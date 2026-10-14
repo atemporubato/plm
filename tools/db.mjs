@@ -1,5 +1,8 @@
 // Kör en SQL-fil mot Supabase: node tools/db.mjs supabase/migrations/0001_init.sql
 import { readFile } from 'node:fs/promises';
+import { readFileSync } from 'node:fs';
+// Läser .env i repots rot så att scripten kan köras direkt med node.
+try { for (const line of readFileSync(new URL('../.env', import.meta.url), 'utf8').split('\n')) { const m = line.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*)$/); if (m && !process.env[m[1]]) process.env[m[1]] = m[2].trim().replace(/^["']|["']$/g, ''); } } catch {}
 import { createRequire } from 'node:module';
 const { Client } = createRequire(import.meta.url)('pg');
 const ref = process.env.SUPABASE_URL.replace(/^https:\/\/([^.]+).*/, '$1');

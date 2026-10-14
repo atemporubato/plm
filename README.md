@@ -23,3 +23,11 @@ Bara konton på atemporubato.com kan läsa och skriva (row level security i data
 Rollen `admin` i tabellen `anvandare` låser upp EAN-administration. Sätts manuellt:
 
     update anvandare set roll = 'admin' where email = 'jakob@atemporubato.com';
+
+## Importer som gjorts (oktober 2026)
+
+- `tools/import-ean.mjs`: Shopifys 1 493 EAN till `ean_anvanda`, poolen startar på 92501 (GS1:s lista räknar 90001 till 92500 som upptagna).
+- `tools/import-masterplaner.js`: 40 PO och 102 rader från Rubato_Masterplaner (flikarna Produktion och SS27), data i `tools/data/masterplaner_po.json`.
+- `tools/import-elliot.js`: hela databasen ur Elliots Samples-artefakt (58 samples, 39 styles, 34 tyger, 2 tygpartier, 8 leverantörer), data i `tools/data/elliot-export-2026-10-14.json`.
+
+Scripten körs med `node tools/<fil>` från repots rot; `.env` läses automatiskt. De är idempotenta (upsert), men import-elliot lägger till loggrader varje gång.

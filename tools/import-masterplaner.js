@@ -1,8 +1,10 @@
+// Kör: node tools/import-elliot.js (läser .env via tools/db.mjs-logiken nedan)
 const { createClient } = require("@supabase/supabase-js");
+try { for (const line of require("fs").readFileSync(require("path").join(__dirname, "..", ".env"), "utf8").split("\n")) { const m = line.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*)$/); if (m && !process.env[m[1]]) process.env[m[1]] = m[2].trim(); } } catch {}
 const s = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SECRET_KEY, { auth: { autoRefreshToken: false, persistSession: false } });
 const slug = (x) => x.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
 (async () => {
-  const d = require("./data/masterplaner_po.json");
+  const d = require(__dirname + "/data/masterplaner_po.json");
   for (const l of d.lev) {
     const { data: ex } = await s.from("leverantorer").select("id").ilike("namn", l.namn).maybeSingle();
     if (ex) continue;
