@@ -18,7 +18,7 @@ const MAP = {
   po: {},
 };
 const TABLES = Object.keys(MAP);
-const SKIP = new Set(["id", "_id", "andrad", "skapad", "logg", "ean", "rader"]);
+const SKIP = new Set(["id", "_id", "andrad", "skapad", "logg", "ean", "rader", "farg_rader"]);
 const toRow = (coll, obj) => {
   const m = MAP[coll] || {}, out = {};
   for (const [k, v] of Object.entries(obj)) { if (SKIP.has(k)) continue; out[m[k] || k] = v === "" ? null : v; }  // tom sträng blir null, så att check-villkor och datumkolumner håller
@@ -38,14 +38,17 @@ const listeners = [];  // { key, fn }
 const fail = (e) => { const err = new Error(e.message || "db"); err.code = e.code === "42501" ? "invalid_argument" : e.code; throw err; };
 
 async function fetchAll() {
-  const [rows, logg, vars, p, s, rader] = await Promise.all([
+  const [rows, logg, vars, p, s, rader, farger] = await Promise.all([
     Promise.all(TABLES.map((t) => supabase.from(t).select("*").order("id"))),
     supabase.from("logg").select("*").order("t"),
     supabase.from("varianter").select("*").order("id"),
     supabase.from("ean_pool").select("*").eq("id", "gs1").maybeSingle(),
-    supabase.from("installningar").select("varde").eq("nyckel", "app").maybeSingle(),
+    supabase.from("installningar").select("nyckel,varde"),
     supabase.from("po_rader").select("*").order("id"),
+    supabase.from("style_farger").select("*").order("fargindex"),
   ]);
+  const fargByStyle = {};
+  for (const f of farger.data || []) (fargByStyle[f.style_id] ||= []).push(f);
   const raderByPo = {};
   for (const r of rader.data || []) { const { po_id, id, ...rest } = r; (raderByPo[po_id] ||= []).push(Object.assign({ _rid: id }, rest)); }
   rows.forEach((r) => { if (r.error) fail(r.error); });
@@ -61,12 +64,14 @@ async function fetchAll() {
       d.logg = byPost[t + "/" + row.id] || [];
       if (t === "styles") d.ean = varsByStyle[row.id] || [];
       if (t === "po") d.rader = raderByPo[row.id] || [];
+      if (t === "styles") d.farg_rader = fargByStyle[row.id] || [];
       m.set(row.id, d);
     }
     cache[t] = m;
   });
   pool = p.data ? { prefix: p.data.prefix, nasta: p.data.nasta, slut: p.data.slut, kommentar: p.data.kommentar, shopifyHogsta: p.data.shopify_hogsta, andrad: p.data.andrad } : null;
-  settings = s.data ? s.data.varde : null;
+  settings = null;
+  if (s.data) { const app = s.data.find((x) => x.nyckel === "app"); settings = Object.assign({}, app ? app.varde : {}); for (const x of s.data) if (x.nyckel !== "app") settings[x.nyckel] = x.varde; }
   eanLogg = (logg.data || []).filter((l) => l.tabell === "ean").slice(-50).reverse().map((l) => ({ _id: String(l.id), t: l.t, av: l.av, text: l.text, styleId: l.post_id }));
 }
 function snapshotFor(key) {

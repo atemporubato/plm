@@ -31,3 +31,13 @@ Rollen `admin` i tabellen `anvandare` låser upp EAN-administration. Sätts manu
 - `tools/import-elliot.js`: hela databasen ur Elliots Samples-artefakt (58 samples, 39 styles, 34 tyger, 2 tygpartier, 8 leverantörer), data i `tools/data/elliot-export-2026-10-14.json`.
 
 Scripten körs med `node tools/<fil>` från repots rot; `.env` läses automatiskt. De är idempotenta (upsert), men import-elliot lägger till loggrader varje gång.
+
+## Shopify-push
+
+`api/shopify.js` är en serverless-funktion på Vercel. Den verifierar användarens Supabase-session (bara atemporubato.com), läser style, varianter, färgrad, leverantör och inställningar, bygger en `productSet`-payload och skapar produkten som utkast (en produkt per färg). SKU = stylekod-färgindex-storlekskod. Färgsyskon (colour_siblings, other_colors) uppdateras på alla produkter i stylen.
+
+Miljövariabler i Vercel (Settings, Environment Variables): SHOPIFY_STORE, SHOPIFY_CLIENT_ID, SHOPIFY_CLIENT_SECRET, SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, SUPABASE_SECRET_KEY.
+
+Inställningar i tabellen `installningar`: `storlekskoder` (storlek till SKU-kod per system), `shopify` (produkttyper med Shopify-kategori och taggar, standardvikter, vendor), `stylekod_nasta` (nästa lediga stylekod).
+
+Lokalt: `node devserver.js` (kräver .env) serverar både appen och /api/shopify på port 3000.
