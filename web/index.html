@@ -264,6 +264,23 @@ table.vtable { width: 100%; border-collapse: collapse; font-size: 13.5px; }
 .login-card h1 em { font-style: italic; color: var(--indigo); }
 .login-card p { margin: 0; color: var(--muted); font-size: 14px; }
 .login-card .btn { padding: 10px 16px; }
+
+/* Produktion */
+.po-planerad, .po-bevaka { color: var(--muted); border-color: var(--line-strong); }
+.po-to-order, .po-ordering { color: var(--warn); border-color: var(--warn); }
+.po-po-bekraftad, .po-tyg-bestallt { color: var(--indigo); border-color: var(--indigo); }
+.po-i-produktion, .po-skickad { background: var(--indigo-soft); color: var(--indigo); }
+.po-inlevererad { background: var(--ok-soft); color: var(--ok); }
+.po-problem { background: var(--late-soft); color: var(--late); }
+.po-avbruten { color: var(--muted); border-color: var(--line); text-decoration: line-through; }
+.rad { border: 1px solid var(--line); border-radius: 8px; padding: 12px; margin-top: 10px; background: var(--paper); display: grid; gap: 10px; }
+.rad-head { display: flex; gap: 10px; align-items: center; }
+.rad .form { gap: 10px 12px; }
+.rad .field input, .rad .field select { background: var(--surface); }
+.sizegrid { display: flex; flex-wrap: wrap; gap: 6px; }
+.sizegrid .sz { display: grid; gap: 2px; width: 64px; }
+.sizegrid .sz span { font-size: 11.5px; color: var(--muted); text-align: center; text-transform: none; letter-spacing: 0; }
+.sizegrid .sz input { width: 100%; padding: 5px 6px; text-align: center; font-family: var(--f-mono); border: 1px solid var(--line-strong); border-radius: 6px; background: var(--surface); }
 </style>
 </head>
 <body>
@@ -280,14 +297,15 @@ table.vtable { width: 100%; border-collapse: collapse; font-size: 13.5px; }
 <div class="wrap">
   <header class="top">
     <div class="brand">
-      <h1>Rubato <em>Samples</em></h1>
-      <p>Samples, styles, tyger, eget tyglager och EAN för produktutvecklingen. Tidsplanen räknas baklänges från leverantörens produktionstid.</p>
+      <h1>Rubato <em>PLM</em></h1>
+      <p>Samples, styles, produktion, tyger, eget tyglager och EAN för produktutvecklingen. Tidsplanen räknas baklänges från leverantörens produktionstid.</p>
     </div>
     <div class="actions" id="actions"></div>
   </header>
   <nav class="tabs" role="tablist" aria-label="Vyer" id="tabs">
     <button class="tab" role="tab" type="button" data-tab="samples">Samples <span class="c" id="c_samples"></span></button>
     <button class="tab" role="tab" type="button" data-tab="styles">Styles <span class="c" id="c_styles"></span></button>
+    <button class="tab" role="tab" type="button" data-tab="produktion">Produktion <span class="c" id="c_produktion"></span></button>
     <button class="tab" role="tab" type="button" data-tab="tyger">Tyger <span class="c" id="c_tyger"></span></button>
     <button class="tab" role="tab" type="button" data-tab="tyglager">Tyglager <span class="c" id="c_tyglager"></span></button>
     <button class="tab" role="tab" type="button" data-tab="leverantorer">Leverantörer <span class="c" id="c_leverantorer"></span></button>

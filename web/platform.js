@@ -15,9 +15,10 @@ const MAP = {
   tyger: { aterDatum: "ater_datum" },
   tyglager: { tygId: "tyg_id", tygNamn: "tyg_namn", inkoptMeter: "inkopt_meter", prisPerMeter: "pris_per_meter", prisValuta: "pris_valuta", reserveradFor: "reserverad_for", bredd: "bredd_cm" },
   leverantorer: { sampleLedtid: "sample_ledtid" },
+  po: {},
 };
 const TABLES = Object.keys(MAP);
-const SKIP = new Set(["id", "_id", "andrad", "skapad", "logg", "ean"]);
+const SKIP = new Set(["id", "_id", "andrad", "skapad", "logg", "ean", "rader"]);
 const toRow = (coll, obj) => {
   const m = MAP[coll] || {}, out = {};
   for (const [k, v] of Object.entries(obj)) { if (SKIP.has(k)) continue; out[m[k] || k] = v === "" ? null : v; }  // tom sträng blir null, så att check-villkor och datumkolumner håller
@@ -31,19 +32,22 @@ const toDoc = (coll, row) => {
 };
 
 /* Cache: senast lästa rader per tabell, som appens dokument. */
-const cache = { samples: new Map(), styles: new Map(), tyger: new Map(), tyglager: new Map(), leverantorer: new Map() };
+const cache = { samples: new Map(), styles: new Map(), tyger: new Map(), tyglager: new Map(), leverantorer: new Map(), po: new Map() };
 let pool = null, settings = null, eanLogg = [];
 const listeners = [];  // { key, fn }
 const fail = (e) => { const err = new Error(e.message || "db"); err.code = e.code === "42501" ? "invalid_argument" : e.code; throw err; };
 
 async function fetchAll() {
-  const [rows, logg, vars, p, s] = await Promise.all([
+  const [rows, logg, vars, p, s, rader] = await Promise.all([
     Promise.all(TABLES.map((t) => supabase.from(t).select("*").order("id"))),
     supabase.from("logg").select("*").order("t"),
     supabase.from("varianter").select("*").order("id"),
     supabase.from("ean_pool").select("*").eq("id", "gs1").maybeSingle(),
     supabase.from("installningar").select("varde").eq("nyckel", "app").maybeSingle(),
+    supabase.from("po_rader").select("*").order("id"),
   ]);
+  const raderByPo = {};
+  for (const r of rader.data || []) { const { po_id, id, ...rest } = r; (raderByPo[po_id] ||= []).push(Object.assign({ _rid: id }, rest)); }
   rows.forEach((r) => { if (r.error) fail(r.error); });
   if (logg.error) fail(logg.error);
   const byPost = {};
@@ -56,6 +60,7 @@ async function fetchAll() {
       const d = toDoc(t, row);
       d.logg = byPost[t + "/" + row.id] || [];
       if (t === "styles") d.ean = varsByStyle[row.id] || [];
+      if (t === "po") d.rader = raderByPo[row.id] || [];
       m.set(row.id, d);
     }
     cache[t] = m;
@@ -83,6 +88,14 @@ async function writeLogg(coll, id, patchLogg) {
   const nya = patchLogg.filter((l) => !seen.has(l.t + "|" + l.text));
   if (!nya.length) return;
   const { error } = await supabase.from("logg").insert(nya.map((l) => ({ tabell: coll, post_id: id, t: l.t, av: l.av || null, text: l.text })));
+  if (error) fail(error);
+}
+async function writeRader(id, rader) {
+  if (!Array.isArray(rader)) return;
+  const { error: e1 } = await supabase.from("po_rader").delete().eq("po_id", id);
+  if (e1) fail(e1);
+  if (!rader.length) return;
+  const { error } = await supabase.from("po_rader").insert(rader.map((r) => { const { _rid, _storlekar, ...rest } = r; return Object.assign({ po_id: id }, rest); }));
   if (error) fail(error);
 }
 async function writeVarianter(id, patchEan) {
@@ -117,6 +130,7 @@ function docRef(coll, id) {
       if (error) fail(error);
       await writeLogg(coll, id, body.logg);
       if (coll === "styles") await writeVarianter(id, body.ean);
+      if (coll === "po") await writeRader(id, body.rader);
       scheduleRefresh();
     },
     async update(patch) {
@@ -127,6 +141,7 @@ function docRef(coll, id) {
       }
       await writeLogg(coll, id, patch.logg);
       if (coll === "styles") await writeVarianter(id, patch.ean);
+      if (coll === "po") await writeRader(id, patch.rader);
       const row = toRow(coll, patch);
       if (Object.keys(row).length) { const { error } = await supabase.from(coll).update(row).eq("id", id); if (error) fail(error); }
       scheduleRefresh();
