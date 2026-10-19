@@ -41,3 +41,7 @@ Miljövariabler i Vercel (Settings, Environment Variables): SHOPIFY_STORE, SHOPI
 Inställningar i tabellen `installningar`: `storlekskoder` (storlek till SKU-kod per system), `shopify` (produkttyper med Shopify-kategori och taggar, standardvikter, vendor), `stylekod_nasta` (nästa lediga stylekod).
 
 Lokalt: `node devserver.js` (kräver .env) serverar både appen och /api/shopify på port 3000.
+
+## Shopify-fliken
+
+Listar en rad per style och färg för styles som ligger i en PO (eller har status PO lagd/Levererad). Raden visar vad som saknas för push (EAN, pris, HS-kod, beskrivning …) och om produkten redan finns i Shopify. Bocka i de som är redo och klicka Skapa utkast i Shopify; varje rad skickas till `/api/shopify` med action create. Kryssrutan "Visa även godkända styles utan PO" tar med godkända styles som saknar produktionsorder.

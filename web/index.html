@@ -293,6 +293,8 @@ table.vtable { width: 100%; border-collapse: collapse; font-size: 13.5px; }
 .shop-warnings li { color: var(--warn); }
 .shop-mf { font-size: 12.5px; color: var(--muted); }
 .warnline.bad { color: var(--late); background: var(--late-soft); }
+.swatch { display: inline-block; width: 12px; height: 12px; border-radius: 50%; border: 1px solid var(--line-strong); margin-right: 6px; vertical-align: -1px; }
+.chk { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; color: var(--muted); }
 @media (max-width: 760px) { .shop-sec .form.three { grid-template-columns: 1fr 1fr; } .farg-rad { grid-template-columns: 1fr 1fr; } }
 </style>
 </head>
@@ -319,6 +321,7 @@ table.vtable { width: 100%; border-collapse: collapse; font-size: 13.5px; }
     <button class="tab" role="tab" type="button" data-tab="samples">Samples <span class="c" id="c_samples"></span></button>
     <button class="tab" role="tab" type="button" data-tab="styles">Styles <span class="c" id="c_styles"></span></button>
     <button class="tab" role="tab" type="button" data-tab="produktion">Produktion <span class="c" id="c_produktion"></span></button>
+    <button class="tab" role="tab" type="button" data-tab="shopify">Shopify <span class="c" id="c_shopify"></span></button>
     <button class="tab" role="tab" type="button" data-tab="tyger">Tyger <span class="c" id="c_tyger"></span></button>
     <button class="tab" role="tab" type="button" data-tab="tyglager">Tyglager <span class="c" id="c_tyglager"></span></button>
     <button class="tab" role="tab" type="button" data-tab="leverantorer">Leverantörer <span class="c" id="c_leverantorer"></span></button>
