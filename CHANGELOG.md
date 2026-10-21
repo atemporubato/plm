@@ -4,6 +4,11 @@ Arbetssätt: Elliot utvecklar i artefakten (sandbox). Jakob hostar: artefaktens 
 artifact/vN.html, byggs med `node tools/build.mjs artifact/vN.html`, datan exporteras ur artefakten
 och importeras med `node tools/import-dokument.js`, och main går live på plm.atemporubato.com.
 
+## v2 (2026-10-21)
+
+Elliots artefakt per 21 oktober 2026, eftermiddag. Endast kodändring, ingen dataimport.
+- E-com: checklistpunkten "Collection/SEO" heter nu "Taggar/Collections" (fältet ecomSeo oförändrat, inga data påverkas).
+
 ## v1 (2026-10-21)
 
 Elliots artefakt per 21 oktober 2026, hostad. Ersätter version 0 (den första porten från 14 oktober).

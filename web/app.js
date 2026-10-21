@@ -1833,7 +1833,7 @@ import * as P from "./platform.js";
   }
 
   // ---------- E-COM (Jakob) ----------
-  const ECOM_CHECKS = [["ecomShopify", "I Shopify"], ["ecomBeskrivning", "Beskrivning"], ["ecomPrisSatt", "Pris satt"], ["ecomStorleksguide", "Storleksguide"], ["ecomNewsletter", "Newsletter"], ["ecomSeo", "Collection/SEO"]];
+  const ECOM_CHECKS = [["ecomShopify", "I Shopify"], ["ecomBeskrivning", "Beskrivning"], ["ecomPrisSatt", "Pris satt"], ["ecomStorleksguide", "Storleksguide"], ["ecomNewsletter", "Newsletter"], ["ecomSeo", "Taggar/Collections"]];
   const EcomView = {
     mount(root) {
       const st = UI.ecom;
@@ -1849,7 +1849,7 @@ import * as P from "./platform.js";
       this.fSeason = filterSelect("f_e_season", "Alla säsonger", st, "season", upd);
       this.count = h("span", { class: "count" });
       this.cards = h("div", { class: "cards" });
-      root.append(h("p", { class: "lede", text: "Allt som ska vara klart i Shopify inför lansering: när plaggen kommer, när kampanj och e-com fotas (från Foto-fliken), och checklistan per produkt – Shopify-produkt, beskrivning, pris, storleksguide, newsletter och collection. EAN hämtas från appen." }),
+      root.append(h("p", { class: "lede", text: "Allt som ska vara klart i Shopify inför lansering: när plaggen kommer, när kampanj och e-com fotas (från Foto-fliken), och checklistan per produkt – Shopify-produkt, beskrivning, pris, storleksguide, newsletter och taggar/collections. EAN hämtas från appen." }),
         this.strip.el, h("section", { class: "filters", "aria-label": "Filter" }, q, this.fSeason.el, this.count), this.cards);
     },
     update() {
