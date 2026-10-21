@@ -61,18 +61,22 @@ async function metaobjectId(type, handle) {
 
 /* Bygger produktpayloaden och listan med fel och varningar. */
 async function build(style_id, farg) {
-  const [styles, fargRader, varianter, settings] = await Promise.all([
-    sb(`styles?id=eq.${encodeURIComponent(style_id)}&select=*`),
+  const [docs, shRows, fargRader, settings] = await Promise.all([
+    sb(`dokument?collection=eq.styles&id=eq.${encodeURIComponent(style_id)}&select=data`),
+    sb(`shopify_styles?style_id=eq.${encodeURIComponent(style_id)}&select=*`),
     sb(`style_farger?style_id=eq.${encodeURIComponent(style_id)}&select=*&order=fargindex,id`),
-    sb(`varianter?style_id=eq.${encodeURIComponent(style_id)}&select=*&order=id`),
     sb(`installningar?nyckel=in.(storlekskoder,shopify,stylekod_nasta)&select=nyckel,varde`),
   ]);
-  const st = styles[0];
-  if (!st) throw new Error("Hittar inte stylen " + style_id);
+  const doc = docs[0] && docs[0].data;
+  if (!doc) throw new Error("Hittar inte stylen " + style_id);
+  // st = artefaktens styledokument plus de hostade Shopify-fälten
+  const st = Object.assign({ id: style_id }, doc, shRows[0] || {});
   const cfg = Object.fromEntries(settings.map((s) => [s.nyckel, s.varde]));
-  const lev = st.leverantor ? (await sb(`leverantorer?namn=ilike.${encodeURIComponent(st.leverantor)}&select=*`))[0] : null;
+  const levDocs = st.leverantor ? await sb(`dokument?collection=eq.leverantorer&select=id,data`) : [];
+  const levRow = levDocs.find((l) => String(l.data.namn || "").toLowerCase() === String(st.leverantor).toLowerCase());
+  const lev = levRow ? Object.assign({ id: levRow.id }, levRow.data) : null;
   const fr = fargRader.find((r) => r.farg.toLowerCase() === String(farg).toLowerCase()) || { farg, fargindex: null };
-  const vars = varianter.filter((v) => v.farg.toLowerCase() === String(farg).toLowerCase());
+  const vars = (st.ean || []).filter((v) => String(v.farg).toLowerCase() === String(farg).toLowerCase());
   const errors = [], warnings = [];
   const need = (cond, msg) => { if (!cond) errors.push(msg); };
   const warn = (cond, msg) => { if (!cond) warnings.push(msg); };
@@ -167,11 +171,15 @@ async function create(ctx, user) {
   const p = r.product;
   const pid = gidNum(p.id);
   // Spara kopplingarna
-  if (!st.stylekod) { await sb(`styles?id=eq.${encodeURIComponent(st.id)}`, { method: "PATCH", body: JSON.stringify({ stylekod }) }); await sb(`installningar?on_conflict=nyckel`, { method: "POST", headers: { Prefer: "resolution=merge-duplicates,return=representation" }, body: JSON.stringify({ nyckel: "stylekod_nasta", varde: Number(stylekod) + 1 }) }); }
-  const row = { style_id: st.id, farg: fr.farg, fargindex, swatch: fr.swatch || null, colour_family: fr.colour_family || null, titel: fr.titel || null, shopify_product_id: pid, shopify_handle: p.handle, shopify_status: p.status, pushad: new Date().toISOString(), pushad_av: user.id };
+  if (!st.stylekod) { await sb(`shopify_styles?on_conflict=style_id`, { method: "POST", headers: { Prefer: "resolution=merge-duplicates,return=representation" }, body: JSON.stringify({ style_id: st.id, stylekod }) }); await sb(`installningar?on_conflict=nyckel`, { method: "POST", headers: { Prefer: "resolution=merge-duplicates,return=representation" }, body: JSON.stringify({ nyckel: "stylekod_nasta", varde: Number(stylekod) + 1 }) }); }
+  const varianter = {};
+  for (const e of p.variants.edges) { const v = input.variants.find((x) => x.sku === e.node.sku); if (v) varianter[v.optionValues[0].name] = { sku: e.node.sku, variant_id: gidNum(e.node.id), ean: v.barcode }; }
+  const row = { style_id: st.id, farg: fr.farg, fargindex, swatch: fr.swatch || null, colour_family: fr.colour_family || null, titel: fr.titel || null, shopify_product_id: pid, shopify_handle: p.handle, shopify_status: p.status, pushad: new Date().toISOString(), pushad_av: user.id, varianter };
   await sb(`style_farger?on_conflict=style_id,farg`, { method: "POST", headers: { Prefer: "resolution=merge-duplicates,return=representation" }, body: JSON.stringify(row) });
-  for (const e of p.variants.edges) { const sku = e.node.sku; const size = input.variants.find((v) => v.sku === sku); if (size) await sb(`varianter?style_id=eq.${encodeURIComponent(st.id)}&farg=eq.${encodeURIComponent(fr.farg)}&storlek=eq.${encodeURIComponent(size.optionValues[0].name)}`, { method: "PATCH", body: JSON.stringify({ sku, shopify_variant_id: gidNum(e.node.id) }) }); }
-  await sb(`logg`, { method: "POST", body: JSON.stringify({ tabell: "styles", post_id: st.id, t: new Date().toISOString(), av: user.id, text: `${input.id ? "Uppdaterad" : "Skapad"} i Shopify som utkast: ${input.title} (${p.handle})` }) });
+  // Händelse på stylen och e-com-checken "I Shopify" i artefaktens dokument
+  const cur = (await sb(`dokument?collection=eq.styles&id=eq.${encodeURIComponent(st.id)}&select=data`))[0].data;
+  const logg = (cur.logg || []).concat([{ t: new Date().toISOString(), av: user.id, text: `${input.id ? "Uppdaterad" : "Skapad"} i Shopify som utkast: ${input.title} (${p.handle})` }]);
+  await sb(`dokument?collection=eq.styles&id=eq.${encodeURIComponent(st.id)}`, { method: "PATCH", body: JSON.stringify({ data: Object.assign({}, cur, { logg, ecomShopify: true, andrad: new Date().toISOString() }) }) });
   // Färgsyskon: alla produkter i stylen pekar på varandra
   const siblings = await sb(`style_farger?style_id=eq.${encodeURIComponent(st.id)}&shopify_product_id=not.is.null&select=shopify_product_id,titel,farg&order=titel,farg`);
   if (siblings.length > 1) {

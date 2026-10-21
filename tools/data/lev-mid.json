@@ -1,0 +1,58 @@
+[
+ {
+  "namn": "Japan Blue",
+  "land": "JP",
+  "mid_code": "JPJAPBLU4047OKA",
+  "mid_name": "JAPAN BLUE Co.,Ltd - COLLECT",
+  "mid_address": "4047-8, Kojima-ajino, Kurashiki, Okayama 711-0913, Japan"
+ },
+ {
+  "namn": "New Esse",
+  "land": "IT",
+  "mid_code": null,
+  "mid_name": null,
+  "mid_address": null
+ },
+ {
+  "namn": "Lockie",
+  "land": "GB",
+  "mid_code": "GBWILLOC28HAW",
+  "mid_name": "William Lockie & Co Ltd",
+  "mid_address": "26-28 Drumlanrig Square, Hawick, Scottish Borders, TD9 OAW, UNITED KINGDOM"
+ },
+ {
+  "namn": "Ibera",
+  "land": "ES",
+  "mid_code": null,
+  "mid_name": null,
+  "mid_address": null
+ },
+ {
+  "namn": "Eminento",
+  "land": "JP",
+  "mid_code": "JPEMI18TOK",
+  "mid_name": "Eminento Inc.",
+  "mid_address": "9-18 Kobuna-Cho, Nihonbashi, Chuo-ku, Tokyo, 103-0024, JAPAN|"
+ },
+ {
+  "namn": "Santa Trinita",
+  "land": "IT",
+  "mid_code": "ITSANTRI10FIR",
+  "mid_name": "Santa Trinita di Nicolò Greco",
+  "mid_address": "Via Etruria 10/E, 50026 San Casciano Val di Pesa, FIRENZE, Italy"
+ },
+ {
+  "namn": "Vuono",
+  "land": "IT",
+  "mid_code": "ITDAMVUO1VER",
+  "mid_name": "Damiano Vuono s.a.s",
+  "mid_address": "Cascina Malora, 1 - 21029 Vergiate (VA), Italy"
+ },
+ {
+  "namn": "Carrara",
+  "land": "IT",
+  "mid_code": null,
+  "mid_name": null,
+  "mid_address": null
+ }
+]
