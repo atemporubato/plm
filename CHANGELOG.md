@@ -1,8 +1,9 @@
 # Changelog
 
-Arbetssätt: Elliot utvecklar i artefakten (sandbox). Jakob hostar: artefaktens HTML sparas som
-artifact/vN.html, byggs med `node tools/build.mjs artifact/vN.html`, datan exporteras ur artefakten
-och importeras med `node tools/import-dokument.js`, och main går live på plm.atemporubato.com.
+Arbetssätt: artefakten är kod, appen är data. Elliot utvecklar koden i artefakten (sandbox), all
+riktig data lever i den hostade appen. Jakob hostar: artefaktens HTML sparas som artifact/vN.html,
+byggs med `node tools/build.mjs artifact/vN.html`, och main går live på plm.atemporubato.com.
+Dataimport från artefakten (`node tools/import-dokument.js`) görs bara som medvetet undantag.
 
 ## v3 (2026-10-22)
 

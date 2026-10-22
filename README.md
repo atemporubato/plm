@@ -4,11 +4,11 @@ Intern app för produktutvecklingen: samples, kollektion, produktion, foto, e-co
 
 ## Arbetssätt
 
-Elliot utvecklar appen i Claude-artefakten (sandbox). Jakob hostar: varje ny version läggs som `artifact/vN.html`, byggs och går live. Se CHANGELOG.md.
+Princip: artefakten är kod, appen är data. Elliot utvecklar koden i Claude-artefakten (sandbox). All riktig data (samples, styles, PO, EAN, leverantörer) läggs in och ändras i den hostade appen på plm.atemporubato.com. Jakob hostar: varje ny version av artefakten läggs som `artifact/vN.html`, byggs och går live. Se CHANGELOG.md.
 
 1. Spara artefaktens HTML som `artifact/vN.html` (Artifact-verktyget i Claude Code läser den).
 2. `node tools/build.mjs artifact/vN.html` skriver `web/index.html` och `web/app.js`. Bygget byter ut Claude-plattformen mot `web/platform.js` (Supabase) och lägger på inloggning samt de hosted-only delarna i `tools/hosted/`. Varje byte är en exakt strängmatchning; har artefakten ändrat något stoppar bygget med ett meddelande om vad som behöver uppdateras.
-3. Om artefaktens data ska följa med: exportera (fångas i Chrome när artefakten är öppen) till `tools/data/elliot-export-<datum>.json` och kör `node tools/import-dokument.js <fil>`.
+3. Ingen dataimport i normalfallet (artefaktens data är testdata). Undantag görs bara medvetet: exportera (fångas i Chrome när artefakten är öppen) till `tools/data/elliot-export-<datum>.json` och kör `node tools/import-dokument.js <fil>`, som skriver över de dokument som finns i exporten.
 4. Commit och push till main, Vercel deployar.
 
 ## Struktur
