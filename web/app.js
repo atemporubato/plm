@@ -1839,7 +1839,7 @@ import * as P from "./platform.js";
       const st = UI.ecom;
       const upd = () => { this.update(); persist(); };
       this.strip = makeStrip([
-        { key: "lev30", label: "Levereras inom 30 d" },
+        { key: "lev30", label: "Levereras inom 30 d (PO)" },
         { key: "shopify", label: "Ej i Shopify", cls: "t-warn" },
         { key: "pris", label: "Saknar pris", cls: "t-warn" },
         { key: "bild", label: "Saknar e-com-bilder", cls: "t-late" },
@@ -1849,7 +1849,7 @@ import * as P from "./platform.js";
       this.fSeason = filterSelect("f_e_season", "Alla säsonger", st, "season", upd);
       this.count = h("span", { class: "count" });
       this.cards = h("div", { class: "cards" });
-      root.append(h("p", { class: "lede", text: "Allt som ska vara klart i Shopify inför lansering: när plaggen kommer, när kampanj och e-com fotas (från Foto-fliken), och checklistan per produkt – Shopify-produkt, beskrivning, pris, storleksguide, newsletter och taggar/collections. EAN hämtas från appen." }),
+      root.append(h("p", { class: "lede", text: "Allt som ska vara klart i Shopify inför lansering: när plaggen kommer, när kampanj och e-com fotas (från Foto-fliken), och checklistan per produkt – Shopify-produkt, beskrivning, pris (med GM1 mot PO-kostnaden: grönt ≥ 75 %, gult 70–75 %, rött under 70 %), storleksguide, newsletter och taggar/collections. EAN hämtas från appen." }),
         this.strip.el, h("section", { class: "filters", "aria-label": "Filter" }, q, this.fSeason.el, this.count), this.cards);
     },
     update() {
@@ -1858,7 +1858,8 @@ import * as P from "./platform.js";
       this.fSeason.fill(seasons);
       const season = st.season || KollView.seasonInView();
       const all = D.styles.filter((s) => norm(s.sasong) === norm(season) && !["Kastad", "Pausad"].includes(styleStatusNorm(s.status)));
-      const eta = (s) => { const es = poLinesOf(s._id).map((x) => poEta(x.po)).filter(Boolean).sort(); return es[0] || null; };
+      const eta = (s) => { const pos = poLinesOf(s._id).map((x) => x.po).filter((p) => !PO_DRAFT.includes(poStatusNorm(p.status))); const req = pos.map((p) => p.leveransOnskad).filter(isISO).sort(); if (req.length) return req[0]; const es = pos.map(poEta).filter(Boolean).sort(); return es[0] || null; };
+      const etaSrc = (s) => { const pos = poLinesOf(s._id).map((x) => x.po).filter((p) => !PO_DRAFT.includes(poStatusNorm(p.status))); return pos.some((p) => isISO(p.leveransOnskad)) ? "PO" : pos.some(poEta) ? "ETA" : ""; };
       const eanOk = (s) => { const vs = variants(s.farger || [], sizesOf(s)); return vs.length ? !eanMissing(s) : false; };
       const done = (s) => ECOM_CHECKS.every(([k]) => !!s[k]) && ["Fotade", "Retuscherade", "Publicerade"].includes(s.ecomBilder || "");
       const lim = addDays(todayISO(), 30);
@@ -1888,7 +1889,11 @@ import * as P from "./platform.js";
           const save = (patch, logText) => write("styles", s._id, Object.assign({ andrad: new Date().toISOString() }, patch, logText ? { logg: (s.logg || []).concat(logEntry(logText)) } : {}));
           const checks = h("div", { class: "checks" }, ECOM_CHECKS.map(([key, label]) => { const cb = h("input", { type: "checkbox", checked: !!s[key], disabled: ro, onchange: () => save({ [key]: cb.checked }, label + (cb.checked ? " klar" : " ej klar")) }); return h("label", { class: "checkline" }, cb, label); }),
             h("span", { class: "pill " + (eanOk(s) ? "ts-ok" : "ts-slut"), text: eanOk(s) ? "EAN klara" : "EAN saknas" }));
-          const pris = inp("pris_" + s._id, s.ecomPris, { type: "number", min: "0", step: "1", placeholder: "SEK", "aria-label": "Pris" }); pris.disabled = ro;
+          const pris = inp("pris_" + s._id, s.ecomPris, { type: "number", min: "0", step: "1", placeholder: "SEK inkl. moms", "aria-label": "Pris" }); pris.disabled = ro;
+          const gmEl = h("div");
+          const unitCost = (() => { const ls = poLinesOf(s._id).filter((x) => !PO_DRAFT.includes(poStatusNorm(x.po.status)) && num(x.r.antal) && num(x.r.styckpris) != null); const u = ls.reduce((a, x) => a + num(x.r.antal), 0); return u ? ls.reduce((a, x) => a + num(x.r.antal) * (num(x.r.styckpris) + (num(x.r.tygkostnad) || 0)), 0) / u : null; })();
+          const renderGm = () => { const pr = num(pris.value); gmEl.replaceChildren(); if (pr == null || !pr) return; if (unitCost == null) { gmEl.append(h("span", { class: "sub", text: "GM1: kostnad saknas på PO" })); return; } const netto = pr / 1.25; const gm = (netto - unitCost) / netto * 100; gmEl.append(h("span", { class: "pill " + (gm >= 75 ? "ts-ok" : gm >= 70 ? "ts-delvis-slut" : "ts-slut"), text: "GM1 " + Math.round(gm) + " %" }), h("div", { class: "sub", text: "kostnad " + fmtSEK(unitCost) + " · netto " + fmtSEK(netto) })); };
+          pris.addEventListener("input", renderGm); renderGm();
           pris.addEventListener("change", () => save({ ecomPris: num(pris.value), ecomPrisSatt: num(pris.value) != null }, "Pris " + (pris.value || "borttaget")));
           const lans = inp("lans_" + s._id, s.ecomLansering, { type: "date", "aria-label": "Lanseringsdatum" }); lans.disabled = ro;
           lans.addEventListener("change", () => save({ ecomLansering: lans.value || null }));
@@ -1898,11 +1903,11 @@ import * as P from "./platform.js";
           const kamp = s.kampanjDatum || s.kampanjStatus ? [isISO(s.kampanjDatum) ? fmtDate(s.kampanjDatum) : "", s.kampanjStatus || ""].filter(Boolean).join(" · ") : "–";
           tb.append(h("tr", { tabIndex: 0, dataset: { style: s._id } },
             td("", "c-main", h("div", { style: "display:flex;gap:10px;align-items:flex-start" }, img ? h("img", { class: "rowthumb", style: "margin-top:0", src: imgUrl(img), alt: "", loading: "lazy" }) : null, h("div", null, h("div", { class: "prod", text: s.namn }), h("div", { class: "sub", text: [typLabel(s), styleKategori(s), (s.farger || []).join(", ")].filter(Boolean).join(" · ") }), h("div", null, styleStatusPill(s))))),
-            td("Leverans", null, e ? h("div", null, h("div", { class: "mono", text: fmtDate(e) }), h("div", { class: "days " + (diffDays(e) < 0 ? "late" : diffDays(e) <= 14 ? "soon" : ""), text: fmtDays(diffDays(e)) })) : h("span", { class: "muted", text: inProduction(s) ? "ETA saknas" : "ingen PO" })),
+            td("Leverans", null, e ? h("div", null, h("div", { class: "mono", text: fmtDate(e) }), h("div", { class: "days " + (diffDays(e) < 0 ? "late" : diffDays(e) <= 14 ? "soon" : ""), text: fmtDays(diffDays(e)) }), etaSrc(s) === "ETA" ? h("div", { class: "sub", text: "ETA lager (PO saknar leveransdatum)" }) : h("div", { class: "sub", text: "enligt PO" })) : h("span", { class: "muted", text: inProduction(s) ? "PO saknar leveransdatum" : "ingen PO" })),
             td("Kampanjfoto", null, kamp),
-            td("E-com-foto", null, h("span", { class: "pill es-" + (s.ecomBilder ? slug(s.ecomBilder) : "x"), text: s.ecomBilder || "inte planerade" }), isISO(s.ecomPlatDatum) ? h("div", { class: "sub mono", text: fmtDate(s.ecomPlatDatum) }) : null),
+            td("E-com-foto", null, isISO(s.ecomPlatDatum) ? h("div", null, h("div", { class: "mono", text: fmtDate(s.ecomPlatDatum) }), h("div", { class: "days " + (diffDays(s.ecomPlatDatum) < 0 ? "" : diffDays(s.ecomPlatDatum) <= 14 ? "soon" : ""), text: fmtDays(diffDays(s.ecomPlatDatum)) }), h("span", { class: "pill es-" + (s.ecomBilder ? slug(s.ecomBilder) : "x"), text: s.ecomBilder || "planerad" })) : h("span", { class: "pill es-" + (s.ecomBilder ? slug(s.ecomBilder) : "x"), text: s.ecomBilder ? s.ecomBilder + " – datum saknas" : "inte planerad av Oliver än" })),
             td("Checklista", "foto-inline", checks),
-            td("Pris", "foto-inline", pris),
+            td("Pris", "foto-inline", h("div", { style: "display:grid;gap:4px" }, pris, gmEl)),
             td("Lansering", "foto-inline", lans),
             td("Notering", "foto-inline", note)));
         }
