@@ -234,7 +234,11 @@ table.ledger { width: 100%; border-collapse: collapse; min-width: 960px; }
 .swatch { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; }
 .swatch i.dot { width: 9px; height: 9px; border-radius: 50%; background: var(--line-strong); flex: 0 0 auto; display: inline-block; }
 .swatch i.dot.s-Mottagen { background: var(--ok); } .swatch i.dot.s-Problem { background: var(--late); } .swatch i.dot.s-Beställd, .swatch i.dot.s-Skickad { background: var(--ink); }
-.swatches { display: flex; flex-wrap: wrap; gap: 6px; }
+.swatches { display: flex; flex-wrap: wrap; gap: 6px; max-width: 280px; align-items: flex-start; }
+.swatch { max-width: 100%; white-space: normal; text-align: left; line-height: 1.25; }
+.btn-swatch.problem { border-color: var(--late); }
+.pill.s-Problem.clickable { cursor: pointer; border-color: var(--late); }
+.pill.s-Problem.clickable:hover { background: var(--late); color: #fff; }
 .btn-swatch { border: 1px solid var(--line); background: var(--surface); padding: 3px 9px 3px 7px; cursor: pointer; color: inherit; font-family: var(--f-ui); }
 .btn-swatch:hover { border-color: var(--ink); }
 .btn-swatch .h { font-family: var(--f-label); font-size: 9px; letter-spacing: .06em; color: var(--muted); }

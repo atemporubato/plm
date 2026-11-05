@@ -94,6 +94,17 @@ import * as P from "./platform.js";
   const tag = (id) => h("span", { class: "tag", text: id });
   const chip = (t, cls) => h("span", { class: "chip " + (cls || ""), text: t });
   const statusPill = (s) => h("span", { class: "pill s-" + (s || "x"), text: s || "–" });
+  // Problem-status i listan är klickbar: visar vad problemet är utan att öppna hela samplen.
+  const problemPill = (items) => { const ps = items.filter((x) => x.status === "Problem"); if (!ps.length) return statusPill(items[0] && items[0].status); return h("button", { class: "pill s-Problem clickable", type: "button", text: "Problem" + (ps.length > 1 ? " ×" + ps.length : ""), title: "Visa problemet", onclick: (e) => { e.stopPropagation(); openProblem(ps); } }); };
+  function openProblem(ps) {
+    const body = ps.map((x) => h("section", { class: "panel", style: "margin-bottom:10px" },
+      h("h3", { class: "sec-title", text: styleName(x) + " · " + (fargText(x.farg) || x._id) + " · " + (x.version || "") }),
+      h("p", { style: "font-size:16px;margin:6px 0", text: x.kommentar || "Inget problem beskrivet – öppna samplen och skriv vad som är fel." }),
+      x.andringar ? h("p", { class: "sub", text: "Ändringar: " + x.andringar }) : null,
+      h("p", { class: "sub", text: [x._id, x.leverantor, isISO(x.bestalld) ? "beställd " + fmtDate(x.bestalld) : "", expected(x) ? "väntas " + fmtDate(expected(x)) : ""].filter(Boolean).join(" · ") }),
+      h("div", { class: "quick" }, h("button", { class: "btn small", type: "button", text: "Öppna sample", onclick: () => openSample(x._id) }), canWrite && db ? h("button", { class: "btn small", type: "button", text: "Problemet löst → Beställd", onclick: async () => { await write("samples", x._id, { status: "Beställd", andrad: new Date().toISOString(), logg: (x.logg || []).concat(logEntry("Problem markerat som löst")) }); closeSheet(); } }) : null)));
+    openSheet({ tag: "Problem", title: ps.length === 1 ? styleName(ps[0]) : ps.length + " samples med problem", sub: "", body, foot: footButtons({}) });
+  }
   const lagePill = (p) => h("span", { class: "lage l-" + p.lage, text: p.lage === "klar" ? p.label : (LAGE_TEXT[p.lage] || p.label) });
   function table(cols) {
     const t = h("table", { class: "ledger" });
@@ -843,7 +854,7 @@ import * as P from "./platform.js";
       placeCell,
       td("Leverantör", null, s.leverantor || ""),
       td("Färg", null, s.farg ? h("span", { class: "swatch" }, h("i", { class: "dot s-" + (s.status || "x") }), fargText(s.farg)) : ""),
-      td("Status", "c-status", statusPill(s.status)),
+      td("Status", "c-status", problemPill([s])),
       td("Utfall", null, h("span", { class: "chips", style: "margin-top:0" }, utfallParts(s))),
       td("Förväntad", "c-exp", expCell(s)),
       noteCell
@@ -868,7 +879,7 @@ import * as P from "./platform.js";
     const sSeasons = uniq(items.map((x) => x.sasong));
     if (sSeasons.length && (!stn || sSeasons.some((x) => norm(x) !== norm(stn.sasong)))) subBits.push("tilltänkt " + sSeasons.join("/"));
     else if (stn && stn.sasong) subBits.push(stn.sasong + (stn.drop ? " " + stn.drop : ""));
-    const colours = h("div", { class: "swatches" }, items.slice().sort((a, b) => fargText(a.farg).localeCompare(fargText(b.farg), "sv")).map((x) => h("button", { class: "swatch btn-swatch", type: "button", title: x._id + " · " + (x.status || "") + (platsText(x) ? " · " + platsText(x) : ""), onclick: (e) => { e.stopPropagation(); openSample(x._id); } }, h("i", { class: "dot s-" + (x.status || "x") }), fargText(x.farg) || x._id, x.platsTyp === "Hängare" ? h("span", { class: "h", text: "H" + (x.hangare || "?") }) : null)));
+    const colours = h("div", { class: "swatches" }, items.slice().sort((a, b) => fargText(a.farg).localeCompare(fargText(b.farg), "sv")).map((x) => h("button", { class: "swatch btn-swatch" + (x.status === "Problem" ? " problem" : ""), type: "button", title: x._id + " · " + (x.status || "") + (platsText(x) ? " · " + platsText(x) : ""), onclick: (e) => { e.stopPropagation(); openSample(x._id); } }, h("i", { class: "dot s-" + (x.status || "x") }), fargText(x.farg) || x._id, x.platsTyp === "Hängare" ? h("span", { class: "h", text: "H" + (x.hangare || "?") }) : null)));
     const statuses = uniq(items.map((x) => x.status));
     const placeCell = td("Hängare", null);
     const hangers = uniq(items.filter((x) => x.platsTyp === "Hängare").map((x) => x.hangare || "?"));
@@ -895,7 +906,7 @@ import * as P from "./platform.js";
       placeCell,
       td("Leverantör", null, s0.leverantor || ""),
       td("Färger", null, colours),
-      td("Status", "c-status", h("span", { class: "chips", style: "margin-top:0" }, statuses.map((x) => statusPill(x)))),
+      td("Status", "c-status", h("span", { class: "chips", style: "margin-top:0" }, statuses.map((x) => x === "Problem" ? problemPill(items) : statusPill(x)))),
       td("Utfall", null, h("span", { class: "chips", style: "margin-top:0" }, utf.map((b) => chip(b, "b-" + slug(b))), stn && (inProduction(stn) || ["Pausad", "Kastad"].includes(styleStatusNorm(stn.status))) ? h("span", { class: "pill st-" + slug(styleStatusNorm(stn.status)), text: styleStatusNorm(stn.status) }) : null)),
       expCellEl,
       td("Kommentar", "note", notes.length ? h("div", { text: notes.length === 1 ? notes[0] : notes.length + " kommentarer" }) : null)
@@ -1320,7 +1331,7 @@ import * as P from "./platform.js";
       const unknown = rs.some((r) => num(r.antal) == null);
       const cost = rs.reduce((a, r) => a + (lineCost(r) || 0), 0);
       const u0 = lineUnit(r0);
-      const colours = rs.map((r) => (r.farg || "TBA") + (num(r.antal) != null ? " " + r.antal : "")).join(" · ");
+      const colours = h("div", { class: "swatches" }, rs.slice().sort((a, b) => fargText(a.farg || "").localeCompare(fargText(b.farg || ""), "sv")).map((r) => h("span", { class: "swatch btn-swatch", style: "cursor:default" }, h("i", { class: "dot" }), (fargText(r.farg) || "TBA") + (num(r.antal) != null ? " " + r.antal : ""))));
       const pimg = st ? styleImage(st) : null;
       return h("tr", { tabIndex: 0, dataset: { po: p._id } },
         td("", "c-main", h("div", { style: "display:flex;gap:10px;align-items:flex-start" }, pimg ? h("img", { class: "rowthumb", style: "margin-top:0", src: imgUrl(pimg), alt: "", loading: "lazy", onclick: (e) => { e.stopPropagation(); openLightbox(styleAllImages(st), pimg); } }) : null, h("div", null, h("div", { class: "prod", text: r0.produkt || (st ? st.namn : "–") }), h("div", { class: "sub" }, r0.typ && r0.typ !== "Nyhet" ? chip(r0.typ) : null, st ? h("button", { class: "linkish", type: "button", text: st._id + (styleKategori(st) ? " · " + styleKategori(st) : ""), onclick: (e) => { e.stopPropagation(); openStyle(st._id); } }) : h("span", { class: "muted", text: "Ingen style kopplad" }))))),

@@ -4,6 +4,12 @@ Arbetssätt: Elliot utvecklar i artefakten (sandbox). Jakob hostar: artefaktens 
 artifact/vN.html, byggs med `node tools/build.mjs artifact/vN.html`, datan exporteras ur artefakten
 och importeras med `node tools/import-dokument.js`, och main går live på plm.atemporubato.com.
 
+## v5 (2026-11-05)
+
+Elliots artefakt per 5 november 2026, eftermiddag. Endast kodändring, ingen dataimport.
+- Samples: status "Problem" i listan är klickbar och visar vad problemet är (kommentar, ändringar, leverantör, datum) utan att öppna hela samplen, med knapparna "Öppna sample" och "Problemet löst → Beställd". Färgchips med problem markeras röda.
+- Produktion: PO-radernas färger visas som chips med antal i stället för text.
+
 ## v4 (2026-11-05)
 
 Elliots artefakt per 5 november 2026. Stor uppdatering, endast kodändring, ingen dataimport.
