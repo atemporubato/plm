@@ -4,6 +4,11 @@ Arbetssätt: Elliot utvecklar i artefakten (sandbox). Jakob hostar: artefaktens 
 artifact/vN.html, byggs med `node tools/build.mjs artifact/vN.html`, datan exporteras ur artefakten
 och importeras med `node tools/import-dokument.js`, och main går live på plm.atemporubato.com.
 
+## v6 (2026-11-05)
+
+Elliots artefakt per 5 november 2026, sen eftermiddag. Endast stiländring, ingen dataimport.
+- Produktion: PO-korten har fasta kolumnbredder så att rubriker och kolumner ligger i linje kort för kort; färgchips får plats på bredden.
+
 ## v5 (2026-11-05)
 
 Elliots artefakt per 5 november 2026, eftermiddag. Endast kodändring, ingen dataimport.

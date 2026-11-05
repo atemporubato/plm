@@ -336,6 +336,15 @@ table.ledger { width: 100%; border-collapse: collapse; min-width: 960px; }
 .checkline { display: inline-flex; gap: 8px; align-items: center; font-size: 14px; color: var(--muted); }
 .checkline input { width: 16px; height: 16px; accent-color: var(--ink); }
 .po-card .card-head { background: var(--surface); }
+/* Samma kolumnbredder i alla PO-kort så att rubrikerna ligger i linje kort för kort */
+.po-card .ledger { table-layout: fixed; width: 100%; min-width: 0; }
+.po-card .ledger th:nth-child(1), .po-card .ledger td:nth-child(1) { width: 30%; }
+.po-card .ledger th:nth-child(2), .po-card .ledger td:nth-child(2) { width: 38%; }
+.po-card .ledger th:nth-child(3), .po-card .ledger td:nth-child(3) { width: 8%; }
+.po-card .ledger th:nth-child(4), .po-card .ledger td:nth-child(4) { width: 12%; }
+.po-card .ledger th:nth-child(5), .po-card .ledger td:nth-child(5) { width: 12%; }
+.po-card .ledger td { vertical-align: top; }
+.po-card .swatches { max-width: none; }
 .po-card .card-head h3 { font-family: var(--f-label); letter-spacing: .08em; font-size: 12px; }
 .budget { background: var(--surface); border: 1px solid var(--ink); padding: 18px 20px; display: grid; gap: 14px; min-width: 0; }
 .budget > * { min-width: 0; }
