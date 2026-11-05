@@ -1,9 +1,26 @@
 # Changelog
 
-Arbetssätt: artefakten är kod, appen är data. Elliot utvecklar koden i artefakten (sandbox), all
-riktig data lever i den hostade appen. Jakob hostar: artefaktens HTML sparas som artifact/vN.html,
-byggs med `node tools/build.mjs artifact/vN.html`, och main går live på plm.atemporubato.com.
-Dataimport från artefakten (`node tools/import-dokument.js`) görs bara som medvetet undantag.
+Arbetssätt: Elliot utvecklar i artefakten (sandbox). Jakob hostar: artefaktens HTML sparas som
+artifact/vN.html, byggs med `node tools/build.mjs artifact/vN.html`, datan exporteras ur artefakten
+och importeras med `node tools/import-dokument.js`, och main går live på plm.atemporubato.com.
+
+## v4 (2026-11-05)
+
+Elliots artefakt per 5 november 2026. Stor uppdatering, endast kodändring, ingen dataimport.
+
+Nytt i appen (från artefakten):
+- Bibliotek: alla styles och produktidéer på ett ställe, även innan en sample är beställd. Idé med beskrivning, tyg, mått och bilder som skickas till Alex. Grundstyle (t.ex. Roper Shirt) återanvänds i flera kollektioner.
+- COO: vad som lanseras när, månad för månad, per drop med produkter och läge (levererat, foto, i Shopify). Mässor och andra händelser (ny samling "handelser") i samma flöde, tidslinje och lista.
+- Användare: roller (Admin, Team, Designer, Junior, Extern partner, Producent, Ingen åtkomst) som styr vilka flikar man ser och om man får redigera. Rollerna kan ändras per flik. Nya personer dyker upp i listan efter sitt första besök.
+- Style: varianter (färg x storlek), egna bilder på stylen, bilder från Shopify för aktiva produkter.
+- E-com: pris hämtas från Shopify (samling "shopifypriser") och prismarginaler per aktiv produkt med valutarisk, bara för roller som ser kostnader.
+- EAN-fliken är dold; EAN hanteras från stylen och COO.
+
+Hostat:
+- Inloggning med Microsoft som tidigare. Admin (kan hantera användare) styrs av rollen i databastabellen anvandare: Jakob och Elliot är admin. Alla andra Rubato-konton får rollen Team tills Elliot ändrar den under Användare.
+- Rollen Producent (leverantörsinloggning som bara ser sina PO) går inte att använda ännu, eftersom bara @atemporubato.com-konton kan logga in.
+- Shopify-fliken ligger kvar efter E-com och ingår i rollsystemet (visas för Admin och Team).
+- Bygget: boot-blocket tas nu från artefakten och bara plattformsraderna byts, så kommande versioner kräver färre anpassningar.
 
 ## v3 (2026-10-22)
 

@@ -81,7 +81,7 @@ function docRef(coll, id) {
   };
 }
 function collection(coll) {
-  const c = { doc: (id) => docRef(coll, id), orderBy: () => c, limit: () => c, onSnapshot(fn, err) { listeners.push({ key: coll, fn, err }); fn(snapshotFor(coll)); return () => {}; } };
+  const c = { doc: (id) => docRef(coll, id), orderBy: () => c, limit: () => c, async get() { if (!cache[coll]) await refresh(); return snapshotFor(coll); }, onSnapshot(fn, err) { listeners.push({ key: coll, fn, err }); fn(snapshotFor(coll)); return () => {}; } };
   return c;
 }
 export const db = { collection, doc: (path) => { const [c, i] = path.split("/"); return docRef(c, i); } };
@@ -114,7 +114,7 @@ export const user = {
   async can() { return true; },
   async canEdit() { return !!myRow && myRow.roll === "admin"; },
   async isOwner() { return !!myRow && myRow.roll === "admin"; },
-  async profiles(ids) { const { data } = await supabase.from("anvandare").select("id, namn, email").in("id", ids); return Object.fromEntries((data || []).map((u) => [u.id, { name: u.namn || u.email }])); },
+  async profiles(ids) { const { data } = await supabase.from("anvandare").select("id, namn, email").in("id", ids); return Object.fromEntries((data || []).map((u) => [u.id, { name: u.namn || u.email, email: u.email, guest: false }])); },
   email: () => (me ? me.email : ""),
 };
 

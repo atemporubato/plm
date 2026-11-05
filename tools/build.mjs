@@ -33,43 +33,31 @@ js = rep(js, '(() => {\n  "use strict";', 'import * as P from "./platform.js";\n
 js = js.replace(/const APP_URL = "https:\/\/claude\.ai\/artifact\/[^"]+";/, 'const APP_URL = location.origin + location.pathname;');
 if (!js.includes("const APP_URL = location.origin")) throw new Error("APP_URL hittades inte.");
 { const a = js.indexOf("  async function allocateEan(n) {"); const b = js.indexOf("\n  }\n", a) + 4; if (a < 0) throw new Error("allocateEan saknas"); js = js.slice(0, a) + "  const allocateEan = (n) => P.allocateEan(n);\n" + js.slice(b); }
-js = rep(js, 'const imgUrl = (id) => "/_blob/" + id;', 'const imgUrl = (id) => P.assets.url(id);');
+js = rep(js, 'const imgUrl = (id) => (/^https?:\\/\\//.test(String(id)) ? String(id) : "/_blob/" + id);', 'const imgUrl = (id) => (/^https?:\\/\\//.test(String(id)) ? String(id) : P.assets.url(id));');
 js = rep(js, '    if (t === "ean" && downloads) add("Exportera alla EAN", exportAllEan);\n', '    if (t === "ean" && downloads) add("Exportera alla EAN", exportAllEan);\n    a.append(h("button", { class: "btn", type: "button", text: "Logga ut", title: P.user.email(), onclick: P.signOut }));\n');
-{
-  const a = js.indexOf("  // ---------- boot ----------"); const b = js.lastIndexOf("})();");
-  if (a < 0 || b < 0) throw new Error("boot-blocket saknas");
-  const old = js.slice(a, b);
-  const subs = old.match(/sub\("[a-zA-Z]+", "[a-zA-Z]+"\);/g) || [];
-  const extraSubs = (old.match(/^    db\.(doc|collection)\(.*$/gm) || []).map((l) => l + "\n").join("");
-  if (!extraSubs.includes("installningar/app")) throw new Error("installningar/app-prenumerationen hittades inte i boot-blocket.");
-  const boot = `  // ---------- boot (hostad) ----------
-  function showLogin() { $("login").hidden = false; $("loginBtn").addEventListener("click", () => { $("loginBtn").disabled = true; P.signIn(); }); }
-  function subError() { banner("Tappade kontakten med databasen. Ladda om sidan."); }
-  switchTab(initialTab());
-  (async () => {
-    let me = null;
-    try { me = await P.start(); } catch (e) { console.error(e); banner("Kunde inte läsa databasen: " + (e.message || e)); }
-    if (!me) { showLogin(); return; }
-    $("login").hidden = true;
-    db = P.db; user = P.user; downloads = P.downloads; assets = P.assets;
-    myId = me.id;
-    try { canAdmin = await user.canEdit(); } catch (e) {}
-    applyWriteMode();
-    switchTab(UI.tab);
-    const sub = (coll, key) => db.collection(coll).onSnapshot((snap) => { D[key] = snap.docs.map((doc) => Object.assign({}, doc.data(), { _id: doc.id })); loaded.add(key); scheduleRefresh(); openFromHash(); }, subError);
-    ${subs.join(" ")}${extraSubs}  })();
-`;
-  js = js.slice(0, a) + boot + js.slice(b);
-}
+// Boot: artefaktens boot-block behålls, bara plattformsraderna byts (inloggning via Supabase).
+js = rep(js, '    if (!window.claude || typeof window.claude.use !== "function") { showUnavailable(); return; }\n    const [d, u, dl, as] = await Promise.all([window.claude.use("db"), window.claude.use("user"), window.claude.use("downloads"), window.claude.use("assets")]);\n    db = d; user = u; downloads = dl; assets = as;\n    if (!db) { showUnavailable(); return; }\n',
+  '    let me = null;\n    try { me = await P.start(); } catch (e) { console.error(e); banner("Kunde inte läsa databasen: " + (e.message || e)); }\n    if (!me) { showLogin(); return; }\n    $("login").hidden = true;\n    db = P.db; user = P.user; downloads = P.downloads; assets = P.assets;\n');
+js = rep(js, '  function showUnavailable() {', '  function showLogin() { $("login").hidden = false; $("loginBtn").addEventListener("click", () => { $("loginBtn").disabled = true; P.signIn(); }); }\n  function showUnavailable() {');
+if (!js.includes('db.doc("installningar/app").onSnapshot')) throw new Error("installningar/app-prenumerationen hittades inte i boot-blocket.");
+
+
+// ---- hostad inloggning: texter som nämner Claude-konton ----
+js = rep(js, 'text: "Vem ser vad. Alla loggar in med sitt eget Claude-konto; här styr du vilken roll de får i appen och vilka flikar rollen ser. Bjud in nya personer via Dela-menyn uppe till höger: Contributor för att kunna redigera, Editor för att även kunna hantera användare. Personer utanför Rubatos Claude-organisation kan bara läsa."',
+  'text: "Vem ser vad. Alla loggar in med sitt Rubato-konto (Microsoft) och dyker upp här efter första besöket; här styr du vilken roll de får i appen och vilka flikar rollen ser. Admin (kan hantera användare) sätts i databasen av Jakob."');
+js = rep(js, 'text: "Bara Editor/ägare kan hantera användare."', 'text: "Bara admin kan hantera användare."');
+js = rep(js, '"Du har läsbehörighet. Be Elliot om Contributor-behörighet för att uppdatera."', '"Du har läsbehörighet. Be Elliot om en roll som får redigera."');
 
 // ---- hosted-only: Shopify-sektion på stylen och Shopify-flik ----
 js = rep(js, '    const addNote = async () => { const t = noteIn.value.trim(); const cur = current(); if (!t || isNew) return; if (await write("styles", cur._id,', hosted("style-shopify.js") + '\n    const addNote = async () => { const t = noteIn.value.trim(); const cur = current(); if (!t || isNew) return; if (await write("styles", cur._id,');
-js = rep(js, '    const body = [form, planSec, gallerySec, prodSec, samplesSec, eanSec];', '    const body = [form, planSec, gallerySec, prodSec, samplesSec, eanSec, shopSec];');
-js = rep(js, 'renderPlan(); renderGallery(); renderProd(); renderSamples(); renderEanTable(); if (!isNew) renderLogInto(logUl, current().logg); }', 'renderPlan(); renderGallery(); renderProd(); renderSamples(); renderEanTable(); if (!isNew) { renderFarger(); renderLogInto(logUl, current().logg); } }');
-js = rep(js, '          const changes = describeChanges(cur, o, ST_LABELS);\n          if (!changes.length) { closeSheet(); return; }', '          const changes = describeChanges(cur, o, ST_LABELS);\n          await saveShopFields();\n          if (!changes.length) { closeSheet(); return; }');
+js = rep(js, '    const body = [varSec, form, ownImgs, planSec, gallerySec, prodSec, samplesSec, eanSec];', '    const body = [varSec, form, ownImgs, planSec, gallerySec, prodSec, samplesSec, eanSec, shopSec];');
+js = rep(js, 'renderVariants(); renderPlan(); renderGallery(); renderProd(); renderSamples(); renderEanTable(); if (!isNew) renderLogInto(logUl, current().logg); }', 'renderVariants(); renderPlan(); renderGallery(); renderProd(); renderSamples(); renderEanTable(); if (!isNew) { renderFarger(); renderLogInto(logUl, current().logg); } }');
+js = rep(js, '        const changes = describeChanges(cur, o, ST_LABELS);\n        if (!changes.length) {', '        const changes = describeChanges(cur, o, ST_LABELS);\n        await saveShopFields();\n        if (!changes.length) {');
 js = rep(js, '  // ---------- tabs ----------', hosted("shopify-tab.js") + '  // ---------- tabs ----------');
-js = rep(js, 'const VIEWS = { samples: SamplesView, ref: RefView, kollektion: KollView, produktion: ProdView, foto: FotoView, ecom: EcomView, tyglager: LagerView, leverantorer: LevView, ean: EanView }', 'const VIEWS = { samples: SamplesView, ref: RefView, kollektion: KollView, produktion: ProdView, foto: FotoView, ecom: EcomView, shopify: ShopifyView, tyglager: LagerView, leverantorer: LevView, ean: EanView }');
-js = rep(js, '    ecom: { view: null, season: "", q: "" },\n', '    ecom: { view: null, season: "", q: "" },\n    shopify: { view: null, status: "ej", q: "", lev: "", season: "", alla: false },\n');
+js = rep(js, 'ecom: EcomView, coo: CooView, tyglager: LagerView', 'ecom: EcomView, shopify: ShopifyView, coo: CooView, tyglager: LagerView');
+js = rep(js, '    ecom: { view: null, season: "", q: "", touched: false },\n', '    ecom: { view: null, season: "", q: "", touched: false },\n    shopify: { view: null, status: "ej", q: "", lev: "", season: "", alla: false },\n');
+js = rep(js, '["ecom", "E-com"], ["coo", "COO"]', '["ecom", "E-com"], ["shopify", "Shopify"], ["coo", "COO"]');
+js = rep(js, 'const NEW_TABS = ["coo"];', 'const NEW_TABS = ["coo", "shopify"];');
 js = rep(js, '    set("c_ean",', '    set("c_shopify", shopRows().filter((r) => !r.pushed && !r.saknar.length).length);\n    set("c_ean",');
 
 // ---- HTML ----
@@ -78,7 +66,7 @@ markup = rep(markup, '<button class="tab" role="tab" type="button" data-tab="eco
 {
   const btn = markup.match(/<button class="tab" role="tab" type="button" data-tab="shopify">.*?<\/button>\n    /s)[0];
   markup = markup.replace(btn, "");
-  markup = rep(markup, '<button class="tab" role="tab" type="button" data-tab="tyglager">', btn + '<button class="tab" role="tab" type="button" data-tab="tyglager">');
+  markup = rep(markup, '<button class="tab" role="tab" type="button" data-tab="coo">', btn + '<button class="tab" role="tab" type="button" data-tab="coo">');
 }
 const login = `
 <div class="login" id="login" hidden>
