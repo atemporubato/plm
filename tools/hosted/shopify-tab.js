@@ -95,7 +95,7 @@
         return h("tr", { tabIndex: 0, dataset: { style: r.st._id } },
           h("td", { class: "c-check" }, box),
           td("Style", "c-main", h("div", { class: "prod", text: r.st.namn }), h("div", { class: "sub", text: r.st._id + " · " + (r.st.status || "") })),
-          td("Färg", null, r.fr.swatch ? h("span", { class: "swatch", style: "background:" + r.fr.swatch }) : null, r.farg),
+          td("Färg", null, r.fr.swatch ? h("span", { class: "sh-swatch", style: "background:" + r.fr.swatch }) : null, r.farg),
           td("Leverantör", null, r.st.leverantor || ""),
           td("Säsong", null, [r.st.sasong, r.st.drop].filter(Boolean).join(" · ")),
           td("PO", null, r.pos.length ? h("div", { class: "sub" }, uniq(r.pos.map((p) => p.nr || p._id)).map((id) => tag(id))) : h("span", { class: "sub", text: "Ingen PO" })),

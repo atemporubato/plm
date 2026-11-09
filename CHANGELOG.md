@@ -4,6 +4,11 @@ Arbetssätt: Elliot utvecklar i artefakten (sandbox). Jakob hostar: artefaktens 
 artifact/vN.html, byggs med `node tools/build.mjs artifact/vN.html`, datan exporteras ur artefakten
 och importeras med `node tools/import-dokument.js`, och main går live på plm.atemporubato.com.
 
+## v6.1 (2026-11-09)
+
+Rättning i den hostade appen, ingen ny artefaktversion och ingen dataimport.
+- Färgchipsen i Samples (och Produktion) visades trasiga hostat: texten låg ovanpå varandra i små runda prickar. Orsaken var att den hostade Shopify-CSS:en hade en egen regel för klassen .swatch som skrev över Elliots färgchips från v5. Den hostade klassen heter nu .sh-swatch, och chipsen ser ut som i artefakten.
+
 ## v6 (2026-11-05)
 
 Elliots artefakt per 5 november 2026, sen eftermiddag. Endast stiländring, ingen dataimport.
