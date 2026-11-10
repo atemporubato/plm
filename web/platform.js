@@ -114,7 +114,7 @@ export const user = {
   async can() { return true; },
   async canEdit() { return !!myRow && myRow.roll === "admin"; },
   async isOwner() { return !!myRow && myRow.roll === "admin"; },
-  async profiles(ids) { const { data } = await supabase.from("anvandare").select("id, namn, email").in("id", ids); return Object.fromEntries((data || []).map((u) => [u.id, { name: u.namn || u.email, email: u.email, guest: false }])); },
+  async profiles(ids) { ids = (ids || []).filter((x) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(x))); if (!ids.length) return {}; const { data } = await supabase.from("anvandare").select("id, namn, email").in("id", ids); return Object.fromEntries((data || []).map((u) => [u.id, { name: u.namn || u.email, email: u.email, guest: false }])); },
   email: () => (me ? me.email : ""),
 };
 

@@ -4,6 +4,24 @@ Arbetssätt: Elliot utvecklar i artefakten (sandbox). Jakob hostar: artefaktens 
 artifact/vN.html, byggs med `node tools/build.mjs artifact/vN.html`, datan exporteras ur artefakten
 och importeras med `node tools/import-dokument.js`, och main går live på plm.atemporubato.com.
 
+## v7 (2026-11-10)
+
+Matrisvy i COO-fliken enligt scope 10 nov 2026. Hostad modul (tools/hosted/coo-matris.js) ovanpå Elliots artefakt v6. Ingen datamigrering: matrisen läser fälten hor_till, fas, offset_dagar, ansvarig, bana och matris på händelserna och mallarna i installningar "planeringsmallar".
+
+- COO har två lägen: Matris (standard) och Lista (Elliots vy, oförändrad).
+- Fem matriser: Drops, PR-träffar, In Residence, Mässor och Lokaler. Rader är föräldrar (matris satt, hor_till tom), sorterade på datum. Kolumner är mallens faser i mallens ordning, med namn och ledtid ("4 v före"). Föräldern själv ligger i sin kolumn (Lansering respektive Event), markerad.
+- Cell: datum, statusprick (Planerad grå, Pågår gul, Klar grön, Försenad röd; försenad räknas vid visning), ansvarig. Tom cell har "+" som skapar fasen från mallen. Klick öppnar samma redigeringspanel som listan.
+- Röd kant när två eller fler händelser i matriserna ligger samma dag. Rader vars titel börjar med "TBD " visas dämpade.
+- Rullgardin per rad: för drops alla PO:er med samma säsong och drop (PO-nr, leverantör, status, önskad leverans, planerad ex, ETA lager, fotosample) och produkterna per PO med antal. Klick på PO-nr öppnar PO:n i Produktion. Därunder kommentar och historik. Utfällda rader sparas i webbläsaren per användare.
+- Flytta lansering: ändras datumet på en förälder frågar appen "Flytta alla faser med?". Ja ger varje fas datum = nytt datum + fasens offset_dagar och loggraden "Flyttad med lanseringen från X till Y". Slutdatum följer med när startdatum ändras.
+- "Ny drop" och "Nytt event" skapar föräldern och en händelse per rad i mallen (titel "TBD " + fasnamn + etikett), med nästa lediga H-nummer.
+- Filter: säsong, ansvarig (övriga celler tonas ner) och Visa TBD. "Min vecka" visar ansvarigs (eller din egen) öppna händelser de kommande 7 dagarna.
+- Redigeringspanelen har fått fältet "Ansvarig för fasen".
+- Mobil: matriserna scrollar sidledes i egen ruta, sidan blir inte bredare.
+- Plattform: namnuppslag i historiken hoppar över loggrader som inte har ett användar-id (t.ex. av "claude"), vilket gav 400-fel i konsolen.
+
+Acceptans testad mot riktig data (teständringarna återställda efteråt): 43 av 44 händelser i rätt matris och cell (H005 Tillträde Söder Mälarstrand 21 har ingen matris i datan och visas därför bara i listan), H002 visar 6 PO:er, flytt av H002 till 4 mar flyttade H037, H015, H016, H038, H017 och H018 med samma avstånd och loggrad, Ny drop 2027-05-20 skapade 8 händelser med rätt datum, krocken 25 feb (H002 och H019) markeras.
+
 ## v6.1 (2026-11-09)
 
 Rättning i den hostade appen, ingen ny artefaktversion och ingen dataimport.

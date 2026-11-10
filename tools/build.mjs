@@ -60,6 +60,15 @@ js = rep(js, '["ecom", "E-com"], ["coo", "COO"]', '["ecom", "E-com"], ["shopify"
 js = rep(js, 'const NEW_TABS = ["coo"];', 'const NEW_TABS = ["coo", "shopify"];');
 js = rep(js, '    set("c_ean",', '    set("c_shopify", shopRows().filter((r) => !r.pushed && !r.saknar.length).length);\n    set("c_ean",');
 
+// ---- hosted-only: COO-matris (tools/hosted/coo-matris.js) ----
+js = rep(js, 'const EV_LABELS = { titel: "Titel", typ: "Typ", datum: "Datum", slut: "Slut", agare: "Ägare", status: "Status",', 'const EV_LABELS = { titel: "Titel", typ: "Typ", datum: "Datum", slut: "Slut", agare: "Ägare", ansvarig: "Ansvarig", status: "Status",');
+js = rep(js, '    const fKom = area("f_ekom", e.kommentar);\n', '    const fKom = area("f_ekom", e.kommentar);\n    const fAnsv = inp("f_eansv", e.ansvarig, { list: "dlAgare", autocomplete: "off", placeholder: "t.ex. Oliver eller Kalle, Jakob" });\n');
+js = rep(js, 'field("Koppla till style", fStyle),\n      field("Kommentar", fKom, { full: true }));', 'field("Koppla till style", fStyle),\n      field("Ansvarig för fasen", fAnsv), field("Kommentar", fKom, { full: true }));');
+js = rep(js, 'styleId: fStyle.value || null, kommentar: fKom.value.trim() };\n', 'styleId: fStyle.value || null, kommentar: fKom.value.trim() };\n      o.ansvarig = fAnsv.value.trim();\n      if (!isNew && isISO(e.datum) && isISO(o.datum) && o.datum !== e.datum && isISO(e.slut) && o.slut === e.slut) o.slut = addDays(e.slut, daysBetween(e.datum, o.datum));\n');
+js = rep(js, 'if (await write("handelser", e._id, Object.assign({}, o, { andrad: now, logg: (e.logg || []).concat(changes.map(logEntry)) }))) { toast("Sparat"); closeSheet(); }', 'if (await write("handelser", e._id, Object.assign({}, o, { andrad: now, logg: (e.logg || []).concat(changes.map(logEntry)) }))) { toast("Sparat"); closeSheet(); await mxMoveKids(e, o); }');
+js = rep(js, '  // ---------- tabs ----------', hosted("coo-matris.js") + '  // ---------- tabs ----------');
+js = rep(js, 'shopify: ShopifyView, coo: CooView,', 'shopify: ShopifyView, coo: CooMatrisView,');
+
 // ---- HTML ----
 markup = rep(markup, '<button class="tab" role="tab" type="button" data-tab="ecom">', '<button class="tab" role="tab" type="button" data-tab="shopify"><span class="tn">Shopify <span class="c" id="c_shopify"></span></span><span class="who">Jakob</span></button>\n    <button class="tab" role="tab" type="button" data-tab="ecom">');
 // Shopify-fliken ska ligga efter E-com: flytta knappen

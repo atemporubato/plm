@@ -50,3 +50,55 @@
 .warnline.bad { color: var(--late); background: var(--late-soft); }
 .chk { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; color: var(--muted); }
 @media (max-width: 760px) { .shop-sec .form.three { grid-template-columns: 1fr 1fr; } .farg-rad { grid-template-columns: 1fr 1fr; } }
+
+/* COO matrisvy (hosted) */
+.mx-seg { justify-self: start; }
+.mx-legend { display: flex; flex-wrap: wrap; gap: 12px; font-size: 13px; color: var(--muted); margin-left: auto; }
+.mx-legend span { display: inline-flex; align-items: center; gap: 5px; }
+.mx-krockbox { display: inline-block; width: 12px; height: 12px; border: 1px solid var(--late); border-radius: 2px; }
+.mx-body { display: grid; gap: 28px; min-width: 0; }
+.mx-sec { display: grid; gap: 8px; min-width: 0; }
+.mx-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.mx-wrap { overflow-x: auto; max-width: 100%; border: 1px solid var(--line-strong); background: var(--surface); -webkit-overflow-scrolling: touch; }
+table.mx { border-collapse: collapse; min-width: 100%; font-size: 13px; }
+table.mx th, table.mx td { border-bottom: 1px solid var(--line); border-right: 1px solid var(--line); padding: 6px 8px; vertical-align: top; text-align: left; }
+table.mx thead th { font-weight: 400; min-width: 104px; background: var(--paper); }
+table.mx thead th span { display: block; }
+table.mx thead th .sub { font-size: 12px; }
+table.mx .mx-parentcol { background: var(--warn-soft); }
+table.mx .mx-rowh { position: sticky; left: 0; z-index: 1; background: var(--surface); min-width: 200px; max-width: 260px; font-weight: 400; }
+table.mx thead .mx-rowh { background: var(--paper); z-index: 2; }
+table.mx .mx-rowh .sub { display: block; font-size: 12px; margin-left: 18px; }
+.mx-name { all: unset; cursor: pointer; display: flex; gap: 6px; align-items: baseline; font-size: 14px; }
+.mx-name:hover span:last-child, .mx-name:focus-visible span:last-child { text-decoration: underline; }
+.mx-caret { width: 12px; color: var(--muted); }
+tr.mx-row.tbd > th, tr.mx-row.tbd > td { color: var(--muted); }
+tr.mx-row.tbd .mx-cell { opacity: .7; }
+.mx-cell { all: unset; box-sizing: border-box; cursor: pointer; display: grid; gap: 1px; width: 100%; padding: 3px 5px; border: 1px solid transparent; border-radius: 2px; }
+.mx-cell + .mx-cell { margin-top: 4px; }
+.mx-cell:hover, .mx-cell:focus-visible { background: var(--paper); border-color: var(--line-strong); }
+.mx-cell.krock { border-color: var(--late); }
+.mx-cell.dim { opacity: .35; }
+.mx-cell.installd .mx-date { text-decoration: line-through; }
+.mx-date { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.mx-who { font-size: 11px; color: var(--muted); margin-left: 14px; }
+.mx-dot { display: inline-block; flex: none; width: 8px; height: 8px; border-radius: 50%; background: #9A968C; }
+.mx-dot.pagar { background: #C9A227; }
+.mx-dot.klar { background: var(--ok); }
+.mx-dot.sen { background: var(--late); }
+.mx-dot.installd { background: transparent; border: 1px solid var(--line-strong); }
+.mx-add { all: unset; box-sizing: border-box; cursor: pointer; display: block; width: 100%; min-width: 48px; text-align: center; color: var(--muted); border: 1px dashed var(--line-strong); border-radius: 2px; padding: 2px 0; }
+.mx-add:hover, .mx-add:focus-visible { color: var(--ink); border-color: var(--ink); }
+tr.mx-open > td { background: var(--paper); padding: 12px 16px; }
+.mx-detail { display: grid; gap: 14px; max-width: 1100px; position: sticky; left: 0; }
+.mx-kom { white-space: pre-wrap; margin: 0; }
+.mx-po { font-size: 13px; }
+.mx-po-prod td { padding-top: 0; border-top: 0; }
+.mx-prod { display: flex; flex-wrap: wrap; gap: 4px 14px; padding-left: 12px; }
+.mx-prod-item { font-size: 13px; }
+.mx-others { display: flex; flex-wrap: wrap; gap: 6px; }
+.mx-week { border: 1px solid var(--line-strong); background: var(--surface); padding: 10px 14px; }
+.mx-week ul { list-style: none; margin: 6px 0 0; padding: 0; display: grid; gap: 4px; }
+.mx-week .linklike { display: inline-flex; gap: 8px; align-items: center; }
+.mx-preview { list-style: none; padding: 0; margin: 0; display: grid; gap: 4px; font-size: 14px; }
+.linklike { all: unset; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
