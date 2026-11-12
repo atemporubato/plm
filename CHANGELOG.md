@@ -4,6 +4,15 @@ Arbetssätt: Elliot utvecklar i artefakten (sandbox). Jakob hostar: artefaktens 
 artifact/vN.html, byggs med `node tools/build.mjs artifact/vN.html`, datan exporteras ur artefakten
 och importeras med `node tools/import-dokument.js`, och main går live på plm.atemporubato.com.
 
+## v8 (2026-11-12)
+
+Elliots artefakt per 12 november 2026 (v6 + Lager-ändringen). Endast kodändring, ingen dataimport och ingen schemaändring: partierna ligger kvar i collection "tyglager".
+- Fliken Tyglager heter Lager och rymmer både tyg och trims (knappar, dragkedjor, etiketter …). Nytt filter Tyg / Trims / Tyg + trims.
+- Tyg räknas i meter som förut, trims i antal (st). Nya fält på trimspartier: typ ("trims"), storlek, inkoptAntal, antal, prisPerSt. Artikelnamnet ligger i tygNamn (tygId tomt). Partier utan typ räknas som tyg.
+- "+ Nytt parti" börjar med Typ (Tyg/Trims); trims är förvalt när filtret står på Trims. "Justera antal", "Förbrukat" och historiken räknar i rätt enhet.
+- Strippen visar meter tyg och antal trims separat; "Saknar mängd" räknar båda.
+- CSV-exporten heter Rubato_Lager med kolumnerna Typ, Storlek och Enhet.
+
 ## v7 (2026-11-10)
 
 Matrisvy i COO-fliken enligt scope 10 nov 2026. Hostad modul (tools/hosted/coo-matris.js) ovanpå Elliots artefakt v6. Ingen datamigrering: matrisen läser fälten hor_till, fas, offset_dagar, ansvarig, bana och matris på händelserna och mallarna i installningar "planeringsmallar".

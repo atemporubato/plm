@@ -21,7 +21,7 @@ import * as P from "./platform.js";
   const STYLE_STATUS = ["Produktidé", "Idé under utveckling", "Sampling", "Godkänd", "PO lagd", "I produktion", "Levererad", "Pausad", "Kastad"];
   const styleStatusNorm = (s) => (s === "Skippad" ? "Kastad" : (s || "Sampling"));
   const isIdea = (st) => !!st && IDEA_STATUS.includes(styleStatusNorm(st.status));
-  const TAB_DEFS = [["bibliotek", "Bibliotek"], ["samples", "Samples"], ["ref", "Ref-plagg"], ["kollektion", "Kollektion"], ["produktion", "Produktion"], ["foto", "Foto"], ["ecom", "E-com"], ["shopify", "Shopify"], ["coo", "COO"], ["tyglager", "Tyglager"], ["leverantorer", "Leverantörer"]];
+  const TAB_DEFS = [["bibliotek", "Bibliotek"], ["samples", "Samples"], ["ref", "Ref-plagg"], ["kollektion", "Kollektion"], ["produktion", "Produktion"], ["foto", "Foto"], ["ecom", "E-com"], ["shopify", "Shopify"], ["coo", "COO"], ["tyglager", "Lager"], ["leverantorer", "Leverantörer"]];
   const NEW_TABS = ["coo", "shopify"]; // flikar tillagda efter att roller kan ha sparats – visas tills rollen sparas om
   const ALL_TABS = TAB_DEFS.map((x) => x[0]);
   const ROLE_DEFAULTS = {
@@ -173,7 +173,7 @@ import * as P from "./platform.js";
     }
   } catch (e) {}
   function persist() {
-    try { localStorage.setItem("rubato-samples-v5", JSON.stringify({ tab: UI.tab, bibliotek: { mode: UI.bibliotek.mode, season: UI.bibliotek.season, kat: UI.bibliotek.kat, lev: UI.bibliotek.lev, status: UI.bibliotek.status }, samples: { status: UI.samples.status, group: UI.samples.group, lev: UI.samples.lev, season: UI.samples.season, plats: UI.samples.plats }, drops: { season: UI.drops.season }, styles: { status: UI.styles.status, lev: UI.styles.lev, season: UI.styles.season }, prod: { status: UI.prod.status, lev: UI.prod.lev, season: UI.prod.season }, koll: UI.koll, foto: { season: UI.foto.season, typ: UI.foto.typ, touched: UI.foto.touched }, ecom: { season: UI.ecom.season, touched: UI.ecom.touched }, coo: { mode: UI.coo.mode, typer: UI.coo.typer, agare: UI.coo.agare, season: UI.coo.season, visaAuto: UI.coo.visaAuto }, lager: { status: UI.lager.status, plats: UI.lager.plats, group: UI.lager.group } })); } catch (e) {}
+    try { localStorage.setItem("rubato-samples-v5", JSON.stringify({ tab: UI.tab, bibliotek: { mode: UI.bibliotek.mode, season: UI.bibliotek.season, kat: UI.bibliotek.kat, lev: UI.bibliotek.lev, status: UI.bibliotek.status }, samples: { status: UI.samples.status, group: UI.samples.group, lev: UI.samples.lev, season: UI.samples.season, plats: UI.samples.plats }, drops: { season: UI.drops.season }, styles: { status: UI.styles.status, lev: UI.styles.lev, season: UI.styles.season }, prod: { status: UI.prod.status, lev: UI.prod.lev, season: UI.prod.season }, koll: UI.koll, foto: { season: UI.foto.season, typ: UI.foto.typ, touched: UI.foto.touched }, ecom: { season: UI.ecom.season, touched: UI.ecom.touched }, coo: { mode: UI.coo.mode, typer: UI.coo.typer, agare: UI.coo.agare, season: UI.coo.season, visaAuto: UI.coo.visaAuto }, lager: { status: UI.lager.status, plats: UI.lager.plats, group: UI.lager.group, typ: UI.lager.typ } })); } catch (e) {}
   }
 
   // ---------- lookups ----------
@@ -240,6 +240,11 @@ import * as P from "./platform.js";
   }
   const lotsOf = (tygId) => (tygId ? D.lager.filter((l) => l.tygId === tygId) : []);
   const lotName = (l) => { const t = tygOf(l); return t ? t.namn : (l.tygNamn || "Okänt tyg"); };
+  // Lager: partier är antingen tyg (meter) eller trims (antal st). Partier utan typ är tyg.
+  const isTrims = (l) => !!l && l.typ === "trims";
+  const lotQty = (l) => num(isTrims(l) ? l.antal : l.meter);
+  const fmtSt = (n) => Math.round(Number(n)).toLocaleString("sv-SE") + " st";
+  const fmtQty = (l, n) => (isTrims(l) ? fmtSt(n) : "ca " + fmtM(n) + " m");
   const reservedName = (l) => { const st = l.reserveradFor ? byId(D.styles, l.reserveradFor) : null; return st ? st.namn : ""; };
   function stockSummary(tygId) {
     const lots = lotsOf(tygId).filter((l) => l.status === "I lager");
@@ -2321,7 +2326,7 @@ import * as P from "./platform.js";
       tb.addEventListener("click", (e) => { const tr = e.target.closest("tr[data-id]"); if (tr) openTyg(tr.dataset.id); });
       tb.addEventListener("keydown", (e) => { if (e.key !== "Enter") return; const tr = e.target.closest("tr[data-id]"); if (tr) openTyg(tr.dataset.id); });
       this.empty = h("div", { class: "empty", hidden: true });
-      root.append(h("p", { class: "lede", text: "Alla tyger ni provat eller använder, skrivna som ni pratar om dem, t.ex. \"Japan Blue inhouse – Westpoint Canvas 223\". Nya tyg som skrivs in på en sample hamnar här automatiskt. Meter ni själva äger ligger under Tyglager." }), h("section", { class: "filters" }, q, fs, this.count), h("section", { class: "ledger-wrap" }, t, this.empty));
+      root.append(h("p", { class: "lede", text: "Alla tyger ni provat eller använder, skrivna som ni pratar om dem, t.ex. \"Japan Blue inhouse – Westpoint Canvas 223\". Nya tyg som skrivs in på en sample hamnar här automatiskt. Meter ni själva äger ligger under Lager." }), h("section", { class: "filters" }, q, fs, this.count), h("section", { class: "ledger-wrap" }, t, this.empty));
     },
     update() {
       const st = UI.tyger, q = norm(st.q);
@@ -2353,48 +2358,58 @@ import * as P from "./platform.js";
       const st = UI.lager;
       const upd = () => { this.update(); persist(); };
       this.strip = makeStrip([
-        { key: "meter", label: "Meter kvar (ca)" },
+        { key: "meter", label: "Meter tyg kvar (ca)" },
+        { key: "antal", label: "Antal trims kvar" },
         { key: "partier", label: "Partier i lager" },
-        { key: "saknar", label: "Saknar meter", cls: "t-warn" },
+        { key: "saknar", label: "Saknar mängd", cls: "t-warn" },
         { key: "bestallda", label: "Beställda" },
         { key: "reserverade", label: "Reserverade" }
       ], st, () => { this.seg.sync(); upd(); });
       const q = searchBox("q_lager", "Sök tyg, färg, plats, style …", st, () => this.update());
       this.fPlats = filterSelect("f_l_plats", "Alla platser", st, "plats", upd);
       this.seg = makeSeg([["I lager", "I lager"], ["Beställd", "Beställd"], ["Förbrukad", "Förbrukad"], ["alla", "Alla"]], st, "status", upd);
+      if (!st.typ) st.typ = "alla";
+      const typState = { get typ() { return st.typ; }, set typ(v) { st.typ = v; }, view: null };
+      this.segTyp = makeSeg([["tyg", "Tyg"], ["trims", "Trims"], ["alla", "Tyg + trims"]], typState, "typ", upd);
+      this.segTyp.el.setAttribute("aria-label", "Typ");
       const grp = selectEl("f_l_group", [["plats", "Gruppera per plats"], ["tyg", "Gruppera per tyg"], ["none", "Ingen gruppering"]], st.group);
       grp.addEventListener("change", () => { st.group = grp.value; upd(); });
       this.count = h("span", { class: "count" });
-      const { t, tb } = table([["Tyg"], ["Plats"], ["Kvar (m)"], ["Reserverad för"], ["Uppdaterad"], ["Status"], ["Kommentar"]]);
+      const { t, tb } = table([["Artikel"], ["Plats"], ["Kvar"], ["Reserverad för"], ["Uppdaterad"], ["Status"], ["Kommentar"]]);
       this.tb = tb;
       tb.addEventListener("click", (e) => { if (e.target.closest("button")) return; const tr = e.target.closest("tr[data-id]"); if (tr) openLager(tr.dataset.id); });
       tb.addEventListener("keydown", (e) => { if (e.key !== "Enter" || e.target.closest("button")) return; const tr = e.target.closest("tr[data-id]"); if (tr) openLager(tr.dataset.id); });
       this.empty = h("div", { class: "empty", hidden: true });
-      root.append(h("p", { class: "lede", text: "Tyg som Rubato äger: var det ligger och ungefär hur många meter som är kvar. Uppdatera metrarna när en order har sytts eller när leverantören har räknat." }), this.strip.el, h("section", { class: "filters", "aria-label": "Filter" }, q, this.fPlats.el, this.seg.el, grp, this.count), h("section", { class: "ledger-wrap" }, t, this.empty));
+      root.append(h("p", { class: "lede", text: "Tyg och trims som Rubato äger: var det ligger och hur mycket som är kvar – meter för tyg, antal för trims (knappar, dragkedjor, etiketter …). Uppdatera när en order har sytts eller när leverantören har räknat." }), this.strip.el, h("section", { class: "filters", "aria-label": "Filter" }, q, this.segTyp.el, this.fPlats.el, this.seg.el, grp, this.count), h("section", { class: "ledger-wrap" }, t, this.empty));
     },
     update() {
       const st = UI.lager, q = norm(st.q);
-      const inStock = D.lager.filter((l) => l.status === "I lager");
+      const typOk = (l) => !st.typ || st.typ === "alla" || (st.typ === "trims") === isTrims(l);
+      this.segTyp.sync();
+      const inStock = D.lager.filter((l) => l.status === "I lager" && typOk(l));
       this.strip.set({
-        meter: Math.round(inStock.reduce((a, l) => a + (num(l.meter) || 0), 0)),
+        meter: Math.round(inStock.filter((l) => !isTrims(l)).reduce((a, l) => a + (num(l.meter) || 0), 0)),
+        antal: inStock.filter(isTrims).reduce((a, l) => a + (num(l.antal) || 0), 0),
         partier: inStock.length,
-        saknar: inStock.filter((l) => num(l.meter) == null).length,
-        bestallda: D.lager.filter((l) => l.status === "Beställd").length,
+        saknar: inStock.filter((l) => lotQty(l) == null).length,
+        bestallda: D.lager.filter((l) => l.status === "Beställd" && typOk(l)).length,
         reserverade: inStock.filter((l) => l.reserveradFor).length
       });
       this.seg.sync();
       this.fPlats.fill(uniq(D.lager.map((l) => l.plats)));
       const list = D.lager.filter((l) => {
         switch (st.view) {
-          case "meter": if (!(l.status === "I lager" && num(l.meter) != null)) return false; break;
+          case "meter": if (!(l.status === "I lager" && !isTrims(l) && num(l.meter) != null)) return false; break;
+          case "antal": if (!(l.status === "I lager" && isTrims(l) && num(l.antal) != null)) return false; break;
           case "partier": if (l.status !== "I lager") return false; break;
-          case "saknar": if (!(l.status === "I lager" && num(l.meter) == null)) return false; break;
+          case "saknar": if (!(l.status === "I lager" && lotQty(l) == null)) return false; break;
           case "bestallda": if (l.status !== "Beställd") return false; break;
           case "reserverade": if (!(l.status === "I lager" && l.reserveradFor)) return false; break;
           default: if (st.status !== "alla" && l.status !== st.status) return false;
         }
+        if (!typOk(l)) return false;
         if (st.plats && l.plats !== st.plats) return false;
-        if (q && ![l._id, lotName(l), l.farg, l.plats, l.kommentar, reservedName(l), l.status].join(" ").toLowerCase().includes(q)) return false;
+        if (q && ![l._id, lotName(l), l.farg, l.storlek, isTrims(l) ? "trims" : "tyg", l.plats, l.kommentar, reservedName(l), l.status].join(" ").toLowerCase().includes(q)) return false;
         return true;
       });
       const keyOf = st.group === "plats" ? (l) => l.plats || "Utan plats" : st.group === "tyg" ? (l) => lotName(l) : () => "";
@@ -2406,11 +2421,14 @@ import * as P from "./platform.js";
         if (st.group !== "none" && k !== last) {
           last = k;
           const grpLots = list.filter((x) => keyOf(x) === k);
-          const known = grpLots.filter((x) => x.status === "I lager" && num(x.meter) != null);
-          const unknown = grpLots.filter((x) => x.status === "I lager" && num(x.meter) == null).length;
+          const inL = grpLots.filter((x) => x.status === "I lager");
+          const knownM = inL.filter((x) => !isTrims(x) && num(x.meter) != null);
+          const knownS = inL.filter((x) => isTrims(x) && num(x.antal) != null);
+          const unknown = inL.filter((x) => lotQty(x) == null).length;
           const bits = [k, grpLots.length + (grpLots.length === 1 ? " parti" : " partier")];
-          if (known.length) bits.push("ca " + fmtM(known.reduce((a, x) => a + num(x.meter), 0)) + " m");
-          if (unknown) bits.push(unknown + " utan meter");
+          if (knownM.length) bits.push("ca " + fmtM(knownM.reduce((a, x) => a + num(x.meter), 0)) + " m");
+          if (knownS.length) bits.push(fmtSt(knownS.reduce((a, x) => a + num(x.antal), 0)));
+          if (unknown) bits.push(unknown + " utan mängd");
           rows.push(h("tr", { class: "group" }, h("td", { colSpan: 7, text: bits.join(" · ") })));
         }
         rows.push(lagerRow(l));
@@ -2419,9 +2437,9 @@ import * as P from "./platform.js";
       this.empty.hidden = list.length > 0;
       if (!list.length) {
         this.empty.replaceChildren(...(!loaded.has("lager")
-          ? [h("strong", { text: db ? "Laddar tyglager …" : "Inget tyglager att visa" })]
+          ? [h("strong", { text: db ? "Laddar lager …" : "Inget lager att visa" })]
           : D.lager.length ? [h("strong", { text: "Inget matchar filtret" }), h("span", { text: "Byt status, plats eller rensa sökningen." })]
-          : [h("strong", { text: "Inga tygpartier ännu" }), h("span", { text: "Lägg till det första med \"+ Nytt parti\": tyg, var det ligger och ungefär hur många meter." })]));
+          : [h("strong", { text: "Inga partier ännu" }), h("span", { text: "Lägg till det första med \"+ Nytt parti\": tyg eller trims, var det ligger och hur mycket." })]));
       }
       this.count.textContent = list.length + " av " + D.lager.length + " partier";
     }
@@ -2429,12 +2447,14 @@ import * as P from "./platform.js";
   function lagerRow(l) {
     const tr = h("tr", { tabIndex: 0, dataset: { id: l._id } });
     const t = tygOf(l);
-    const sub = [l._id, l.farg, num(l.bredd) != null ? l.bredd + " cm" : ""].filter(Boolean).join(" · ");
-    const kvar = h("td", { "data-label": "Kvar (m)", class: "c-exp" });
-    if (num(l.meter) != null) kvar.append(h("div", { class: "mono", text: "ca " + fmtM(l.meter) + " m" }));
-    else if (l.status === "I lager") kvar.append(h("span", { class: "flag", text: "Ange meter" }));
+    const trm = isTrims(l);
+    const sub = [l._id, trm ? "Trims" : "", l.farg, trm ? l.storlek : (num(l.bredd) != null ? l.bredd + " cm" : "")].filter(Boolean).join(" · ");
+    const kvar = h("td", { "data-label": "Kvar", class: "c-exp" });
+    const qn = lotQty(l), qi = num(trm ? l.inkoptAntal : l.inkoptMeter);
+    if (qn != null) kvar.append(h("div", { class: "mono", text: fmtQty(l, qn) }));
+    else if (l.status === "I lager") kvar.append(h("span", { class: "flag", text: trm ? "Ange antal" : "Ange meter" }));
     else kvar.append(h("span", { class: "muted", text: "–" }));
-    if (num(l.inkoptMeter) != null) kvar.append(h("div", { class: "sub", text: "inköpt " + fmtM(l.inkoptMeter) + " m" }));
+    if (qi != null) kvar.append(h("div", { class: "sub", text: "inköpt " + (trm ? fmtSt(qi) : fmtM(qi) + " m") }));
     const upd = l.raknad || (l.andrad ? String(l.andrad).slice(0, 10) : "");
     tr.append(
       td("", "c-main", h("div", { class: "prod" + (t && t.status === "Slut" ? " late-text" : ""), text: lotName(l) }), h("div", { class: "sub", text: sub })),
@@ -3656,7 +3676,7 @@ import * as P from "./platform.js";
     if (t === "foto" && w) add("+ Ny sample", () => openSample(null, { version: "Fotosample" }), true);
     if (t === "ref" && w) add("+ Nytt referensplagg", () => openRef(null), true);
     if (t === "produktion") { if (downloads) add("Exportera CSV", exportPo); if (w) add("+ Ny PO", () => openPo(null, { sasong: ProdView.seasonInView() || "", leverantor: UI.prod.lev || "" }), true); }
-    if (t === "tyglager") { if (downloads) add("Exportera CSV", exportLager); if (w) add("+ Nytt tyg", () => openTyg(null)); if (w) add("+ Nytt parti", () => openLager(null), true); }
+    if (t === "tyglager") { if (downloads) add("Exportera CSV", exportLager); if (w) add("+ Nytt tyg", () => openTyg(null)); if (w) add("+ Nytt parti", () => openLager(null, UI.lager.typ === "trims" ? { typ: "trims" } : null), true); }
     if (t === "leverantorer" && w) add("+ Ny leverantör", () => openLev(null), true);
     if (t === "ean" && downloads) add("Exportera alla EAN", exportAllEan);
     a.append(h("button", { class: "btn", type: "button", text: "Logga ut", title: P.user.email(), onclick: P.signOut }));
@@ -4505,7 +4525,7 @@ import * as P from "./platform.js";
   }
 
   // ---------- fabric lot sheet ----------
-  const L_LABELS = { tygId: "Tyg", farg: "Färg", plats: "Plats", status: "Status", inkoptMeter: "Inköpt (m)", meter: "Kvar (m)", bredd: "Bredd (cm)", prisPerMeter: "Pris per meter", prisValuta: "Valuta", inkopt: "Inköpt", reserveradFor: "Reserverad för", kommentar: "Kommentar" };
+  const L_LABELS = { tygId: "Tyg", farg: "Färg", plats: "Plats", status: "Status", inkoptMeter: "Inköpt (m)", meter: "Kvar (m)", bredd: "Bredd (cm)", prisPerMeter: "Pris per meter", prisValuta: "Valuta", inkopt: "Inköpt", reserveradFor: "Reserverad för", kommentar: "Kommentar", typ: "Typ", tygNamn: "Artikel", storlek: "Storlek", inkoptAntal: "Inköpt (st)", antal: "Kvar (st)", prisPerSt: "Pris per st" };
   function openLager(id, preset) {
     const isNew = !id;
     const l = isNew ? Object.assign({ _id: null, status: "I lager", plats: "", logg: [] }, preset || {}) : byId(D.lager, id);
@@ -4523,19 +4543,37 @@ import * as P from "./platform.js";
     const fPris = inp("f_lpris", l.prisPerMeter, { type: "number", min: "0", step: "0.01", inputmode: "decimal" });
     const fVal = selectEl("f_lval", [["", "–"], "SEK", "EUR", "JPY", "GBP", "USD"], l.prisValuta || "");
     const fInkDate = inp("f_linkopt", l.inkopt, { type: "date" });
+    const fTyp = selectEl("f_ltyp", [["tyg", "Tyg (meter)"], ["trims", "Trims (antal)"]], isTrims(l) ? "trims" : "tyg");
+    const fStorlek = inp("f_lstorlek", l.storlek, { placeholder: "t.ex. 32L" });
+    const fInkSt = inp("f_linkst", l.inkoptAntal, { type: "number", min: "0", step: "1", inputmode: "numeric" });
+    const fKvarSt = inp("f_lkvarst", l.antal, { type: "number", min: "0", step: "1", inputmode: "numeric", placeholder: "antal" });
+    const fPrisSt = inp("f_lprisst", l.prisPerSt, { type: "number", min: "0", step: "0.0001", inputmode: "decimal" });
+    fInkSt.addEventListener("change", () => { if (isNew && !fKvarSt.value && fInkSt.value) fKvarSt.value = fInkSt.value; });
     const styleOpts = [["", "– Ingen –"]].concat(D.styles.filter((s) => isActiveStyle(s) || s._id === l.reserveradFor).sort((a, b) => (a.namn || "").localeCompare(b.namn || "", "sv")).map((s) => [s._id, s.namn + (s.sasong ? " · " + s.sasong : "")]));
     const fRes = selectEl("f_lres", styleOpts, l.reserveradFor || "");
     const fKom = area("f_lkom", l.kommentar, "T.ex. vad partiet är tänkt till, eller varifrån metertalet kommer");
     fInk.addEventListener("change", () => { if (isNew && !fKvar.value && fInk.value) fKvar.value = fInk.value; });
+    const fArt = field("Tyg", fTyg, { full: true, hint: "Skriv fritt eller välj ett tyg som redan finns." });
+    const fsTyg = [h("h3", { class: "sec-title full", text: "Meter" }), field("Inköpt (m)", fInk), field("Kvar (m, ca)", fKvar, { hint: "Tomt = vet inte ännu" }), field("Bredd (cm)", fBredd), field("Pris per meter", fPris)];
+    const fsTrims = [h("h3", { class: "sec-title full", text: "Antal" }), field("Storlek", fStorlek), field("Inköpt (st)", fInkSt), field("Kvar (st)", fKvarSt, { hint: "Tomt = vet inte ännu" }), field("Pris per st", fPrisSt)];
     const form = h("form", { class: "form", id: "lagerForm", autocomplete: "off", onsubmit: (e) => e.preventDefault() },
-      field("Tyg", fTyg, { full: true, hint: "Skriv fritt eller välj ett tyg som redan finns." }),
+      field("Typ", fTyp), field("Status", fStatus),
+      fArt,
       field("Färg / kulör", fFarg), field("Ligger hos", fPlats),
-      field("Status", fStatus), field("Reserverad för", fRes),
-      h("h3", { class: "sec-title full", text: "Meter" }),
-      field("Inköpt (m)", fInk), field("Kvar (m, ca)", fKvar, { hint: "Tomt = vet inte ännu" }),
-      field("Bredd (cm)", fBredd), field("Inköpt datum", fInkDate),
-      field("Pris per meter", fPris), field("Valuta", fVal),
+      field("Reserverad för", fRes), field("Inköpt datum", fInkDate),
+      ...fsTyg, ...fsTrims,
+      field("Valuta", fVal),
       field("Kommentar", fKom, { full: true }));
+    const syncTyp = () => {
+      const t = fTyp.value === "trims";
+      fsTyg.forEach((e) => (e.hidden = t));
+      fsTrims.forEach((e) => (e.hidden = !t));
+      const lab = fArt.querySelector("label"); if (lab) lab.textContent = t ? "Artikel" : "Tyg";
+      const hint = fArt.querySelector(".hint"); if (hint) hint.textContent = t ? "Leverantör + artikel, t.ex. Fenili 11072 Corno 4F (knapp)." : "Skriv fritt eller välj ett tyg som redan finns.";
+      fTyg.placeholder = t ? "t.ex. Fenili 11072 Corno 4F" : "t.ex. Olmetex – C993950";
+      if (t) fTyg.removeAttribute("list"); else fTyg.setAttribute("list", "dlTyg");
+    };
+    fTyp.addEventListener("change", syncTyp); syncTyp();
     if (ro) lock(form);
 
     const quick = h("div", { class: "quick" });
@@ -4552,20 +4590,21 @@ import * as P from "./platform.js";
       if (isNew || ro) { quick.hidden = true; return; }
       quick.hidden = false;
       const add = (label, fn, primary) => quick.append(h("button", { class: "btn small" + (primary ? " primary" : ""), type: "button", text: label, onclick: fn }));
-      if (cur.status === "I lager") add("Justera meter", () => adjustMeters(cur), true);
+      if (cur.status === "I lager") add(isTrims(cur) ? "Justera antal" : "Justera meter", () => adjustMeters(cur), true);
       if (cur.status === "Beställd") add("Levererat", () => quickUpdate(cur, { status: "I lager" }, "Markerat som i lager"), true);
-      if (cur.status !== "Förbrukad") add("Förbrukat", () => quickUpdate(cur, { status: "Förbrukad", meter: 0, raknad: todayISO() }, "Markerat som förbrukat"));
+      if (cur.status !== "Förbrukad") add("Förbrukat", () => quickUpdate(cur, Object.assign({ status: "Förbrukad", raknad: todayISO() }, isTrims(cur) ? { antal: 0 } : { meter: 0 }), "Markerat som förbrukat"));
       if (cur.tygId && byId(D.tyger, cur.tygId)) add("Öppna tyg", () => openTyg(cur.tygId));
     }
     function adjustMeters(cur) {
-      const i = inp("f_ladj", cur.meter, { type: "number", min: "0", step: "0.5", inputmode: "decimal", "aria-label": "Nya meter" });
-      const row = h("div", { class: "admin-row" }, h("span", { text: "Kvar nu (m):" }), i,
+      const trm = isTrims(cur), key = trm ? "antal" : "meter", fmtU = (n) => (trm ? fmtSt(n) : fmtM(n) + " m");
+      const i = inp("f_ladj", cur[key], { type: "number", min: "0", step: trm ? "1" : "0.5", inputmode: trm ? "numeric" : "decimal", "aria-label": trm ? "Nytt antal" : "Nya meter" });
+      const row = h("div", { class: "admin-row" }, h("span", { text: trm ? "Kvar nu (st):" : "Kvar nu (m):" }), i,
         h("button", { class: "btn small primary", type: "button", text: "Spara", onclick: async () => {
-          const n = num(i.value); if (n == null || n < 0) { toast("Ange ett metertal."); return; }
-          const before = num(cur.meter);
-          const patch = { meter: n, raknad: todayISO() };
-          const body = Object.assign({}, patch, { andrad: new Date().toISOString(), logg: (cur.logg || []).concat(logEntry("Kvar: " + (before == null ? "okänt" : fmtM(before) + " m") + " → " + fmtM(n) + " m")) });
-          if (await write("tyglager", cur._id, body)) { toast("Meter uppdaterade"); fKvar.value = n; renderQuick(); }
+          const n = num(i.value); if (n == null || n < 0) { toast(trm ? "Ange ett antal." : "Ange ett metertal."); return; }
+          const before = num(cur[key]);
+          const patch = { [key]: n, raknad: todayISO() };
+          const body = Object.assign({}, patch, { andrad: new Date().toISOString(), logg: (cur.logg || []).concat(logEntry("Kvar: " + (before == null ? "okänt" : fmtU(before)) + " → " + fmtU(n))) });
+          if (await write("tyglager", cur._id, body)) { toast(trm ? "Antal uppdaterat" : "Meter uppdaterade"); (trm ? fKvarSt : fKvar).value = n; renderQuick(); }
         } }),
         h("button", { class: "btn small", type: "button", text: "Avbryt", onclick: renderQuick }));
       quick.replaceChildren(row); i.focus(); i.select();
@@ -4574,30 +4613,36 @@ import * as P from "./platform.js";
       const changes = describeChanges(cur, patch, L_LABELS);
       const body = Object.assign({}, patch, { andrad: new Date().toISOString(), logg: (cur.logg || []).concat(changes.map(logEntry)) });
       const ok = await write("tyglager", cur._id, body);
-      if (ok) { toast(msg); if ("status" in patch) fStatus.value = patch.status; if ("meter" in patch) fKvar.value = patch.meter == null ? "" : patch.meter; }
+      if (ok) { toast(msg); if ("status" in patch) fStatus.value = patch.status; if ("meter" in patch) fKvar.value = patch.meter == null ? "" : patch.meter; if ("antal" in patch) fKvarSt.value = patch.antal == null ? "" : patch.antal; }
       return ok;
     }
     async function save() {
       const btn = $("btnSave"); if (btn) btn.disabled = true;
       try {
-        const name = fTyg.value.trim(), plats = fPlats.value.trim();
-        if (!name) { toast("Skriv vilket tyg det gäller."); fTyg.focus(); return; }
-        if (!plats) { toast("Skriv var tyget ligger."); fPlats.focus(); return; }
-        const tygId = await resolveTyg(name, "");
-        if (!tygId) return;
-        const tt = byId(D.tyger, tygId);
-        const o = { tygId, tygNamn: tt ? tt.namn : name, farg: fFarg.value.trim(), plats, status: fStatus.value, inkoptMeter: num(fInk.value), meter: num(fKvar.value), bredd: num(fBredd.value), prisPerMeter: num(fPris.value), prisValuta: fVal.value || null, inkopt: fInkDate.value || null, reserveradFor: fRes.value || null, kommentar: fKom.value.trim() };
+        const name = fTyg.value.trim(), plats = fPlats.value.trim(), trims = fTyp.value === "trims";
+        if (!name) { toast(trims ? "Skriv vilken artikel det gäller." : "Skriv vilket tyg det gäller."); fTyg.focus(); return; }
+        if (!plats) { toast(trims ? "Skriv var artikeln ligger." : "Skriv var tyget ligger."); fPlats.focus(); return; }
+        let o;
+        if (trims) {
+          o = { typ: "trims", tygId: null, tygNamn: name, farg: fFarg.value.trim(), storlek: fStorlek.value.trim(), plats, status: fStatus.value, inkoptAntal: num(fInkSt.value), antal: num(fKvarSt.value), prisPerSt: num(fPrisSt.value), prisValuta: fVal.value || null, inkopt: fInkDate.value || null, reserveradFor: fRes.value || null, kommentar: fKom.value.trim() };
+        } else {
+          const tygId = await resolveTyg(name, "");
+          if (!tygId) return;
+          const tt = byId(D.tyger, tygId);
+          o = { typ: "tyg", tygId, tygNamn: tt ? tt.namn : name, farg: fFarg.value.trim(), plats, status: fStatus.value, inkoptMeter: num(fInk.value), meter: num(fKvar.value), bredd: num(fBredd.value), prisPerMeter: num(fPris.value), prisValuta: fVal.value || null, inkopt: fInkDate.value || null, reserveradFor: fRes.value || null, kommentar: fKom.value.trim() };
+        }
+        const q0 = trims ? o.antal : o.meter;
         const now = new Date().toISOString();
         if (isNew) {
           const nid = await freshId("tyglager", D.lager, "TL-", 3);
-          const body = Object.assign({ id: nid, raknad: o.meter != null ? todayISO() : null, logg: [logEntry("Parti skapat (" + o.status + (o.meter != null ? ", ca " + fmtM(o.meter) + " m" : "") + ")")], andrad: now }, o);
+          const body = Object.assign({ id: nid, raknad: q0 != null ? todayISO() : null, logg: [logEntry("Parti skapat (" + (trims ? "trims, " : "") + o.status + (q0 != null ? ", " + fmtQty(o, q0) : "") + ")")], andrad: now }, o);
           if (await create("tyglager", nid, body)) { if (!byId(D.lager, nid)) D.lager.push(Object.assign({}, body, { _id: nid })); toast(nid + " sparat"); closeSheet(); }
         } else {
           const cur = current();
           const changes = describeChanges(cur, o, L_LABELS);
           if (!changes.length) { closeSheet(); return; }
           const body = Object.assign({}, o, { andrad: now, logg: (cur.logg || []).concat(changes.map(logEntry)) });
-          if (num(cur.meter) !== o.meter) body.raknad = todayISO();
+          if (num(cur[trims ? "antal" : "meter"]) !== q0) body.raknad = todayISO();
           if (await write("tyglager", cur._id, body)) { toast("Sparat"); closeSheet(); }
         }
       } finally { if (btn) btn.disabled = false; }
@@ -4606,8 +4651,8 @@ import * as P from "./platform.js";
     if (!isNew) body.push(h("section", null, h("h3", { class: "sec-title", text: "Historik" }), logUl, ro ? null : h("div", { class: "add-note" }, noteIn, h("button", { class: "btn small", type: "button", text: "Lägg till", onclick: addNote }))));
     openSheet({
       tag: isNew ? "Nytt" : l._id,
-      title: isNew ? "Nytt tygparti" : lotName(l) + (l.farg ? " · " + l.farg : ""),
-      sub: isNew ? "" : [l.plats, num(l.meter) != null ? "ca " + fmtM(l.meter) + " m kvar" : "meter saknas", l.status].filter(Boolean).join(" · "),
+      title: isNew ? "Nytt parti" : lotName(l) + (l.farg ? " · " + l.farg : "") + (isTrims(l) && l.storlek ? " · " + l.storlek : ""),
+      sub: isNew ? "" : [isTrims(l) ? "Trims" : "Tyg", l.plats, lotQty(l) != null ? fmtQty(l, lotQty(l)) + " kvar" : (isTrims(l) ? "antal saknas" : "meter saknas"), l.status].filter(Boolean).join(" · "),
       body,
       foot: footButtons({ onDelete: isNew ? null : async () => { if (await remove("tyglager", l._id)) { toast("Borttaget"); closeSheet(); } }, canDelete: true, onSave: save }),
       ctx: { refresh: () => { if (!isNew && !byId(D.lager, l._id)) { closeSheet(); return; } renderQuick(); if (!isNew) renderLogInto(logUl, current().logg); } },
@@ -4723,8 +4768,8 @@ import * as P from "./platform.js";
     saveFile("Rubato_Samples_" + todayISO() + ".csv", csv(["Sample-ID", "Style", "Version", "Leverantör", "Färg", "Tyg", "Storlek", "Pris", "Valuta", "Beställd", "Ledtid (dgr)", "Förväntad leverans", "Status", "Mottagen", "Plats", "Platsnotering", "Beslut", "Style-status", "Ändringar", "Tracking", "P1 skickad", "P2 skickad", "Säsong", "Drop", "Kommentar"], rows));
   }
   function exportLager() {
-    const rows = D.lager.slice().sort((a, b) => (a.plats || "").localeCompare(b.plats || "", "sv") || a._id.localeCompare(b._id)).map((l) => [l._id, lotName(l), l.farg, l.plats, l.status, l.inkoptMeter, l.meter, l.bredd, l.prisPerMeter, l.prisValuta, l.inkopt, reservedName(l), l.raknad, l.kommentar]);
-    saveFile("Rubato_Tyglager_" + todayISO() + ".csv", csv(["Parti-ID", "Tyg", "Färg", "Ligger hos", "Status", "Inköpt (m)", "Kvar (m, ca)", "Bredd (cm)", "Pris per meter", "Valuta", "Inköpt datum", "Reserverad för", "Senast räknad", "Kommentar"], rows));
+    const rows = D.lager.slice().sort((a, b) => (a.plats || "").localeCompare(b.plats || "", "sv") || a._id.localeCompare(b._id)).map((l) => [l._id, isTrims(l) ? "Trims" : "Tyg", lotName(l), l.farg, l.storlek, l.plats, l.status, isTrims(l) ? "st" : "m", isTrims(l) ? l.inkoptAntal : l.inkoptMeter, isTrims(l) ? l.antal : l.meter, l.bredd, isTrims(l) ? l.prisPerSt : l.prisPerMeter, l.prisValuta, l.inkopt, reservedName(l), l.raknad, l.kommentar]);
+    saveFile("Rubato_Lager_" + todayISO() + ".csv", csv(["Parti-ID", "Typ", "Artikel", "Färg", "Storlek", "Ligger hos", "Status", "Enhet", "Inköpt", "Kvar", "Bredd (cm)", "Pris per enhet", "Valuta", "Inköpt datum", "Reserverad för", "Senast räknad", "Kommentar"], rows));
   }
   function exportStyleEan(st) {
     saveFile("EAN_" + safeName(st.namn) + ".csv", csv(["Produkt", "Färg", "Storlek", "EAN"], (st.ean || []).map((e) => [st.namn, e.farg, e.storlek, e.ean])));
