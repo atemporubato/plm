@@ -4,6 +4,11 @@ Arbetssätt: Elliot utvecklar i artefakten (sandbox). Jakob hostar: artefaktens 
 artifact/vN.html, byggs med `node tools/build.mjs artifact/vN.html`, datan exporteras ur artefakten
 och importeras med `node tools/import-dokument.js`, och main går live på plm.atemporubato.com.
 
+## v9 (2026-11-12)
+
+Elliots artefakt per 12 november 2026 (v8 + färg i färgchips). Endast kodändring, ingen dataimport och ingen schemaändring.
+- Produktion: pricken i varje färgchip på PO-korten visar färgen i namnet (Navy mörkblå, Indigo/Denim blå, Light Blue Chambray ljusblå, Ecru/Cream benvit, Khaki/Olive oliv, Brown/Clay/Camel brun, Beige/Birch/Marble sand, Black svart, Signal Red/Persimmon röd m.fl., även svenska och italienska namn). Okända färger behåller den grå pricken.
+
 ## v8 (2026-11-12)
 
 Elliots artefakt per 12 november 2026 (v6 + Lager-ändringen). Endast kodändring, ingen dataimport och ingen schemaändring: partierna ligger kvar i collection "tyglager".

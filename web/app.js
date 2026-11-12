@@ -270,6 +270,28 @@ import * as P from "./platform.js";
   const imgUrl = (id) => (/^https?:\/\//.test(String(id)) ? String(id) : P.assets.url(id));
   const shopUrl = (st) => (st && st.shopifyBild && st.shopifyBild.url) || "";
   const shopTitle = (st) => (st && st.shopifyBild ? (st.shopifyBild.titel || "Shopify") + (st.shopifyBild.likhet === "liknande" ? " (liknande produkt)" : "") : "");
+  // Färgnamn -> ungefärlig färg för chipsens prick. Först träff vinner; okänd färg blir grå.
+  const COLOUR_MAP = [
+    [/signal red|röd|\bred\b|persimmon|rust|brick|wine|burgundy|bordeaux/, "#b5362f"],
+    [/dark navy|navy|marin|midnight|deep\b|blu scuro|dark blue/, "#1f2a44"],
+    [/light blue|sky|new haven|chambray|celeste/, "#9fb9d6"],
+    [/indigo|denim|blue rinse|rinse|dark blue rinse|\bblue\b|blå|blu\b/, "#2f4f8a"],
+    [/black|svart|nero|charcoal|anthracite|onyx/, "#1a1a1a"],
+    [/ecru|cream|ivory|off.?white|vellum|bianco|natural|undyed|chalk|bone/, "#efe8d8"],
+    [/\bwhite\b|vit\b|optical/, "#f7f7f5"],
+    [/khaki|olive|olive drab|sage|army|moss|green|grön|verde|forest/, "#6b6a3e"],
+    [/dark brown|dk brown|chocolate|coffee|cafe|espresso|dale|cognac/, "#4a3425"],
+    [/brown|brun|tobacco|tan|camel|cognac|peak|dun|clay|tankard|earth|rust/, "#8a6a4a"],
+    [/beige|sand|stone|oat|birch|marble|taupe|shale|dune|cloud|storm|putty/, "#c9bca6"],
+    [/grey|gray|grå|grigio|silver|slate|mid grey|light grey/, "#8d8d8d"],
+    [/yellow|gul|mustard|ochre|gold/, "#c9a227"],
+    [/orange|apricot|peach|coral/, "#d8793a"],
+    [/pink|rosa|rose|blush/, "#d9a3ad"],
+    [/purple|lilac|violet|plum|aubergine/, "#6b4a7a"],
+    [/stripe|hundtand|check|houndstooth|herringbone/, "#5c5c5c"]
+  ];
+  const colourHex = (name) => { const n = String(name || "").toLowerCase(); for (const [re, hex] of COLOUR_MAP) if (re.test(n)) return hex; return ""; };
+  const colourDot = (name, extraClass) => { const hex = colourHex(name); return h("i", { class: "dot cdot" + (extraClass ? " " + extraClass : ""), style: hex ? "background:" + hex + (/^#(f|e)/.test(hex) ? ";border:1px solid #bbb" : "") : "", title: name || "" }); };
   const fargText = (f) => { const raw = String(f || "").trim(); const words = raw.replace(/^(?:col(?:ou?r)?\.?\s*)?[#0-9][0-9a-z]*[\s.:\-–]+/i, "").split(/[\s,]+/).filter(Boolean); const kept = words.filter((w) => !/\d/.test(w) && !/^col(?:ou?r)?\.?$/i.test(w)); const out = (kept.length ? kept : words).join(" ").replace(/[\s.:\-–]+$/, ""); return out ? out[0].toUpperCase() + out.slice(1) : raw; };
   const expanded = new Set();
   const groupKeyOf = (s) => (s.styleId || "p:" + norm(s.produkt)) + "|" + norm(s.version) + "|" + norm(s.leverantor);
@@ -1336,7 +1358,7 @@ import * as P from "./platform.js";
       const unknown = rs.some((r) => num(r.antal) == null);
       const cost = rs.reduce((a, r) => a + (lineCost(r) || 0), 0);
       const u0 = lineUnit(r0);
-      const colours = h("div", { class: "swatches" }, rs.slice().sort((a, b) => fargText(a.farg || "").localeCompare(fargText(b.farg || ""), "sv")).map((r) => h("span", { class: "swatch btn-swatch", style: "cursor:default" }, h("i", { class: "dot" }), (fargText(r.farg) || "TBA") + (num(r.antal) != null ? " " + r.antal : ""))));
+      const colours = h("div", { class: "swatches" }, rs.slice().sort((a, b) => fargText(a.farg || "").localeCompare(fargText(b.farg || ""), "sv")).map((r) => h("span", { class: "swatch btn-swatch", style: "cursor:default" }, colourDot(fargText(r.farg)), (fargText(r.farg) || "TBA") + (num(r.antal) != null ? " " + r.antal : ""))));
       const pimg = st ? styleImage(st) : null;
       return h("tr", { tabIndex: 0, dataset: { po: p._id } },
         td("", "c-main", h("div", { style: "display:flex;gap:10px;align-items:flex-start" }, pimg ? h("img", { class: "rowthumb", style: "margin-top:0", src: imgUrl(pimg), alt: "", loading: "lazy", onclick: (e) => { e.stopPropagation(); openLightbox(styleAllImages(st), pimg); } }) : null, h("div", null, h("div", { class: "prod", text: r0.produkt || (st ? st.namn : "–") }), h("div", { class: "sub" }, r0.typ && r0.typ !== "Nyhet" ? chip(r0.typ) : null, st ? h("button", { class: "linkish", type: "button", text: st._id + (styleKategori(st) ? " · " + styleKategori(st) : ""), onclick: (e) => { e.stopPropagation(); openStyle(st._id); } }) : h("span", { class: "muted", text: "Ingen style kopplad" }))))),
