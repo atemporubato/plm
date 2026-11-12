@@ -4,6 +4,13 @@ Arbetssätt: Elliot utvecklar i artefakten (sandbox). Jakob hostar: artefaktens 
 artifact/vN.html, byggs med `node tools/build.mjs artifact/vN.html`, datan exporteras ur artefakten
 och importeras med `node tools/import-dokument.js`, och main går live på plm.atemporubato.com.
 
+Versionsnumrering: små ändringar ger punktversion (v9.1, v9.2 …). Nytt heltal (v10) bara vid stora ändringar.
+
+## v9.1 (2026-11-12)
+
+Endast kodändring, ingen dataimport.
+- Färgkort i Produktion justerade enligt Elliot: Shale mörkgrå, Brown mörkbrun (Dark Brown ännu mörkare), Birch driftwood (brunare beige), Earth kaffefärgad.
+
 ## v9 (2026-11-12)
 
 Elliots artefakt per 12 november 2026 (v8 + färg i färgchips). Endast kodändring, ingen dataimport och ingen schemaändring.
