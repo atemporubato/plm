@@ -202,6 +202,78 @@ import * as P from "./platform.js";
   const styleStatusPill = (st) => { const s = styleStatusNorm(st.status); return h("span", { class: "pill st-" + slug(s), text: s }); };
   const seasonRank = (s) => { const m = /^(SS|AW)\s?(\d{2})$/i.exec(String(s || "").trim()); return m ? Number(m[2]) * 2 + (m[1].toUpperCase() === "AW" ? 1 : 0) : -1; };
   const dropKey = (sasong, namn) => norm(sasong) + "|" + norm(namn);
+  // ---- drop-register ----
+  // Ett register för alla drops: dokumenten i "drops" plus Jakobs drop-rader i COO (händelser med matris "drop").
+  // Lanseringen ägs av COO-raden. "I lager senast" = lansering minus marginalen (5 dagar), om droppen inte har ett eget datum.
+  // D.drops och D.po är härledda vyer av RAW.drops och RAW.po – allt som läser dem får samma svar; bara formulären skriver råvärden.
+  const RAW = { drops: [], po: [] };
+  const lagerMarginal = () => num(D.settings.lagerMarginal) ?? 5;
+  const dropNr = (namn) => { const m = /(\d+)/.exec(String(namn || "")); return m ? Number(m[1]) : 99; };
+  function cooDropRows() {
+    const rows = new Map(); const tbd = (x) => /^TBD\s/i.test(x.titel || "");
+    for (const e of D.handelser || []) {
+      if (e.matris !== "drop" || e.hor_till || e.status === "Inställd" || !String(e.sasong || "").trim() || !String(e.drop || "").trim()) continue;
+      const k = dropKey(e.sasong, e.drop); const cur = rows.get(k);
+      if (!cur || (tbd(cur) && !tbd(e)) || (tbd(cur) === tbd(e) && String(e.datum || "9") < String(cur.datum || "9"))) rows.set(k, e);
+    }
+    return rows;
+  }
+  function effDrop(doc, ev) {
+    const lans = ev && isISO(ev.datum) ? ev.datum : (isISO(doc.lansering) ? doc.lansering : null);
+    const eget = isISO(doc.klartSenast) ? doc.klartSenast : null;
+    return Object.assign({}, doc, { lansering: lans, klartSenast: eget || (lans ? addDays(lans, -lagerMarginal()) : null), _doc: doc, _coo: ev ? ev._id : null, _klartEget: !!eget });
+  }
+  function deriveDrops() {
+    const rows = cooDropRows(); const seen = new Set(); const out = [];
+    for (const d of RAW.drops) { const k = dropKey(d.sasong, d.namn); seen.add(k); out.push(effDrop(d, rows.get(k) || null)); }
+    for (const [k, e] of rows) if (!seen.has(k)) out.push(effDrop({ _id: slug(e.sasong.trim() + "-" + e.drop.trim()), sasong: e.sasong.trim(), namn: e.drop.trim(), ordning: dropNr(e.drop), klartSenast: null, lansering: null, kommentar: "", _virtual: true }, e));
+    D.drops = out;
+  }
+  // PO:ns drop följer stylarna på raderna (samma säsong). Har ingen style en drop gäller det som står på PO:n.
+  function poStyleDrops(p) {
+    const out = [];
+    for (const r of p.rader || []) { const st = r.styleId ? byId(D.styles, r.styleId) : null; const dn = st ? String(st.drop || "").trim() : ""; if (dn && norm(st.sasong) === norm(p.sasong) && !out.some((x) => norm(x) === norm(dn))) out.push(dn); }
+    return out.sort((a, b) => a.localeCompare(b, "sv"));
+  }
+  function derivePo() {
+    D.po = RAW.po.map((p) => { const ds = poStyleDrops(p); const raw = String(p.drop || "").trim(); return ds.length ? Object.assign({}, p, { drop: ds.join(" + "), _drops: ds, _dropRaw: raw, _dropFranStyles: true }) : Object.assign({}, p, { _drops: raw ? [raw] : [], _dropRaw: raw, _dropFranStyles: false }); });
+  }
+  // Vad en flyttad lansering betyder för leveranserna: nytt "i lager senast" och vilka PO som inte hinner.
+  function launchImpact(sasong, dropNamn, nyLansering) {
+    if (!isISO(nyLansering) || !String(dropNamn || "").trim()) return null;
+    const d = D.drops.find((x) => dropKey(x.sasong, x.namn) === dropKey(sasong, dropNamn));
+    const eget = !!(d && d._klartEget);
+    const klart = eget ? d._doc.klartSenast : addDays(nyLansering, -lagerMarginal());
+    const pos = D.po.filter((p) => !["Avbruten", "Inlevererad"].includes(poStatusNorm(p.status)) && norm(p.sasong) === norm(sasong) && (p._drops || []).some((n) => norm(n) === norm(dropNamn)));
+    const rows = pos.map((p) => ({ po: p, eta: poEta(p) || (isISO(p.leveransOnskad) ? p.leveransOnskad : null) }));
+    return { klart, eget, pos, sena: rows.filter((x) => x.eta && x.eta > klart).map((x) => Object.assign(x, { dagar: daysBetween(klart, x.eta) })), utanEta: rows.filter((x) => !x.eta) };
+  }
+  function launchImpactText(sasong, dropNamn, nyLansering) {
+    const i = launchImpact(sasong, dropNamn, nyLansering); if (!i) return "";
+    return "I lager senast " + (i.eget ? "ligger kvar på " + fmtDate(i.klart) + " (eget datum på droppen)" : "blir " + fmtDate(i.klart)) + ". " +
+      (i.sena.length ? i.sena.length + " PO hinner inte: " + i.sena.map((x) => (x.po.nr || x.po._id) + " (+" + x.dagar + " d)").join(", ") + "." : i.pos.length ? "Alla " + i.pos.length + " PO hinner." : "Inga öppna PO i droppen.") +
+      (i.utanEta.length ? " " + i.utanEta.length + " PO saknar ETA." : "");
+  }
+  // Rullistor i stället för fritext, så att säsong och drop alltid pekar på registret.
+  function seasonSelect(id, value, emptyLabel) {
+    const y = new Date().getFullYear() % 100; const gen = []; for (let i = y - 1; i <= y + 2; i++) gen.push("SS" + i, "AW" + i);
+    const seen = new Set();
+    const all = gen.concat(D.drops.map((d) => d.sasong), D.styles.map((s) => s.sasong), D.po.map((p) => p.sasong)).map((x) => String(x || "").trim()).filter((x) => { const k = norm(x); if (!x || seen.has(k)) return false; seen.add(k); return true; }).sort((a, b) => seasonRank(a) - seasonRank(b) || a.localeCompare(b, "sv"));
+    return selectEl(id, [["", emptyLabel || "– Ingen säsong –"]].concat(all.map((x) => [x, x])), value || "");
+  }
+  function dropSelect(id, value, seasonEl) {
+    const e = h("select", { id });
+    const names = () => dropsOfSeason(seasonEl.value).map((d) => d.namn);
+    e.refill = (keep) => {
+      const ns = names(); const hit = ns.find((n) => norm(n) === norm(keep));
+      e.replaceChildren(new Option("– Ingen drop, bara säsong –", ""), ...ns.map((n) => new Option(n, n)));
+      if (keep && !hit) e.add(new Option(keep + " (finns inte som drop i " + (seasonEl.value || "säsongen") + ")", keep));
+      e.value = hit || keep || "";
+    };
+    e.refill(String(value || "").trim());
+    seasonEl.addEventListener("change", () => { const cur = e.value; e.refill(names().some((n) => norm(n) === norm(cur)) ? cur : ""); e.dispatchEvent(new Event("change")); });
+    return e;
+  }
   const dropOf = (st) => (st.sasong && st.drop ? D.drops.find((d) => dropKey(d.sasong, d.namn) === dropKey(st.sasong, st.drop)) || null : null);
   const dropsOfSeason = (season) => D.drops.filter((d) => norm(d.sasong) === norm(season)).sort((a, b) => (num(a.ordning) ?? 99) - (num(b.ordning) ?? 99) || (a.namn || "").localeCompare(b.namn || "", "sv"));
   function deadlineOf(st) {
@@ -1226,24 +1298,36 @@ import * as P from "./platform.js";
     const d = isNew ? Object.assign({ _id: null, ordning: 1 }, preset || {}) : byId(D.drops, id);
     if (!d) { toast("Hittar inte droppen."); return; }
     const ro = !canWrite || !db;
+    // Droppen finns bara som rad i COO: lägg upp den i registret när någon som får redigera öppnar den.
+    if (!isNew && d._virtual && !ro) {
+      const body = { sasong: d.sasong, namn: d.namn, ordning: d.ordning, klartSenast: null, lansering: null, kommentar: "", andrad: new Date().toISOString() };
+      create("drops", d._id, body).then((ok) => { if (!ok) return; if (!RAW.drops.some((x) => x._id === d._id)) RAW.drops.push(Object.assign({}, body, { _id: d._id })); deriveDrops(); openDrop(id); });
+      return;
+    }
+    const raw = d._doc || d;
+    const cooEv = d._coo ? byId(D.handelser, d._coo) : null;
+    const marg = lagerMarginal();
     const fSas = inp("f_dsasong", d.sasong, { list: "dlSeason", autocomplete: "off", placeholder: "t.ex. SS27" });
     const fNamn = inp("f_dnamn", d.namn, { list: "dlDrop", autocomplete: "off", placeholder: "t.ex. Drop 1" });
     const fOrd = inp("f_dordning", d.ordning, { type: "number", min: "1", step: "1" });
-    const fKlart = inp("f_dklart", d.klartSenast, { type: "date" });
-    const fLans = inp("f_dlans", d.lansering, { type: "date" });
+    const fKlart = inp("f_dklart", raw.klartSenast, { type: "date" });
+    const fLans = inp("f_dlans", d.lansering, { type: "date" }); if (cooEv) fLans.disabled = true;
+    const klartHint = h("span", { class: "hint" });
+    const syncKlart = () => { const l = cooEv ? d.lansering : fLans.value; const auto = isISO(l) ? addDays(l, -marg) : null; klartHint.textContent = fKlart.value ? (isISO(l) && fKlart.value > l ? "Eget datum som ligger efter lanseringen " + fmtDate(l) + ". Töm fältet för " + marg + " dagar före." : "Eget datum. Töm fältet för att följa lanseringen" + (auto ? " (" + fmtDate(auto) + ")" : "") + ".") : (auto ? "Följer lanseringen: " + fmtDate(auto) + ", " + marg + " dagar före. Fyll i bara om droppen ska ha ett eget datum." : "Tomt = " + marg + " dagar före lanseringen."); };
+    fKlart.addEventListener("input", syncKlart); fLans.addEventListener("input", syncKlart); syncKlart();
     const fKom = area("f_dkom", d.kommentar);
     if (!isNew) { fSas.disabled = true; fNamn.disabled = true; }
     const form = h("form", { class: "form", autocomplete: "off", onsubmit: (e) => e.preventDefault() },
       field("Säsong", fSas), field("Namn", fNamn, { hint: isNew ? "Styles kopplas via säsong + namn" : "Byt inte namn; styles pekar på det" }),
-      field("Ordning", fOrd, { hint: "Sorteringsordning inom säsongen" }), field("I lager senast", fKlart, { hint: "Ärvs av styles utan eget datum" }),
-      field("Lansering", fLans, { hint: "Valfritt, bara för översikten" }), h("div"),
+      field("Ordning", fOrd, { hint: "Sorteringsordning inom säsongen" }), h("div", { class: "field" }, h("label", { for: "f_dklart", text: "I lager senast" }), fKlart, klartHint),
+      h("div", { class: "field" }, h("label", { for: "f_dlans", text: "Lansering" }), fLans, cooEv ? h("span", { class: "hint" }, "Styrs i COO av Jakob. ", h("button", { class: "linkish", type: "button", text: "Ändra där", onclick: () => { closeSheet(); switchTab("coo"); openEvent(cooEv._id); } })) : h("span", { class: "hint", text: "Ingen drop-rad i COO än. Datumet här gäller tills droppen läggs upp där." })), h("div"),
       field("Kommentar", fKom, { full: true }));
     if (ro) lock(form);
     const members = isNew ? [] : D.styles.filter((s) => dropKey(s.sasong, s.drop) === dropKey(d.sasong, d.namn));
     const pendingImgs = isNew ? [] : null;
     const imgSec = bilderSection({ title: "Bilder och moodboard", ro, pending: pendingImgs, current: () => byId(D.drops, d._id) || d, empty: "Lägg in moodboard, referensbilder eller en bild på hängaren för droppen. Visas överst i Kollektion.", save: (ids) => write("drops", d._id, { bilder: ids, andrad: new Date().toISOString() }) });
     async function save() {
-      const o = { sasong: fSas.value.trim(), namn: fNamn.value.trim(), ordning: num(fOrd.value) ?? 1, klartSenast: fKlart.value || null, lansering: fLans.value || null, kommentar: fKom.value.trim(), andrad: new Date().toISOString() };
+      const o = { sasong: fSas.value.trim(), namn: fNamn.value.trim(), ordning: num(fOrd.value) ?? 1, klartSenast: fKlart.value || null, lansering: cooEv ? (raw.lansering || null) : (fLans.value || null), kommentar: fKom.value.trim(), andrad: new Date().toISOString() };
       if (!o.sasong || !o.namn) { toast("Fyll i säsong och namn."); return; }
       if (isNew) {
         const nid = slug(o.sasong + "-" + o.namn);
@@ -1603,8 +1687,9 @@ import * as P from "./platform.js";
     const current = () => (isNew ? po : byId(D.po, po._id) || po);
     const fNr = inp("f_pnr", po.nr, { placeholder: "t.ex. EMI-SS27-5" });
     const fLev = inp("f_plev", po.leverantor, { list: "dlLev", autocomplete: "off" });
-    const fSas = inp("f_psas", po.sasong, { list: "dlSeason", autocomplete: "off", placeholder: "t.ex. SS27" });
-    const fDrop = inp("f_pdrop", po.drop, { list: "dlDrop", autocomplete: "off", placeholder: "t.ex. Drop 1" });
+    const fSas = seasonSelect("f_psas", po.sasong, "– Välj säsong –");
+    const poDropFranStyles = !isNew && !!po._dropFranStyles;
+    const fDrop = poDropFranStyles ? inp("f_pdrop", po.drop, { disabled: true }) : dropSelect("f_pdrop", po._dropRaw != null ? po._dropRaw : po.drop, fSas);
     const fStatus = selectEl("f_pstatus", PO_STATUS, poStatusNorm(po.status));
     const fPrio = selectEl("f_pprio", PRIORITET, po.prioritet || "Normal");
     const fProd = inp("f_pprod", po.produktionstid, { type: "number", min: "0", step: "1", placeholder: "dagar" });
@@ -1633,7 +1718,7 @@ import * as P from "./platform.js";
     const form = h("form", { class: "form three", id: "poForm", autocomplete: "off", onsubmit: (e) => e.preventDefault() },
       h("h3", { class: "sec-title full", text: "Order" }),
       h("div", { class: "field" }, h("label", { for: "f_pnr", text: "PO-nr" }), fNr, nrHint), field("Leverantör", fLev), field("Status", fStatus),
-      field("Säsong", fSas), field("Drop", fDrop), field("Prioritet", fPrio),
+      field("Säsong", fSas), field("Drop", fDrop, { hint: poDropFranStyles ? "Följer stylarnas drop – ändras på stylen" : "Följer stylarna så fort de har en drop" }), field("Prioritet", fPrio),
       h("h3", { class: "sec-title full", text: "Tidplan" }),
       field("Orderdatum", fOrdD), field("Produktionstid (dagar)", fProd), field("Önskad leverans", fLevO, { hint: "Tomt = droppens \"I lager senast\"" }),
       field("Planerad ex-factory", fPlan), field("Bekräftad ex-factory", fBekEx), field("ETA lager", fEta),
@@ -1778,7 +1863,7 @@ import * as P from "./platform.js";
 
     const logUl = h("ul", { class: "log" });
     async function save() {
-      const o = { nr: fNr.value.trim(), leverantor: fLev.value.trim(), sasong: fSas.value.trim(), drop: fDrop.value.trim(), status: fStatus.value, prioritet: fPrio.value, produktionstid: num(fProd.value), fotosample: fFoto.value, fotosampleLeverans: fFotoD.value || null, tygstatus: fTygS.value, orderBekraftad: fBek.value === "1", planeradEx: fPlan.value || null, bekraftadEx: fBekEx.value || null, etaLager: fEta.value || null, valuta: fVal.value.trim() || "SEK", kommentar: fKom.value.trim(),
+      const o = { nr: fNr.value.trim(), leverantor: fLev.value.trim(), sasong: fSas.value.trim(), drop: poDropFranStyles ? (po._dropRaw || "") : fDrop.value.trim(), status: fStatus.value, prioritet: fPrio.value, produktionstid: num(fProd.value), fotosample: fFoto.value, fotosampleLeverans: fFotoD.value || null, tygstatus: fTygS.value, orderBekraftad: fBek.value === "1", planeradEx: fPlan.value || null, bekraftadEx: fBekEx.value || null, etaLager: fEta.value || null, valuta: fVal.value.trim() || "SEK", kommentar: fKom.value.trim(),
         orderDatum: fOrdD.value || null, leveransOnskad: fLevO.value || null, labelInstructions: fLabel.value.trim(),
         forskottBelopp: num(fFskB.value), forskottDatum: fFskD.value || null, forskottBetald: fFskP.value === "1", slutBelopp: num(fSlutB.value), slutDatum: fSlutD.value || null, slutBetald: fSlutP.value === "1" };
       if (!o.leverantor) { toast("Ange leverantör."); fLev.focus(); return; }
@@ -1806,7 +1891,7 @@ import * as P from "./platform.js";
           toast(o.nr + " sparad");
         } else {
           const cur = current();
-          const changes = describeChanges(cur, o, PO_LABELS);
+          const changes = describeChanges(Object.assign({}, cur, { drop: cur._dropRaw != null ? cur._dropRaw : cur.drop }), o, PO_LABELS);
           if (JSON.stringify(cur.rader || []) !== JSON.stringify(rader)) changes.push("Rader ändrade (" + rader.length + ")");
           if (!(await write("po", cur._id, Object.assign({}, o, { andrad: now, logg: (cur.logg || []).concat(changes.map(logEntry)) })))) return;
           Object.assign(cur, o);
@@ -1872,7 +1957,7 @@ import * as P from "./platform.js";
     const wb = new window.ExcelJS.Workbook();
     const ws = wb.addWorksheet("PO");
     const F = { name: "Arial", size: 10 }, FB = { name: "Arial", size: 10, bold: true };
-    const d = dropOf({ sasong: po.sasong, drop: po.drop });
+    const d = (po._drops && po._drops.length ? po._drops : [po.drop]).map((n) => dropOf({ sasong: po.sasong, drop: n })).filter((x) => x && isISO(x.klartSenast)).sort((a, b) => a.klartSenast.localeCompare(b.klartSenast))[0] || null;
     const reqDate = po.leveransOnskad || (d && d.klartSenast) || "";
     const head = [["Order Date", po.orderDatum || todayISO()], ["Customer Name", PO_DEFAULTS.customer], ["Contact Email", PO_DEFAULTS.email], ["Contact Tel", PO_DEFAULTS.tel], ["Delivery Address", PO_DEFAULTS.delivery], ["Invoice Address", PO_DEFAULTS.invoice], ["Label Instructions", po.labelInstructions == null ? PO_DEFAULTS.label : po.labelInstructions], ["Requested Delivery Date", reqDate], ["Payment Terms", ""]];
     head.forEach(([k, v], i) => { const r = ws.getRow(i + 1); r.getCell(1).value = k; r.getCell(1).font = FB; r.getCell(2).value = v; r.getCell(2).font = F; r.height = 15; });
@@ -2578,7 +2663,7 @@ import * as P from "./platform.js";
     for (const d of D.drops) {
       const members = D.styles.filter((x) => dropKey(x.sasong, x.drop) === dropKey(d.sasong, d.namn) && styleStatusNorm(x.status) !== "Kastad");
       const base = { sasong: d.sasong, drop: d.namn, open: () => openDrop(d._id) };
-      if (isISO(d.lansering)) add(Object.assign({}, base, { key: "d-lans-" + d._id, typ: "drop", titel: "Drop-datum: " + d.namn + " " + d.sasong, datum: d.lansering, agare: "Jakob", klar: d.lansering < todayISO() || (members.length > 0 && members.every((x) => x.ecomBilder === "Publicerade")) }));
+      if (isISO(d.lansering) && !d._coo) add(Object.assign({}, base, { key: "d-lans-" + d._id, typ: "drop", titel: "Drop-datum: " + d.namn + " " + d.sasong, datum: d.lansering, agare: "Jakob", klar: d.lansering < todayISO() || (members.length > 0 && members.every((x) => x.ecomBilder === "Publicerade")) }));
       if (isISO(d.klartSenast)) add(Object.assign({}, base, { key: "d-klart-" + d._id, typ: "inkop", titel: "I lager senast: " + d.namn + " " + d.sasong, datum: d.klartSenast, agare: "Elliot", klar: members.length > 0 && members.every((x) => styleStatusNorm(x.status) === "Levererad") }));
     }
     for (const po of D.po) {
@@ -2784,8 +2869,8 @@ import * as P from "./platform.js";
     const fSlut = inp("f_eslut", e.slut, { type: "date" });
     const fAgare = inp("f_eagare", e.agare || EV_OWNER_DEFAULT[e.typ] || "", { list: "dlAgare", autocomplete: "off" });
     const fStatus = selectEl("f_estatus", EV_STATUS, e.status || "Planerad");
-    const fSas = inp("f_esas", e.sasong, { list: "dlSeason", autocomplete: "off" });
-    const fDrop = inp("f_edrop", e.drop, { list: "dlDrop", autocomplete: "off" });
+    const fSas = seasonSelect("f_esas", e.sasong);
+    const fDrop = dropSelect("f_edrop", e.drop, fSas);
     const fPo = selectEl("f_epo", [["", "– ingen –"]].concat(D.po.filter((p) => !PO_DRAFT.includes(poStatusNorm(p.status))).map((p) => [p._id, (p.nr || p._id) + " · " + (p.leverantor || "")])), e.poId || "");
     const fStyle = selectEl("f_estyle", [["", "– ingen –"]].concat(D.styles.filter((x) => !x.grund && styleStatusNorm(x.status) !== "Kastad").sort((a, b) => (a.namn || "").localeCompare(b.namn || "", "sv")).map((x) => [x._id, x.namn + (x.sasong ? " · " + x.sasong : "")])), e.styleId || "");
     const fKom = area("f_ekom", e.kommentar);
@@ -2814,6 +2899,8 @@ import * as P from "./platform.js";
       } else {
         const changes = describeChanges(e, o, EV_LABELS);
         if (!changes.length) { closeSheet(); return; }
+        const lansFlytt = e.matris === "drop" && !e.hor_till && isISO(o.datum) && o.datum !== e.datum ? launchImpactText(o.sasong, o.drop, o.datum) : "";
+        if (lansFlytt) setTimeout(() => { if ($("sheet").hidden) toast("Lansering " + fmtDate(o.datum) + ". " + lansFlytt); }, 700);
         if (await write("handelser", e._id, Object.assign({}, o, { andrad: now, logg: (e.logg || []).concat(changes.map(logEntry)) }))) { toast("Sparat"); closeSheet(); await mxMoveKids(e, o); }
       }
     }
@@ -3321,7 +3408,7 @@ import * as P from "./platform.js";
     const pfas = mxParentFas(matris);
     const prow = mall.find((r) => r.fas === pfas) || { fas: pfas, ansvarig: "Jakob", bana: "" };
     const fNamn = inp("f_mxnamn", "", { placeholder: isDrop ? "t.ex. SS27 Drop 3" : "t.ex. London PR Drop 3" });
-    const fSas = inp("f_mxsas", MXS.sasong || "", { list: "dlSeason", autocomplete: "off", placeholder: "t.ex. SS27" });
+    const fSas = seasonSelect("f_mxsas", MXS.sasong || "");
     const fDropSel = selectEl("f_mxdrop", [["", isDrop ? "Välj …" : "– ingen –"]].concat(MX_DROP_LABELS.map((x) => [x, x])).concat([["__annat", "Annat …"]]), "");
     const fDropAnnat = inp("f_mxdropannat", "", { placeholder: "Egen etikett" }); fDropAnnat.hidden = true;
     fDropSel.addEventListener("change", () => { fDropAnnat.hidden = fDropSel.value !== "__annat"; });
@@ -3369,7 +3456,7 @@ import * as P from "./platform.js";
   }
 
   function mxPoPanel(p) {
-    const pos = D.po.filter((po) => norm(po.sasong) === norm(p.sasong) && norm(po.drop) === norm(p.drop) && p.drop);
+    const pos = D.po.filter((po) => norm(po.sasong) === norm(p.sasong) && p.drop && (po._drops && po._drops.length ? po._drops : [po.drop]).some((n) => norm(n) === norm(p.drop)));
     if (!p.drop) return h("p", { class: "sub", text: "Ingen drop-etikett på lanseringen, så inga PO:er kan matchas." });
     if (!pos.length) return h("p", { class: "sub", text: "Inga PO:er med säsong " + (p.sasong || "–") + " och drop " + p.drop + "." });
     const t = h("table", { class: "ledger mx-po" });
@@ -3431,7 +3518,7 @@ import * as P from "./platform.js";
       const tr = h("tr", { class: "mx-row" + (tbd ? " tbd" : "") + (open ? " open" : "") });
       tr.append(h("th", { class: "mx-rowh", scope: "row" },
         h("button", { class: "mx-name", type: "button", "aria-expanded": String(open), onclick: () => { mxToggle(p._id); MatrisView.update(); } }, h("span", { class: "mx-caret", text: open ? "▾" : "▸" }), h("span", { text: p.titel })),
-        h("span", { class: "sub", text: [mxShort(p.datum), p.sasong, p.drop].filter(Boolean).join(" · ") })));
+        h("span", { class: "sub", text: [mxShort(p.datum), p.sasong, p.drop, matris === "drop" && dropOf({ sasong: p.sasong, drop: p.drop }) && isISO(dropOf({ sasong: p.sasong, drop: p.drop }).klartSenast) ? "i lager senast " + mxShort(dropOf({ sasong: p.sasong, drop: p.drop }).klartSenast) : ""].filter(Boolean).join(" · ") })));
       for (const r of mall) {
         const td = h("td");
         if (r.fas === pfas) td.append(mxCell(p, model.krock, MXS.ansvarig && !mxHasPerson(p, MXS.ansvarig)));
@@ -3521,7 +3608,7 @@ import * as P from "./platform.js";
       toast(n + " faser flyttade"); closeSheet(); scheduleRefresh();
     };
     openSheet({ tag: "Flytta", title: "Flytta alla faser med?", sub: e.titel + ": " + fmtDate(e.datum) + " → " + fmtDate(o.datum),
-      body: [h("p", { text: "Varje fas får lanseringens nya datum plus sin ledtid från mallen. Nej flyttar bara " + (e.matris === "drop" ? "lanseringen" : "eventet") + "." }), list],
+      body: [e.matris === "drop" && launchImpactText(o.sasong, o.drop, o.datum) ? h("p", { class: "mx-kom", text: "Leveranser: " + launchImpactText(o.sasong, o.drop, o.datum) }) : null, h("p", { text: "Varje fas får lanseringens nya datum plus sin ledtid från mallen. Nej flyttar bara " + (e.matris === "drop" ? "lanseringen" : "eventet") + "." }), list],
       foot: [h("button", { class: "btn", type: "button", text: "Nej, bara " + (e.matris === "drop" ? "lanseringen" : "eventet"), onclick: closeSheet }), h("button", { class: "btn primary", type: "button", text: "Ja, flytta " + plan.length + " faser", onclick: (ev) => doMove(ev.target) })] });
   }
 
@@ -3949,7 +4036,7 @@ import * as P from "./platform.js";
     const fFarg = inp("f_farg", s.farg);
     const fTyg = inp("f_tyg", tygName(s), { list: "dlTyg", autocomplete: "off", placeholder: "t.ex. Japan Blue inhouse – Westpoint Canvas 223" });
     const fStorlek = inp("f_storlek", s.storlek, { placeholder: "t.ex. M eller 50" });
-    const fSas = inp("f_ssas", s.sasong, { list: "dlSeason", autocomplete: "off", placeholder: "t.ex. SS27" });
+    const fSas = seasonSelect("f_ssas", s.sasong, "– Samma som stylen –");
     const fPris = inp("f_pris", s.prisBelopp, { type: "number", step: "0.01", min: "0", inputmode: "decimal" });
     const fValuta = selectEl("f_valuta", [["", "–"], "SEK", "EUR", "JPY", "GBP", "USD"], s.prisValuta || "");
     const fStatus = selectEl("f_status", SAMPLE_STATUS, s.status || "Beställd");
@@ -4154,8 +4241,10 @@ import * as P from "./platform.js";
 
   // ---------- style sheet ----------
   const ST_LABELS = { shopifyBild: "Shopify-bild", ecomBilder: "E-com-bilder", ecomPlatDatum: "E-com-plåtning", kampanjStatus: "Kampanjfoto", kampanjDatum: "Kampanjfoto datum", bildId: "Huvudbild", namn: "Namn", leverantor: "Leverantör", sasong: "Säsong", drop: "Drop", typ: "Typ", kategori: "Kategori", status: "Status", klartSenast: "I lager senast", fotoSenast: "Fotosample senast", kommentar: "Kommentar", farger: "Färger", storlekar: "Storlekar", beskrivning: "Beskrivning", tygId: "Tyg", grund: "Grundstyle", grundId: "Variant av", mattFran: "Mått från", mattlista: "Måttlista", referenser: "Referenser" };
-  function openStyle(id, preset) {
+  function openStyle(id, preset, opts) {
     const isNew = !id;
+    // Bibliotek är Carls flik: bara det som rör plagget. Planering, foto, e-com, EAN, Shopify och inköp sköts i sina flikar.
+    const lean = UI.tab === "bibliotek" && !(opts && opts.full);
     const st = isNew ? Object.assign({ _id: null, status: "Sampling", typ: "Nyhet", farger: [], storlekar: [], ean: [], bilder: [], logg: [] }, preset || {}) : byId(D.styles, id);
     if (!st) { toast("Hittar inte " + id + "."); return; }
     const ro = !canWrite || !db;
@@ -4169,8 +4258,8 @@ import * as P from "./platform.js";
     const fGrund = selectEl("f_sgrund", grundOpts, st.grundId || "");
     const fLev = inp("f_slev", st.leverantor, { list: "dlLev", autocomplete: "off" });
     const fTyg = inp("f_styg", styleTyg(st), { list: "dlTyg", autocomplete: "off", placeholder: "t.ex. Japan Blue inhouse – Westpoint Canvas 223" });
-    const fSas = inp("f_ssasong", st.sasong, { list: "dlSeason", autocomplete: "off", placeholder: "t.ex. SS27" });
-    const fDrop = inp("f_sdrop", st.drop, { list: "dlDrop", autocomplete: "off", placeholder: "t.ex. Drop 1" });
+    const fSas = seasonSelect("f_ssasong", st.sasong);
+    const fDrop = dropSelect("f_sdrop", st.drop, fSas);
     const fTyp = selectEl("f_styp", STYLE_TYP, st.typ || "Nyhet");
     const fKat = selectEl("f_skat", [["", "– välj –"]].concat(KATEGORIER), styleKategori(st));
     const fStatus = selectEl("f_sstatus", STYLE_STATUS, styleStatusNorm(st.status));
@@ -4191,7 +4280,7 @@ import * as P from "./platform.js";
     const fRef = area("f_sref", st.referenser, "Referensplagg, länkar, inspiration …");
     const fShop = inp("f_sshop", shopUrl(st), { placeholder: "https://cdn.shopify.com/… eller produktsidans bild-URL" });
     const dropHint = h("span", { class: "hint" });
-    const syncDropHint = () => { const d = dropOf({ sasong: fSas.value.trim(), drop: fDrop.value.trim() }); dropHint.textContent = fDrop.value.trim() ? (d ? (isISO(d.klartSenast) ? "Droppen har datum " + fmtDate(d.klartSenast) : "Droppen saknar datum") : "Ingen drop med det namnet i " + (fSas.value.trim() || "säsongen") + " – skapas under Drops") : "Tomt = utan drop"; };
+    const syncDropHint = () => { const d = dropOf({ sasong: fSas.value.trim(), drop: fDrop.value.trim() }); dropHint.textContent = fDrop.value.trim() ? (d ? (isISO(d.lansering) ? "Lansering " + fmtDate(d.lansering) + " · i lager senast " + fmtDate(d.klartSenast) : isISO(d.klartSenast) ? "I lager senast " + fmtDate(d.klartSenast) : "Droppen har inget lanseringsdatum i COO än") : "Finns inte som drop i " + (fSas.value.trim() || "säsongen") + " – läggs upp under Kollektion eller COO") : "Valfritt. Välj bara säsong om droppen inte är bestämd."; };
     const grundHint = h("span", { class: "hint" });
     const hasVariants = () => !isNew && D.styles.some((v) => v.grundId === st._id);
     const syncGrund = () => { const g = byId(D.styles, fGrund.value); const own = !!st.grund || hasVariants(); grundHint.textContent = g ? "Variant av " + g.namn + ". Ärver namn, kategori och mått därifrån om fälten är tomma." : own ? "Den här stylen är själv grundstyle för andra styles." : "Välj plagget som detta är en variant av – den valda stylen blir grundstyle."; fGrund.disabled = ro || own; if (own) fGrund.value = ""; };
@@ -4210,18 +4299,19 @@ import * as P from "./platform.js";
       field("Måttlista", fMatt, { full: true }),
       h("h3", { class: "sec-title full", text: "Referenser" }),
       field("Referenser och länkar", fRef, { full: true }),
-      field("Bild från Shopify (URL)", fShop, { full: true, hint: st.shopifyBild ? "Hämtad från " + shopTitle(st) + (st.shopifyBild.handle ? " – atemporubato.com/products/" + st.shopifyBild.handle : "") + ". Används när stylen saknar egna bilder; töm fältet för att ta bort." : "Klistra in bild-URL från Shopify för en placeholder tills egna bilder finns." }),
-      h("h3", { class: "sec-title full", text: "Planering" }),
+      lean ? null : field("Bild från Shopify (URL)", fShop, { full: true, hint: st.shopifyBild ? "Hämtad från " + shopTitle(st) + (st.shopifyBild.handle ? " – atemporubato.com/products/" + st.shopifyBild.handle : "") + ". Används när stylen saknar egna bilder; töm fältet för att ta bort." : "Klistra in bild-URL från Shopify för en placeholder tills egna bilder finns." }),
+      ...(lean ? [] : [h("h3", { class: "sec-title full", text: "Planering" }),
       field("I lager senast", fKlart, { hint: "Tomt = droppens datum används" }), field("Fotosample senast", fFoto, { hint: "Valfritt" }),
       h("h3", { class: "sec-title full", text: "Foto och e-com" }),
       field("E-com-bilder", fEcom, { hint: "Olivers status" }), field("E-com-plåtning, datum", fEcomD),
-      field("Kampanjfoto", fKamp), field("Kampanjfoto, datum", fKampD),
+      field("Kampanjfoto", fKamp), field("Kampanjfoto, datum", fKampD)]),
       field("Kommentar", fKom, { full: true }),
-      canSeeMoney() ? h("h3", { class: "sec-title full", text: "Inköp" }) : null,
-      canSeeMoney() ? field("Inköpspris per plagg", fInk, { hint: st.inkopsKalla ? "Källa: " + st.inkopsKalla + (st.inkopsDatum ? " " + fmtDate(st.inkopsDatum) : "") : "I leverantörens valuta – räknas om till SEK med kurserna under Leverantörer" }) : null,
-      canSeeMoney() ? field("Valuta", fInkV) : null);
+      lean && !isNew ? h("p", { class: "hint full" }, "Planering, foto, e-com, EAN, Shopify och inköp sköts i sina egna flikar. ", h("button", { class: "linkish", type: "button", text: "Visa hela stylen", onclick: () => openStyle(st._id, null, { full: true }) })) : null,
+      canSeeMoney() && !lean ? h("h3", { class: "sec-title full", text: "Inköp" }) : null,
+      canSeeMoney() && !lean ? field("Inköpspris per plagg", fInk, { hint: st.inkopsKalla ? "Källa: " + st.inkopsKalla + (st.inkopsDatum ? " " + fmtDate(st.inkopsDatum) : "") : "I leverantörens valuta – räknas om till SEK med kurserna under Leverantörer" }) : null,
+      canSeeMoney() && !lean ? field("Valuta", fInkV) : null);
     if (ro) lock(form);
-    fSas.addEventListener("input", syncDropHint); fDrop.addEventListener("input", syncDropHint); syncDropHint(); syncGrund();
+    fSas.addEventListener("change", syncDropHint); fDrop.addEventListener("change", syncDropHint); syncDropHint(); syncGrund();
     const formState = () => ({ _id: st._id, namn: fNamn.value.trim(), beskrivning: fBesk.value.trim(), grund: !!st.grund, grundId: st.grund ? "" : fGrund.value, leverantor: fLev.value.trim(), sasong: fSas.value.trim(), drop: fDrop.value.trim(), typ: fTyp.value, kategori: fKat.value, status: fStatus.value, mattFran: fMattFran.value, mattlista: fMatt.value.trim(), referenser: fRef.value.trim(), shopifyBild: fShop.value.trim() ? (st.shopifyBild && st.shopifyBild.url === fShop.value.trim() ? st.shopifyBild : { url: fShop.value.trim(), titel: "", handle: "", likhet: "manuell", t: new Date().toISOString() }) : null, ecomBilder: fEcom.value, ecomPlatDatum: fEcomD.value || null, kampanjStatus: fKamp.value, kampanjDatum: fKampD.value || null, klartSenast: fKlart.value || null, fotoSenast: fFoto.value || null, kommentar: fKom.value.trim(), inkopspris: canSeeMoney() ? num(fInk.value) : st.inkopspris ?? null, inkopsValuta: canSeeMoney() ? fInkV.value : st.inkopsValuta || "", inkopsKalla: canSeeMoney() && num(fInk.value) !== num(st.inkopspris) ? (num(fInk.value) == null ? "" : myName || "manuellt") : st.inkopsKalla || "", inkopsDatum: canSeeMoney() && num(fInk.value) !== num(st.inkopspris) ? (num(fInk.value) == null ? "" : todayISO()) : st.inkopsDatum || "" });
 
     const prodSec = h("section");
@@ -4539,6 +4629,7 @@ import * as P from "./platform.js";
     const nSamples = isNew ? 0 : samplesOfStyle(st._id).length;
     const nVariants = isNew ? 0 : variantsOf(st._id).length;
     const body = [varSec, form, ownImgs, planSec, gallerySec, prodSec, samplesSec, eanSec, shopSec];
+    if (lean) body.splice(0, body.length, ...body.filter((x, i) => i < 3 || x === gallerySec || x === samplesSec));
     if (!isNew) body.push(h("section", null, h("h3", { class: "sec-title", text: "Historik" }), logUl, ro ? null : h("div", { class: "add-note" }, noteIn, h("button", { class: "btn small", type: "button", text: "Lägg till", onclick: addNote }))));
     const foot = footButtons({ onDelete: isNew ? null : async () => { if (await remove("styles", st._id)) { toast("Borttagen"); closeSheet(); } }, canDelete: !nSamples && !(st.ean || []).length && !nVariants, blockText: "Stylen har samples, EAN eller varianter kopplade", onSave: () => save() });
     if (!ro) {
@@ -4992,12 +5083,15 @@ import * as P from "./platform.js";
     if (!ME.flikar.length) return;
     switchTab(UI.tab);
     const sub = (coll, key, filter, after) => db.collection(coll).onSnapshot((snap) => {
-      D[key] = mapDocs(snap).filter(filter || (() => true));
+      const docs = mapDocs(snap).filter(filter || (() => true));
+      if (key === "drops" || key === "po") RAW[key] = docs; else D[key] = docs;
+      if (key === "drops" || key === "handelser") deriveDrops();
+      if (key === "po" || key === "styles") derivePo();
       loaded.add(key); scheduleRefresh(); openFromHash(); if (after) after();
     }, subError);
     sub("samples", "samples"); sub("styles", "styles", null, () => { probeExternalImages(); renderDiag(); }); sub("tyger", "tyger"); sub("tyglager", "lager"); sub("leverantorer", "lev"); sub("drops", "drops"); sub("po", "po", (p) => !ME.leverantor || norm(p.leverantor) === norm(ME.leverantor)); sub("budget", "budget"); sub("refplagg", "ref"); sub("handelser", "handelser"); sub("shopifypriser", "shopify");
     db.doc("ean/pool").onSnapshot((snap) => { D.pool = snap.exists ? snap.data() : null; loaded.add("pool"); scheduleRefresh(); }, subError);
-    db.doc("installningar/app").onSnapshot((snap) => { if (snap.exists) Object.assign(D.settings, snap.data()); scheduleRefresh(); }, subError);
+    db.doc("installningar/app").onSnapshot((snap) => { if (snap.exists) Object.assign(D.settings, snap.data()); deriveDrops(); scheduleRefresh(); }, subError);
     db.collection("eanLogg").orderBy("t", "desc").limit(50).onSnapshot((snap) => { D.logg = snap.docs.map((doc) => Object.assign({}, doc.data(), { _id: doc.id })); scheduleRefresh(); }, subError);
   })();
 })();

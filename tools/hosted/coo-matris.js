@@ -77,7 +77,7 @@
     const pfas = mxParentFas(matris);
     const prow = mall.find((r) => r.fas === pfas) || { fas: pfas, ansvarig: "Jakob", bana: "" };
     const fNamn = inp("f_mxnamn", "", { placeholder: isDrop ? "t.ex. SS27 Drop 3" : "t.ex. London PR Drop 3" });
-    const fSas = inp("f_mxsas", MXS.sasong || "", { list: "dlSeason", autocomplete: "off", placeholder: "t.ex. SS27" });
+    const fSas = seasonSelect("f_mxsas", MXS.sasong || "");
     const fDropSel = selectEl("f_mxdrop", [["", isDrop ? "Välj …" : "– ingen –"]].concat(MX_DROP_LABELS.map((x) => [x, x])).concat([["__annat", "Annat …"]]), "");
     const fDropAnnat = inp("f_mxdropannat", "", { placeholder: "Egen etikett" }); fDropAnnat.hidden = true;
     fDropSel.addEventListener("change", () => { fDropAnnat.hidden = fDropSel.value !== "__annat"; });
@@ -125,7 +125,7 @@
   }
 
   function mxPoPanel(p) {
-    const pos = D.po.filter((po) => norm(po.sasong) === norm(p.sasong) && norm(po.drop) === norm(p.drop) && p.drop);
+    const pos = D.po.filter((po) => norm(po.sasong) === norm(p.sasong) && p.drop && (po._drops && po._drops.length ? po._drops : [po.drop]).some((n) => norm(n) === norm(p.drop)));
     if (!p.drop) return h("p", { class: "sub", text: "Ingen drop-etikett på lanseringen, så inga PO:er kan matchas." });
     if (!pos.length) return h("p", { class: "sub", text: "Inga PO:er med säsong " + (p.sasong || "–") + " och drop " + p.drop + "." });
     const t = h("table", { class: "ledger mx-po" });
@@ -187,7 +187,7 @@
       const tr = h("tr", { class: "mx-row" + (tbd ? " tbd" : "") + (open ? " open" : "") });
       tr.append(h("th", { class: "mx-rowh", scope: "row" },
         h("button", { class: "mx-name", type: "button", "aria-expanded": String(open), onclick: () => { mxToggle(p._id); MatrisView.update(); } }, h("span", { class: "mx-caret", text: open ? "▾" : "▸" }), h("span", { text: p.titel })),
-        h("span", { class: "sub", text: [mxShort(p.datum), p.sasong, p.drop].filter(Boolean).join(" · ") })));
+        h("span", { class: "sub", text: [mxShort(p.datum), p.sasong, p.drop, matris === "drop" && dropOf({ sasong: p.sasong, drop: p.drop }) && isISO(dropOf({ sasong: p.sasong, drop: p.drop }).klartSenast) ? "i lager senast " + mxShort(dropOf({ sasong: p.sasong, drop: p.drop }).klartSenast) : ""].filter(Boolean).join(" · ") })));
       for (const r of mall) {
         const td = h("td");
         if (r.fas === pfas) td.append(mxCell(p, model.krock, MXS.ansvarig && !mxHasPerson(p, MXS.ansvarig)));
@@ -277,7 +277,7 @@
       toast(n + " faser flyttade"); closeSheet(); scheduleRefresh();
     };
     openSheet({ tag: "Flytta", title: "Flytta alla faser med?", sub: e.titel + ": " + fmtDate(e.datum) + " → " + fmtDate(o.datum),
-      body: [h("p", { text: "Varje fas får lanseringens nya datum plus sin ledtid från mallen. Nej flyttar bara " + (e.matris === "drop" ? "lanseringen" : "eventet") + "." }), list],
+      body: [e.matris === "drop" && launchImpactText(o.sasong, o.drop, o.datum) ? h("p", { class: "mx-kom", text: "Leveranser: " + launchImpactText(o.sasong, o.drop, o.datum) }) : null, h("p", { text: "Varje fas får lanseringens nya datum plus sin ledtid från mallen. Nej flyttar bara " + (e.matris === "drop" ? "lanseringen" : "eventet") + "." }), list],
       foot: [h("button", { class: "btn", type: "button", text: "Nej, bara " + (e.matris === "drop" ? "lanseringen" : "eventet"), onclick: closeSheet }), h("button", { class: "btn primary", type: "button", text: "Ja, flytta " + plan.length + " faser", onclick: (ev) => doMove(ev.target) })] });
   }
 

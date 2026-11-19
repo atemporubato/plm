@@ -6,6 +6,19 @@ och importeras med `node tools/import-dokument.js`, och main går live på plm.a
 
 Versionsnumrering: små ändringar ger punktversion (v9.1, v9.2 …). Nytt heltal (v10) bara vid stora ändringar.
 
+## v9.3 (2026-11-19)
+
+Drop och säsong sätts på ett ställe och gäller överallt. Ingen dataimport och ingen schemaändring: inga fält tas bort eller skrivs om, allt nedan räknas fram vid visning.
+- Drop-register: dokumenten i "drops" plus Jakobs drop-rader i COO (händelser med matris "drop", samma säsong + drop). En COO-rad utan drop-dokument syns ändå som drop överallt; dokumentet skapas först när någon som får redigera öppnar droppen.
+- Lanseringen ägs av COO-raden. I Kollektion visas datumet låst med länken "Ändra där". Finns ingen COO-rad gäller droppens eget lanseringsdatum som förut.
+- "I lager senast" = lansering minus 5 dagar (installningar app.lagerMarginal, standard 5) om droppen inte har ett eget datum. Befintliga egna datum ligger kvar och gäller före; drop-rutan säger till om ett eget datum ligger efter lanseringen.
+- Säsong och drop väljs i rullistor ur registret på style, PO, sample och COO-händelse. Drop är frivilligt (bara säsong går bra). Ett värde som inte finns i registret visas kvar som eget alternativ tills någon väljer om.
+- PO:ns drop följer stylarna på raderna (samma säsong som PO:n), flera drops visas som "Drop 1 + Drop 2". Har ingen style en drop gäller PO:ns eget fält, som ligger kvar orört i datan.
+- Flyttas lanseringen i COO visas direkt vad det gör med leveranserna (nytt "i lager senast", vilka PO som inte hinner), och notis 14 i mejlet kl. 10 säger samma sak. Hinner någon PO inte går den även till Elliot och Alex.
+- Bibliotek (Carls flik): stylen visar bara produkt, grundstyle, tyg, säsong/drop, mått, referenser, kommentar, bilder och samples. Planering/Tidsplan, Foto och e-com, Varianter och EAN, Shopify, Produktion och Inköp visas när stylen öppnas från övriga flikar, eller via "Visa hela stylen".
+- Matrisen i COO: PO-panelen matchar på härledd drop, drop-raden visar "i lager senast", och "Ny drop" väljer säsong ur lista.
+- `api/notiser.js` läser även händelser; ögonblicksbilden av drops nycklas på säsong + namn.
+
 ## v9.2 (2026-11-19)
 
 Dagligt mejl kl. 10 med notiser (spec: claude/notiser-spec-v9.2.md i projektet RUBATO PLM) samt två buggfixar i appen (bilder, grundstyle). Ingen dataimport, ingen schemaändring.

@@ -8,7 +8,7 @@
 const { compute, renderMail, personKey, NAMN } = require("./_lib/notiser");
 
 const BASE = process.env.PLM_URL || "https://plm.atemporubato.com";
-const COLLS = ["samples", "styles", "po", "drops", "leverantorer"];
+const COLLS = ["samples", "styles", "po", "drops", "leverantorer", "handelser"];
 const env = (k) => { const v = process.env[k]; if (!v) throw new Error("Saknar miljövariabel " + k); return v; };
 
 async function sb(path, opts = {}) {

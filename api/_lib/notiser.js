@@ -104,14 +104,37 @@ function makeMoney(docs, settings) {
   return { plan };
 }
 
+/* ---------- drop-register (samma regler som appen) ----------
+   Lanseringen ägs av Jakobs drop-rad i COO (händelse med matris "drop"); finns ingen rad gäller droppens eget datum.
+   "I lager senast" = lansering minus marginalen (5 dagar) om droppen inte har ett eget datum.
+   En PO hör till de drops som stylarna på raderna har (samma säsong); annars det som står på PO:n. */
+function register(docs, settings = {}) {
+  const marginal = num(settings.lagerMarginal) ?? 5;
+  const tbd = (x) => /^TBD\s/i.test(x.titel || "");
+  const rows = new Map();
+  for (const e of docs.handelser || []) {
+    if (e.matris !== "drop" || e.hor_till || e.status === "Inställd" || !String(e.sasong || "").trim() || !String(e.drop || "").trim()) continue;
+    const k = dropKey(e.sasong, e.drop); const cur = rows.get(k);
+    if (!cur || (tbd(cur) && !tbd(e)) || (tbd(cur) === tbd(e) && String(e.datum || "9") < String(cur.datum || "9"))) rows.set(k, e);
+  }
+  const eff = (doc, ev) => { const l = (ev && iso(ev.datum)) || iso(doc.lansering) || null; const eget = iso(doc.klartSenast) || null; return { key: dropKey(doc.sasong, doc.namn), _id: doc._id, sasong: String(doc.sasong || "").trim(), namn: String(doc.namn || "").trim(), lansering: l, klart: eget || (l ? addDays(l, -marginal) : null), eget: !!eget, ev: ev || null, doc }; };
+  const seen = new Set(); const drops = [];
+  for (const d of docs.drops || []) { const k = dropKey(d.sasong, d.namn); seen.add(k); drops.push(eff(d, rows.get(k))); }
+  for (const [k, e] of rows) if (!seen.has(k)) drops.push(eff({ sasong: e.sasong, namn: e.drop }, e));
+  const styles = new Map((docs.styles || []).map((s) => [s._id, s]));
+  const poDrops = (p) => { const out = []; for (const r of p.rader || []) { const st = r.styleId ? styles.get(r.styleId) : null; const dn = st ? String(st.drop || "").trim() : ""; if (dn && norm(st.sasong) === norm(p.sasong) && !out.some((x) => norm(x) === norm(dn))) out.push(dn); } if (!out.length && String(p.drop || "").trim()) out.push(String(p.drop).trim()); return out.sort((a, b) => a.localeCompare(b, "sv")); };
+  return { drops, poDrops, marginal };
+}
+
 /* ---------- kompakt ögonblicksbild ---------- */
-function snapshot(docs) {
+function snapshot(docs, settings) {
   const snap = { samples: {}, styles: {}, po: {}, drops: {}, text: {} };
   const textOf = (coll, d) => { const t = TEXT_FIELDS.map((f) => d[f] || "").join("\n"); const m = mentions(t); if (Object.keys(m).length) snap.text[coll + ":" + d._id] = m; };
   for (const s of docs.samples || []) { snap.samples[s._id] = { s: s.status || "", b: beslutNorm(s.beslut), m: s.mattGodkanda == null || s.mattGodkanda === "" ? 0 : 1, k: hash(s.kommentar) }; textOf("samples", s); }
   for (const s of docs.styles || []) { snap.styles[s._id] = { s: styleStatusNorm(s.status), o: (s.overlamnad && s.overlamnad.t) || "", e: s.ecomBilder || "" }; textOf("styles", s); }
   for (const p of docs.po || []) { snap.po[p._id] = { s: poStatusNorm(p.status), eta: poEta(p) || "", bex: iso(p.bekraftadEx) || "", f: fotoPoNorm(p.fotosample), q: (p.rader || []).reduce((a, r) => a + (num(r.antal) || 0), 0) }; textOf("po", p); }
-  for (const d of docs.drops || []) { snap.drops[d._id] = { l: iso(d.lansering) || "" }; textOf("drops", d); }
+  for (const d of register(docs, settings).drops) snap.drops[d.key] = { l: d.lansering || "" };
+  for (const d of docs.drops || []) textOf("drops", d);
   return snap;
 }
 
@@ -137,12 +160,13 @@ function compute({ state, docs, settings = {}, persons = [], now = new Date() })
   };
   const once = (key) => { if (sent[key]) return false; sent[key] = today; return true; };
 
+  const reg = register(docs, settings);
   const styles = new Map((docs.styles || []).map((s) => [s._id, s]));
   const styleName = (id) => (styles.get(id) ? styles.get(id).namn : id || "");
   const sampleLabel = (s) => s._id + " " + styleName(s.styleId) + (s.farg ? " · " + fargText(s.farg) : "");
   const poProducts = (p) => { const names = [...new Set((p.rader || []).map((r) => r.produkt || styleName(r.styleId)).filter(Boolean))]; return names.length ? names.slice(0, 3).join(", ") + (names.length > 3 ? " m.fl." : "") : ""; };
   const poLabel = (p) => (p.nr || p._id) + (poProducts(p) ? " · " + poProducts(p) : "");
-  const poSub = (p) => [p.leverantor, [p.sasong, p.drop].filter(Boolean).join(" "), (p.rader || []).reduce((a, r) => a + (num(r.antal) || 0), 0) ? (p.rader || []).reduce((a, r) => a + (num(r.antal) || 0), 0) + " st" : "", poEta(p) ? "ETA lager " + fmtDate(poEta(p)) : ""].filter(Boolean).join(" · ");
+  const poSub = (p) => [p.leverantor, [p.sasong, reg.poDrops(p).join(" + ")].filter(Boolean).join(" "), (p.rader || []).reduce((a, r) => a + (num(r.antal) || 0), 0) ? (p.rader || []).reduce((a, r) => a + (num(r.antal) || 0), 0) + " st" : "", poEta(p) ? "ETA lager " + fmtDate(poEta(p)) : ""].filter(Boolean).join(" · ");
   const L = { sample: (s) => "#" + s._id, style: (s) => "#" + s._id, po: (p) => "#po:" + p._id, ecom: "#ecom", coo: "#coo", lev: "#leverantorer", foto: "#foto" };
   const item = (key, block, tag, text, sub, link, linkText) => ({ key, block, tag, text, sub: sub || "", link, linkText });
 
@@ -184,7 +208,7 @@ function compute({ state, docs, settings = {}, persons = [], now = new Date() })
         const eta = poEta(po) || "";
         if (eta && p.eta && eta !== p.eta) {
           const diff = daysBetween(p.eta, eta);
-          const it = item("eta:" + po._id + ":" + eta, "veta", "ETA", poLabel(po) + ": ETA lager " + fmtDate(p.eta) + " → " + fmtDate(eta) + " (" + (diff > 0 ? "+" : "") + diff + " d)", [po.leverantor, [po.sasong, po.drop].filter(Boolean).join(" ")].filter(Boolean).join(" · "), L.po(po), "Öppna PO");
+          const it = item("eta:" + po._id + ":" + eta, "veta", "ETA", poLabel(po) + ": ETA lager " + fmtDate(p.eta) + " → " + fmtDate(eta) + " (" + (diff > 0 ? "+" : "") + diff + " d)", [po.leverantor, [po.sasong, reg.poDrops(po).join(" + ")].filter(Boolean).join(" ")].filter(Boolean).join(" · "), L.po(po), "Öppna PO");
           add(["jakob"], it, actor);
           if (Math.abs(diff) > 7) add(["carl", "alex"], it, actor);
         }
@@ -195,10 +219,21 @@ function compute({ state, docs, settings = {}, persons = [], now = new Date() })
         if (q && !p.q && s === "Placeholder") add(["alex", "jakob", "oliver"], item("19:" + po._id, "veta", "PO", (po.nr || po._id) + " utkast: " + new Set((po.rader || []).map((r) => fargText(r.farg)).filter(Boolean)).size + " färger, " + q + " st", poProducts(po) + (po.leverantor ? " · " + po.leverantor : ""), L.po(po), "Öppna PO"), actor);
       }
     }
-    /* --- drops --- */
-    for (const d of docs.drops || []) {
-      const p = prev.drops[d._id]; const l = iso(d.lansering) || "";
-      if (p && p.l && l && l !== p.l) add(["jakob", "oliver", "carl"], item("14:" + d._id + ":" + l, "veta", "Drop", [d.sasong, d.namn].join(" ") + " flyttad " + fmtDate(p.l) + " → " + fmtDate(l), "", L.coo, "Öppna COO"), actorOf(d, since));
+    /* --- drops: lanseringen flyttad (i COO) och vad det gör med leveranserna --- */
+    for (const d of reg.drops) {
+      const p = prev.drops[d.key]; const l = d.lansering || "";
+      if (!(p && p.l && l && l !== p.l)) continue;
+      const name = [d.sasong, d.namn].filter(Boolean).join(" ");
+      const diff = daysBetween(p.l, l);
+      const pos = (docs.po || []).filter((po) => !["Avbruten", "Inlevererad"].includes(poStatusNorm(po.status)) && norm(po.sasong) === norm(d.sasong) && reg.poDrops(po).some((n) => norm(n) === norm(d.namn)));
+      const rows = pos.map((po) => ({ po, eta: poEta(po) || iso(po.leveransOnskad) || null }));
+      const sena = d.klart ? rows.filter((x) => x.eta && x.eta > d.klart) : [];
+      const utanEta = rows.filter((x) => !x.eta).length;
+      const sub = ["I lager senast " + (d.eget ? "ligger kvar på " + fmtDate(d.klart) + " (eget datum på droppen)" : "nu " + fmtDate(d.klart)),
+        sena.length ? sena.length + " PO hinner inte: " + sena.map((x) => (x.po.nr || x.po._id) + " (ETA " + fmtDate(x.eta) + ", " + daysBetween(d.klart, x.eta) + " d sent)").join(", ") : pos.length ? "alla " + pos.length + " PO hinner" : "inga öppna PO i droppen",
+        utanEta ? utanEta + " PO saknar ETA" : ""].filter(Boolean).join(" · ");
+      const it = item("14:" + d.key + ":" + l, sena.length ? "gora" : "veta", "Lansering", name + ": lansering flyttad " + fmtDate(p.l) + " → " + fmtDate(l) + " (" + (diff > 0 ? "+" : "") + diff + " d)", sub, L.coo, "Öppna COO");
+      add(["jakob", "oliver", "carl"].concat(sena.length ? ["elliot", "alex"] : []), it, actorOf(d.ev || d.doc, since));
     }
     /* --- @-omnämnanden (25) --- */
     for (const [coll, list] of [["samples", docs.samples], ["styles", docs.styles], ["po", docs.po], ["drops", docs.drops]]) {
@@ -230,26 +265,26 @@ function compute({ state, docs, settings = {}, persons = [], now = new Date() })
   }
   const live = (st) => !st.grund && !IDEA_STATUS.includes(styleStatusNorm(st.status)) && !["Kastad", "Pausad"].includes(styleStatusNorm(st.status));
   const done = (st) => ECOM_CHECKS.every((k) => !!st[k]) && SHOT.includes(st.ecomBilder || "");
-  for (const d of docs.drops || []) {
-    const l = iso(d.lansering); const members = (docs.styles || []).filter((st) => live(st) && dropKey(st.sasong, st.drop) === dropKey(d.sasong, d.namn));
+  for (const d of reg.drops) {
+    const l = d.lansering; const members = (docs.styles || []).filter((st) => live(st) && dropKey(st.sasong, st.drop) === d.key);
     const name = [d.sasong, d.namn].filter(Boolean).join(" ");
     if (!l || !members.length) continue;
     const left = daysBetween(today, l);
     if (left >= 0 && left <= 14) {
       const notDone = members.filter((st) => !done(st));
-      if (notDone.length && once("13:" + d._id + ":" + l)) {
+      if (notDone.length && once("13:" + d.key + ":" + l)) {
         const noImg = notDone.filter((st) => !SHOT.includes(st.ecomBilder || "")).length, noText = notDone.filter((st) => !st.ecomBeskrivning).length, noShop = notDone.filter((st) => !st.ecomShopify).length;
-        add(["jakob", "oliver", "carl"], item("13:" + d._id, "gora", "Lansering", name + " om " + left + " dagar – checklistan är inte klar", [noImg ? noImg + " saknar e-com-bilder" : "", noText ? noText + " saknar produkttext" : "", noShop ? noShop + " ej i Shopify" : "", "lansering " + fmtDate(l)].filter(Boolean).join(" · "), L.ecom, "Öppna E-com"));
+        add(["jakob", "oliver", "carl"], item("13:" + d.key, "gora", "Lansering", name + " om " + left + " dagar – checklistan är inte klar", [noImg ? noImg + " saknar e-com-bilder" : "", noText ? noText + " saknar produkttext" : "", noShop ? noShop + " ej i Shopify" : "", "lansering " + fmtDate(l)].filter(Boolean).join(" · "), L.ecom, "Öppna E-com"));
       }
     }
     if (left > 14 && left <= 42) {
       const noKamp = members.filter((st) => (st.typ || "Nyhet") === "Nyhet" && !iso(st.kampanjDatum));
-      if (noKamp.length && once("22:" + d._id + ":" + l)) add(["oliver", "jakob"], item("22:" + d._id, "gora", "Foto", "Kampanjfoto för " + name + " är inte bokat", "Lansering " + fmtDate(l) + " – " + Math.round(left / 7) + " veckor kvar · " + noKamp.length + " nyheter utan kampanjdatum", L.foto, "Öppna Foto"));
+      if (noKamp.length && once("22:" + d.key + ":" + l)) add(["oliver", "jakob"], item("22:" + d.key, "gora", "Foto", "Kampanjfoto för " + name + " är inte bokat", "Lansering " + fmtDate(l) + " – " + Math.round(left / 7) + " veckor kvar · " + noKamp.length + " nyheter utan kampanjdatum", L.foto, "Öppna Foto"));
     }
-    const allDone = members.every(done); const dk = "klar:" + d._id;
-    if (allDone && !seen[dk]) { seen[dk] = today; if (prev) add(["jakob", "oliver"], item("23:" + d._id, "veta", "Drop", name + ": " + members.length + " av " + members.length + " klara för lansering", "Lansering " + fmtDate(l), L.ecom, "Öppna E-com")); }
+    const allDone = members.every(done); const dk = "klar:" + d.key;
+    if (allDone && !seen[dk]) { seen[dk] = today; if (prev) add(["jakob", "oliver"], item("23:" + d.key, "veta", "Drop", name + ": " + members.length + " av " + members.length + " klara för lansering", "Lansering " + fmtDate(l), L.ecom, "Öppna E-com")); }
     if (!allDone) delete seen[dk];
-    if (prev && l > lastDay && l <= today && once("24:" + d._id + ":" + l)) add("alla", item("24:" + d._id, "veta", "Lansering", name + " live idag – " + members.length + " produkter", "", L.coo, "Öppna COO"));
+    if (prev && l > lastDay && l <= today && once("24:" + d.key + ":" + l)) add("alla", item("24:" + d.key, "veta", "Lansering", name + " live idag – " + members.length + " produkter", "", L.coo, "Öppna COO"));
   }
   const money = makeMoney(docs, settings);
   for (const po of docs.po || []) for (const pay of money.plan(po)) {
@@ -270,7 +305,7 @@ function compute({ state, docs, settings = {}, persons = [], now = new Date() })
     }
   }
   for (const k of Object.keys(perPerson)) perPerson[k].sort((a, b) => (a.block === b.block ? 0 : a.block === "gora" ? -1 : 1));
-  return { perPerson, state: { lastRun: now.toISOString(), snap: snapshot(docs), sent, seen } };
+  return { perPerson, state: { lastRun: now.toISOString(), snap: snapshot(docs, settings), sent, seen } };
 }
 
 /* ---------- mejlet ---------- */
@@ -299,4 +334,4 @@ function renderMail({ name, items, base }) {
   return { subject, html };
 }
 
-module.exports = { compute, renderMail, personKey, NAMN, PERSONER, snapshot };
+module.exports = { compute, renderMail, personKey, NAMN, PERSONER, snapshot, register };
