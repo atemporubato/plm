@@ -373,7 +373,8 @@ import * as P from "./platform.js";
   const styleAllImages = (st) => uniq(docImages(st).concat(st.bildId ? [st.bildId] : [], st._id ? samplesOfStyle(st._id).flatMap(sampleImages) : [], shopUrl(st) ? [shopUrl(st)] : []));
   const grundOf = (st) => (st && st.grundId ? byId(D.styles, st.grundId) : null);
   const variantsOf = (id) => D.styles.filter((s) => s.grundId === id).sort((a, b) => seasonRank(b.sasong) - seasonRank(a.sasong) || (a.namn || "").localeCompare(b.namn || "", "sv"));
-  const grundStyles = () => D.styles.filter((s) => s.grund).sort((a, b) => (a.namn || "").localeCompare(b.namn || "", "sv"));
+  const isGrund = (s) => !!s && (!!s.grund || D.styles.some((v) => v.grundId === s._id));
+  const grundStyles = () => D.styles.filter(isGrund).sort((a, b) => (a.namn || "").localeCompare(b.namn || "", "sv"));
   const styleTyg = (st) => { const t = st && st.tygId ? byId(D.tyger, st.tygId) : null; return t ? t.namn : (st && st.tygNamn) || ""; };
   const refName = (id) => { if (!id) return ""; const st = byId(D.styles, id); if (st) return st.namn; const s = byId(D.samples, id); return s ? styleName(s) + (s.version ? " · " + s.version : "") + " (" + s._id + ")" : String(id); };
   const fotoSamplesOf = (st) => samplesOfStyle(st._id).filter((x) => (x.version === "Fotosample" || x.version === "Produktionssample") && !isArchived(x));
@@ -413,24 +414,49 @@ import * as P from "./platform.js";
     if (made.length) await write("styles", st._id, { andrad: new Date().toISOString(), logg: (st.logg || []).concat(logEntry("Fotosample beställd: " + made.join(", ") + (p0 ? " (PO " + (p0.nr || p0._id) + ")" : ""))) });
     return made;
   }
+  // Bilder: allt webbläsaren kan läsa plus HEIC/HEIF (iPhone). Allt som inte redan är en liten JPG/PNG/WebP/GIF
+  // görs om till JPG, högst `max` pixlar på längsta sidan (ingen beskärning – hela bilden behålls).
+  const IMG_ACCEPT = "image/*,.heic,.heif,.avif";
+  const IMG_EXT = /\.(jpe?g|png|webp|gif|avif|bmp|heic|heif|tiff?|svg)$/i;
+  const isImageFile = (f) => /^image\//.test(f.type || "") || IMG_EXT.test(f.name || "");
+  const isHeic = (f) => /hei[cf]/i.test(f.type || "") || /\.(heic|heif)$/i.test(f.name || "");
+  let heicLib = null;
+  const loadHeic = () => heicLib || (heicLib = new Promise((res, rej) => {
+    const s = document.createElement("script"); s.src = "https://cdn.jsdelivr.net/npm/heic-to@1.6.7/dist/iife/heic-to.js";
+    s.onload = () => (typeof window.HeicTo === "function" ? res(window.HeicTo) : rej(new Error("heic")));
+    s.onerror = () => { heicLib = null; rej(new Error("heic")); };
+    document.head.append(s);
+  }));
+  const viaImg = (file) => new Promise((res) => { const u = URL.createObjectURL(file); const im = new Image(); im.onload = () => res(im); im.onerror = () => { URL.revokeObjectURL(u); res(null); }; im.src = u; });
+  async function decodeImage(file) {
+    try { return await createImageBitmap(file); } catch (e) {}
+    const im = await viaImg(file); if (im && im.naturalWidth) return im;
+    if (isHeic(file) || !/^image\/(jpeg|png|webp|gif)$/.test(file.type || "")) { try { const heicTo = await loadHeic(); return await heicTo({ blob: file, type: "bitmap" }); } catch (e) {} }
+    return null;
+  }
   async function shrinkImage(file, max) {
-    if (!/^image\//.test(file.type) || file.type === "image/svg+xml") return file;
-    try {
-      const bmp = await createImageBitmap(file);
-      const k = Math.min(1, max / Math.max(bmp.width, bmp.height));
-      if (k >= 1 && file.size < 1.5e6) return file;
-      const c = document.createElement("canvas"); c.width = Math.round(bmp.width * k); c.height = Math.round(bmp.height * k);
-      c.getContext("2d").drawImage(bmp, 0, 0, c.width, c.height);
-      const blob = await new Promise((res) => c.toBlob(res, "image/jpeg", 0.86));
-      return blob || file;
-    } catch (e) { return file; }
+    const t = file.type || "";
+    if (t === "image/svg+xml" || /\.svg$/i.test(file.name || "")) return file;
+    const webSafe = /^image\/(jpeg|png|webp|gif)$/.test(t);
+    const bmp = await decodeImage(file);
+    if (!bmp) return webSafe ? file : null;
+    const bw = bmp.naturalWidth || bmp.width, bh = bmp.naturalHeight || bmp.height;
+    const k = Math.min(1, max / Math.max(bw, bh));
+    if (k >= 1 && webSafe && file.size < 1.5e6) return file;
+    const c = document.createElement("canvas"); c.width = Math.max(1, Math.round(bw * k)); c.height = Math.max(1, Math.round(bh * k));
+    const ctx = c.getContext("2d"); ctx.fillStyle = "#ffffff"; ctx.fillRect(0, 0, c.width, c.height); ctx.drawImage(bmp, 0, 0, c.width, c.height);
+    const blob = await new Promise((res) => c.toBlob(res, "image/jpeg", 0.86));
+    return blob || (webSafe ? file : null);
   }
   async function uploadImages(files) {
     if (!assets) { toast("Bilduppladdning kräver Editor-behörighet på appen."); return []; }
     const ids = [];
     for (const f of files) {
-      try { const blob = await shrinkImage(f, 1600); const r = await assets.upload(blob, blob.type ? undefined : { type: "image/jpeg" }); ids.push(r.id); }
-      catch (e) { const c = e && e.code; toast(c === "too_large" ? "Bilden är för stor (max 20 MB)." : c === "unsupported_type" ? "Filtypen stöds inte – använd JPG, PNG eller WebP." : c === "quota_or_state" ? "Bildlagringen är full." : "Kunde inte ladda upp bilden."); }
+      let blob = null;
+      try { blob = await shrinkImage(f, 1600); } catch (e) {}
+      if (!blob) { toast("Kunde inte läsa " + (f.name || "filen") + " – ladda upp en bild (JPG, PNG, HEIC, WebP …)."); continue; }
+      try { const r = await assets.upload(blob, blob.type ? undefined : { type: "image/jpeg" }); ids.push(r.id); }
+      catch (e) { const c = e && e.code; toast(c === "too_large" ? "Bilden är för stor (max 20 MB)." : c === "unsupported_type" ? "Filtypen stöds inte – använd JPG, PNG, HEIC eller WebP." : c === "quota_or_state" ? "Bildlagringen är full." : "Kunde inte ladda upp bilden."); }
     }
     return ids;
   }
@@ -457,14 +483,39 @@ import * as P from "./platform.js";
     document.body.append(box);
   }
   function imageDrop(onFiles, label) {
-    const input = h("input", { type: "file", accept: "image/*", multiple: true, hidden: true, onchange: () => { if (input.files.length) onFiles([...input.files]); input.value = ""; } });
+    const input = h("input", { type: "file", accept: IMG_ACCEPT, multiple: true, hidden: true, onchange: () => { if (input.files.length) onFiles([...input.files]); input.value = ""; } });
     const btn = h("button", { class: "btn small", type: "button", text: label || "+ Lägg till bilder", onclick: () => input.click() });
-    const zone = h("div", { class: "dropzone" }, btn, h("span", { class: "hint", text: "eller släpp bilder här" }), input);
-    zone.addEventListener("dragover", (e) => { e.preventDefault(); zone.classList.add("over"); });
-    zone.addEventListener("dragleave", () => zone.classList.remove("over"));
-    zone.addEventListener("drop", (e) => { e.preventDefault(); zone.classList.remove("over"); const fs = [...e.dataTransfer.files].filter((f) => /^image\//.test(f.type)); if (fs.length) onFiles(fs); });
+    const zone = h("div", { class: "dropzone" }, btn, h("span", { class: "hint", text: "eller dra hit bilder – JPG, PNG, HEIC, skärmdumpar" }), input);
+    zone._onFiles = onFiles;
     return zone;
   }
+  // Släpp hanteras på ett ställe för hela sidan: en fil som släpps bredvid rutan ska hamna i närmaste bildruta,
+  // inte öppnas av webbläsaren (då försvinner appen).
+  const dragHasFiles = (e) => !!e.dataTransfer && [...(e.dataTransfer.types || [])].includes("Files");
+  function dropZoneFor(e) {
+    const t = e.target instanceof Element ? e.target : null;
+    const own = t && t.closest(".dropzone, .tile-empty");
+    if (own && own._onFiles) return own;
+    const sec = t && t.closest("section");
+    const inSec = sec && [...sec.querySelectorAll(".dropzone")].filter((z) => z._onFiles);
+    if (inSec && inSec.length === 1) return inSec[0];
+    const scope = (t && t.closest(".sheet, .modal")) || document;
+    const zs = [...scope.querySelectorAll(".dropzone")].filter((z) => z._onFiles && z.offsetParent !== null);
+    return zs.length === 1 ? zs[0] : null;
+  }
+  let dragZone = null;
+  const setDragZone = (z) => { if (dragZone === z) return; if (dragZone) dragZone.classList.remove("over"); dragZone = z; if (z) z.classList.add("over"); };
+  document.addEventListener("dragover", (e) => { if (!dragHasFiles(e)) return; e.preventDefault(); const z = dropZoneFor(e); setDragZone(z); e.dataTransfer.dropEffect = z ? "copy" : "none"; });
+  document.addEventListener("dragleave", (e) => { if (!e.relatedTarget) setDragZone(null); });
+  document.addEventListener("drop", (e) => {
+    if (!dragHasFiles(e)) return;
+    e.preventDefault();
+    const z = dropZoneFor(e); setDragZone(null);
+    const all = [...e.dataTransfer.files];
+    if (!z) { if (all.length) toast("Släpp bilden på en bildruta (\"+ Lägg till bilder\")."); return; }
+    const fs = all.filter(isImageFile);
+    if (fs.length) z._onFiles(fs); else if (all.length) toast("Bara bilder kan läggas till här (JPG, PNG, HEIC, WebP …).");
+  });
   // Generic image block for a document (style, drop, ref-plagg, tyg). For a new, unsaved document
   // the ids are kept in opts.pending and saved together with the document.
   // Tom bildruta i Bibliotek/Kollektion: kategori + vad som saknas, och uppladdning direkt från kortet (skiss, referens eller foto).
@@ -472,7 +523,9 @@ import * as P from "./platform.js";
     const what = isIdea(s) ? "Skiss eller referensbild saknas" : (xs && xs.length ? "Foto på samplen saknas" : "Ingen sample än – lägg en skiss");
     const box = h("div", { class: "noimg tile-empty" }, h("span", { class: "kat", text: styleKategori(s) || typLabel(s) || "" }), h("span", { class: "what", text: what }));
     if (assets && canWrite && db) {
-      const input = h("input", { type: "file", accept: "image/*", multiple: true, hidden: true, onchange: async () => { const files = [...input.files]; input.value = ""; if (!files.length) return; const ids = await uploadImages(files); if (!ids.length) return; const cur = byId(D.styles, s._id) || s; await write("styles", s._id, { bilder: (cur.bilder || []).concat(ids), bildId: cur.bildId && !cur.bildAuto ? cur.bildId : ids[0], bildAuto: false, andrad: new Date().toISOString(), logg: (cur.logg || []).concat(logEntry(ids.length + (ids.length === 1 ? " bild" : " bilder") + " uppladdad från Bibliotek")) }); toast("Bild sparad"); } });
+      const addFiles = async (files) => { if (!files.length) return; toast("Laddar upp " + files.length + (files.length === 1 ? " bild …" : " bilder …")); const ids = await uploadImages(files); if (!ids.length) return; const cur = byId(D.styles, s._id) || s; await write("styles", s._id, { bilder: (cur.bilder || []).concat(ids), bildId: cur.bildId && !cur.bildAuto ? cur.bildId : ids[0], bildAuto: false, andrad: new Date().toISOString(), logg: (cur.logg || []).concat(logEntry(ids.length + (ids.length === 1 ? " bild" : " bilder") + " uppladdad från Bibliotek")) }); toast("Bild sparad"); };
+      const input = h("input", { type: "file", accept: IMG_ACCEPT, multiple: true, hidden: true, onchange: () => { const files = [...input.files]; input.value = ""; addFiles(files); } });
+      box._onFiles = addFiles;
       box.append(h("button", { class: "btn small", type: "button", text: "+ Lägg till bild", onclick: (e) => { e.stopPropagation(); input.click(); } }), input);
       box.addEventListener("click", (e) => e.stopPropagation());
     }
@@ -3534,13 +3587,13 @@ import * as P from "./platform.js";
       this.body.replaceChildren();
       if (st.mode === "grund" && !st.view) {
         const gs = grundStyles().filter((g) => list.includes(g) || variantsOf(g._id).some((v) => list.includes(v)));
-        const loose = list.filter((s) => !s.grund && !grundOf(s));
+        const loose = list.filter((s) => !isGrund(s) && !grundOf(s));
         const sec = h("section", { class: "lib-sec" }, h("div", { class: "lib-h" }, h("h3", { text: "Grundstyles" }), h("span", { class: "sub", text: gs.length + (gs.length === 1 ? " grundstyle" : " grundstyles") + " · " + loose.length + " styles utan grundstyle" })));
-        if (!gs.length) sec.append(h("p", { class: "hint", text: "Inga grundstyles ännu. Öppna en style och bocka i \"Detta är en grundstyle\", eller skapa en ny med \"+ Ny grundstyle\"." }));
+        if (!gs.length) sec.append(h("p", { class: "hint", text: "Inga grundstyles ännu. Öppna en style och välj plagget den bygger på under \"Grundstyle\" – den valda stylen blir grundstyle." }));
         else sec.append(h("div", { class: "cards" }, gs.map((g) => this.grundCard(g, list))));
         this.body.append(sec);
         if (loose.length) {
-          const sec2 = h("section", { class: "lib-sec" }, h("div", { class: "lib-h" }, h("h3", { text: "Utan grundstyle" }), h("span", { class: "sub", text: "Öppna en style och välj \"Variant av grundstyle\" för att koppla den." })), h("div", { class: "pgrid" }, loose.sort((a, b) => (a.namn || "").localeCompare(b.namn || "", "sv")).map((s) => KollView.card(s))));
+          const sec2 = h("section", { class: "lib-sec" }, h("div", { class: "lib-h" }, h("h3", { text: "Utan grundstyle" }), h("span", { class: "sub", text: "Öppna en style och välj \"Grundstyle\" för att koppla den." })), h("div", { class: "pgrid" }, loose.sort((a, b) => (a.namn || "").localeCompare(b.namn || "", "sv")).map((s) => KollView.card(s))));
           this.body.append(sec2);
         }
         this.count.textContent = list.length + " styles";
@@ -3696,7 +3749,7 @@ import * as P from "./platform.js";
     const w = canWrite && !!db, t = UI.tab;
     const libSeason = () => (UI.bibliotek.season && UI.bibliotek.season !== "Utan säsong" ? UI.bibliotek.season : KollView.seasonInView() || "");
     if ((t === "bibliotek" || t === "produktion" || t === "kollektion") && w && assets && shopTodo().length) add("Hämta Shopify-bilder (" + shopTodo().length + ")", importShopifyImages);
-    if (t === "bibliotek" && w) { add("+ Ny grundstyle", () => openStyle(null, { grund: true, status: "Produktidé" })); add("+ Ny style", () => openStyle(null, { sasong: libSeason() })); add("+ Ny produktidé", () => openStyle(null, { status: "Produktidé", sasong: libSeason() }), true); }
+    if (t === "bibliotek" && w) { add("+ Ny style", () => openStyle(null, { sasong: libSeason() })); add("+ Ny produktidé", () => openStyle(null, { status: "Produktidé", sasong: libSeason() }), true); }
     if (t === "samples") { if (downloads) add("Exportera CSV", exportSamples); if (w) add("+ Ny style", () => openStyle(null)); if (w) add("+ Ny sample", () => openSample(null), true); }
     if (t === "kollektion" && w) { add("+ Ny drop", () => openDrop(null, { sasong: KollView.seasonInView() || "" })); add("+ Ny sample", () => openSample(null)); add("+ Ny produktidé", () => openStyle(null, { status: "Produktidé", sasong: KollView.seasonInView() || "" })); add("+ Ny style", () => openStyle(null, { sasong: KollView.seasonInView() || "" }), true); }
     if (t === "foto" && w) add("+ Ny sample", () => openSample(null, { version: "Fotosample" }), true);
@@ -3788,7 +3841,7 @@ import * as P from "./platform.js";
       };
       if (can("bibliotek") || can("kollektion")) {
         const sts = D.styles.filter((s) => hit(q, s._id, s.namn, s.beskrivning, s.leverantor, s.kategori, styleTyg(s), (s.farger || []).join(" "), s.sasong, s.drop, grundOf(s) ? grundOf(s).namn : "", s.referenser, s.kommentar)).sort((a, b) => seasonRank(b.sasong) - seasonRank(a.sasong) || (a.namn || "").localeCompare(b.namn || "", "sv"));
-        res.append(sec("Styles och idéer", sts, (s) => h("li", null, h("button", { class: "mini-row", type: "button", onclick: () => openStyle(s._id) }, tag(s._id), h("span", { class: "mini-main" }, h("strong", { text: s.namn + (s.grund ? " (grundstyle)" : "") }), h("span", { class: "sub", text: [s.sasong, s.drop, s.leverantor, styleTyg(s)].filter(Boolean).join(" · ") }), styleSummary(s)), h("span", { class: "mini-side" }, styleStatusPill(s))))));
+        res.append(sec("Styles och idéer", sts, (s) => h("li", null, h("button", { class: "mini-row", type: "button", onclick: () => openStyle(s._id) }, tag(s._id), h("span", { class: "mini-main" }, h("strong", { text: s.namn + (isGrund(s) ? " (grundstyle)" : "") }), h("span", { class: "sub", text: [s.sasong, s.drop, s.leverantor, styleTyg(s)].filter(Boolean).join(" · ") }), styleSummary(s)), h("span", { class: "mini-side" }, styleStatusPill(s))))));
       }
       if (can("samples")) {
         const xs = D.samples.filter((s) => hit(q, s._id, styleName(s), s.version, tygName(s), s.material, s.farg, s.leverantor, s.kommentar, s.andringar, s.storlek, platsText(s), s.hangare ? "h" + s.hangare : "", seasonOf(s), beslutNorm(s.beslut))).sort((a, b) => isArchived(a) - isArchived(b) || styleName(a).localeCompare(styleName(b), "sv") || versionRank(a.version) - versionRank(b.version));
@@ -4109,9 +4162,11 @@ import * as P from "./platform.js";
     const current = () => (isNew ? st : byId(D.styles, st._id) || st);
     const fNamn = inp("f_snamn", st.namn);
     const fBesk = area("f_sbesk", st.beskrivning, "Vad är det för plagg? Passform, detaljer, känsla, vad som skiljer från tidigare versioner …");
-    const grundOpts = [["", "– Egen style, ingen grundstyle –"]].concat(grundStyles().filter((g) => g._id !== st._id).map((g) => [g._id, g.namn + (g.kategori ? " · " + g.kategori : "")]));
+    // Samma urval som "Använd mått från": alla styles. Den som väljs blir grundstyle (ingen bock behövs).
+    const grundOpts = [["", "– Ingen, egen style –"]].concat(D.styles.filter((x) => x._id !== st._id && !(st._id && x.grundId === st._id) && (x._id === st.grundId || styleStatusNorm(x.status) !== "Kastad"))
+      .sort((a, b) => (isGrund(b) ? 1 : 0) - (isGrund(a) ? 1 : 0) || (a.namn || "").localeCompare(b.namn || "", "sv") || seasonRank(b.sasong) - seasonRank(a.sasong))
+      .map((x) => [x._id, x.namn + (x.sasong ? " · " + x.sasong : "") + (isGrund(x) ? " · grundstyle" : "")]));
     const fGrund = selectEl("f_sgrund", grundOpts, st.grundId || "");
-    const fIsGrund = h("input", { type: "checkbox", id: "f_sisgrund" }); fIsGrund.checked = !!st.grund;
     const fLev = inp("f_slev", st.leverantor, { list: "dlLev", autocomplete: "off" });
     const fTyg = inp("f_styg", styleTyg(st), { list: "dlTyg", autocomplete: "off", placeholder: "t.ex. Japan Blue inhouse – Westpoint Canvas 223" });
     const fSas = inp("f_ssasong", st.sasong, { list: "dlSeason", autocomplete: "off", placeholder: "t.ex. SS27" });
@@ -4138,15 +4193,14 @@ import * as P from "./platform.js";
     const dropHint = h("span", { class: "hint" });
     const syncDropHint = () => { const d = dropOf({ sasong: fSas.value.trim(), drop: fDrop.value.trim() }); dropHint.textContent = fDrop.value.trim() ? (d ? (isISO(d.klartSenast) ? "Droppen har datum " + fmtDate(d.klartSenast) : "Droppen saknar datum") : "Ingen drop med det namnet i " + (fSas.value.trim() || "säsongen") + " – skapas under Drops") : "Tomt = utan drop"; };
     const grundHint = h("span", { class: "hint" });
-    const syncGrund = () => { const g = byId(D.styles, fGrund.value); grundHint.textContent = g ? "Ärver namn, kategori och mått från " + g.namn + " om fälten är tomma." : fIsGrund.checked ? "Grundstyle: återanvänds i flera kollektioner via varianter." : "Välj en grundstyle om detta är en variant av ett plagg som redan finns."; fGrund.disabled = ro || fIsGrund.checked; if (fIsGrund.checked) fGrund.value = ""; };
-    fGrund.addEventListener("change", () => { const g = byId(D.styles, fGrund.value); if (g) { if (!fNamn.value.trim()) fNamn.value = g.namn; if (!fKat.value && g.kategori) fKat.value = g.kategori; if (!fLev.value.trim() && g.leverantor) fLev.value = g.leverantor; if (!fMattFran.value && fMatt.value.trim() === "") fMattFran.value = g._id; } syncGrund(); });
-    fIsGrund.addEventListener("change", syncGrund);
+    const hasVariants = () => !isNew && D.styles.some((v) => v.grundId === st._id);
+    const syncGrund = () => { const g = byId(D.styles, fGrund.value); const own = !!st.grund || hasVariants(); grundHint.textContent = g ? "Variant av " + g.namn + ". Ärver namn, kategori och mått därifrån om fälten är tomma." : own ? "Den här stylen är själv grundstyle för andra styles." : "Välj plagget som detta är en variant av – den valda stylen blir grundstyle."; fGrund.disabled = ro || own; if (own) fGrund.value = ""; };
+    fGrund.addEventListener("change", () => { let g = byId(D.styles, fGrund.value); const root = g ? grundOf(g) : null; if (root && root._id !== st._id) { toast(g.namn + (g.sasong ? " " + g.sasong : "") + " är redan en variant av grundstylen " + root.namn + " – kopplar dit i stället."); fGrund.value = root._id; g = root; } if (g) { if (!fNamn.value.trim()) fNamn.value = g.namn; if (!fKat.value && g.kategori) fKat.value = g.kategori; if (!fLev.value.trim() && g.leverantor) fLev.value = g.leverantor; if (!fMattFran.value && fMatt.value.trim() === "") fMattFran.value = g._id; } syncGrund(); });
     const form = h("form", { class: "form", id: "styleForm", autocomplete: "off", onsubmit: (e) => e.preventDefault() },
       h("h3", { class: "sec-title full", text: "Produkt" }),
       field("Namn", fNamn, { full: true }),
       field("Beskrivning", fBesk, { full: true }),
-      h("div", { class: "field" }, h("label", { for: "f_sgrund", text: "Variant av grundstyle" }), fGrund, grundHint),
-      h("div", { class: "field" }, h("label", { for: "f_sisgrund", text: "Grundstyle" }), h("label", { class: "checkline", style: "color:var(--ink)" }, fIsGrund, "Detta är en grundstyle (kan få varianter)")),
+      h("div", { class: "field full" }, h("label", { for: "f_sgrund", text: "Grundstyle" }), fGrund, grundHint),
       field("Kategori", fKat, { hint: "Styr storleksskala och budgetruta" }), field("Leverantör", fLev),
       field("Tyg", fTyg, { full: true, hint: "Skriv fritt eller välj ett tyg som redan finns i Tyglager." }),
       field("Säsong", fSas), h("div", { class: "field" }, h("label", { for: "f_sdrop", text: "Drop" }), fDrop, dropHint),
@@ -4166,9 +4220,9 @@ import * as P from "./platform.js";
       canSeeMoney() ? h("h3", { class: "sec-title full", text: "Inköp" }) : null,
       canSeeMoney() ? field("Inköpspris per plagg", fInk, { hint: st.inkopsKalla ? "Källa: " + st.inkopsKalla + (st.inkopsDatum ? " " + fmtDate(st.inkopsDatum) : "") : "I leverantörens valuta – räknas om till SEK med kurserna under Leverantörer" }) : null,
       canSeeMoney() ? field("Valuta", fInkV) : null);
-    if (ro) { lock(form); fIsGrund.disabled = true; }
+    if (ro) lock(form);
     fSas.addEventListener("input", syncDropHint); fDrop.addEventListener("input", syncDropHint); syncDropHint(); syncGrund();
-    const formState = () => ({ _id: st._id, namn: fNamn.value.trim(), beskrivning: fBesk.value.trim(), grund: fIsGrund.checked, grundId: fIsGrund.checked ? "" : fGrund.value, leverantor: fLev.value.trim(), sasong: fSas.value.trim(), drop: fDrop.value.trim(), typ: fTyp.value, kategori: fKat.value, status: fStatus.value, mattFran: fMattFran.value, mattlista: fMatt.value.trim(), referenser: fRef.value.trim(), shopifyBild: fShop.value.trim() ? (st.shopifyBild && st.shopifyBild.url === fShop.value.trim() ? st.shopifyBild : { url: fShop.value.trim(), titel: "", handle: "", likhet: "manuell", t: new Date().toISOString() }) : null, ecomBilder: fEcom.value, ecomPlatDatum: fEcomD.value || null, kampanjStatus: fKamp.value, kampanjDatum: fKampD.value || null, klartSenast: fKlart.value || null, fotoSenast: fFoto.value || null, kommentar: fKom.value.trim(), inkopspris: canSeeMoney() ? num(fInk.value) : st.inkopspris ?? null, inkopsValuta: canSeeMoney() ? fInkV.value : st.inkopsValuta || "", inkopsKalla: canSeeMoney() && num(fInk.value) !== num(st.inkopspris) ? (num(fInk.value) == null ? "" : myName || "manuellt") : st.inkopsKalla || "", inkopsDatum: canSeeMoney() && num(fInk.value) !== num(st.inkopspris) ? (num(fInk.value) == null ? "" : todayISO()) : st.inkopsDatum || "" });
+    const formState = () => ({ _id: st._id, namn: fNamn.value.trim(), beskrivning: fBesk.value.trim(), grund: !!st.grund, grundId: st.grund ? "" : fGrund.value, leverantor: fLev.value.trim(), sasong: fSas.value.trim(), drop: fDrop.value.trim(), typ: fTyp.value, kategori: fKat.value, status: fStatus.value, mattFran: fMattFran.value, mattlista: fMatt.value.trim(), referenser: fRef.value.trim(), shopifyBild: fShop.value.trim() ? (st.shopifyBild && st.shopifyBild.url === fShop.value.trim() ? st.shopifyBild : { url: fShop.value.trim(), titel: "", handle: "", likhet: "manuell", t: new Date().toISOString() }) : null, ecomBilder: fEcom.value, ecomPlatDatum: fEcomD.value || null, kampanjStatus: fKamp.value, kampanjDatum: fKampD.value || null, klartSenast: fKlart.value || null, fotoSenast: fFoto.value || null, kommentar: fKom.value.trim(), inkopspris: canSeeMoney() ? num(fInk.value) : st.inkopspris ?? null, inkopsValuta: canSeeMoney() ? fInkV.value : st.inkopsValuta || "", inkopsKalla: canSeeMoney() && num(fInk.value) !== num(st.inkopspris) ? (num(fInk.value) == null ? "" : myName || "manuellt") : st.inkopsKalla || "", inkopsDatum: canSeeMoney() && num(fInk.value) !== num(st.inkopspris) ? (num(fInk.value) == null ? "" : todayISO()) : st.inkopsDatum || "" });
 
     const prodSec = h("section");
     function renderPris() {
@@ -4255,8 +4309,8 @@ import * as P from "./platform.js";
       const cur = current();
       const g = grundOf(cur);
       if (g) { varSec.append(h("div", { class: "ideabanner" }, h("span", null, "Variant av grundstylen ", h("button", { class: "linkish", type: "button", text: g.namn, onclick: () => openStyle(g._id) })), h("span", { class: "sub", text: "· " + variantsOf(g._id).length + (variantsOf(g._id).length === 1 ? " variant totalt" : " varianter totalt") }))); }
-      if (!cur.grund) return;
       const vs = variantsOf(cur._id);
+      if (!isGrund(cur)) { if (!ro && !g) varSec.append(h("button", { class: "btn small", type: "button", text: "+ Ny variant av " + cur.namn, title: "Gör " + cur.namn + " till grundstyle och skapar en variant av den", onclick: () => openStyle(null, { grundId: cur._id, namn: cur.namn, kategori: cur.kategori || "", leverantor: cur.leverantor || "", storlekar: (cur.storlekar || []).slice(), mattFran: cur._id, status: "Produktidé", sasong: UI.bibliotek.season || "" }) })); return; }
       varSec.append(h("h3", { class: "sec-title", text: "Varianter (" + vs.length + ")" }));
       if (vs.length) varSec.append(h("ul", { class: "mini" }, vs.map((v) => h("li", null, h("button", { class: "mini-row", type: "button", onclick: () => openStyle(v._id) }, tag(v._id), h("span", { class: "mini-main" }, h("strong", { text: v.namn }), h("span", { class: "sub", text: [v.sasong, v.drop, styleTyg(v), (v.farger || []).join(", ")].filter(Boolean).join(" · ") })), h("span", { class: "mini-side" }, styleStatusPill(v)))))));
       else varSec.append(h("p", { class: "hint", text: "Inga varianter ännu. En variant är samma plagg i ny kollektion, nytt tyg eller ny färgställning." }));
@@ -4495,7 +4549,7 @@ import * as P from "./platform.js";
     openSheet({
       tag: isNew ? (IDEA_STATUS.includes(st.status) ? "Ny idé" : "Ny") : st._id,
       title: isNew ? (IDEA_STATUS.includes(st.status) ? (st.grundId ? "Ny variant" : "Ny produktidé") : "Ny style") : st.namn,
-      sub: isNew ? (st.grundId && byId(D.styles, st.grundId) ? "Variant av " + byId(D.styles, st.grundId).namn : "") : [st.grund ? "Grundstyle" : "", st.leverantor, st.sasong, st.drop].filter(Boolean).join(" · "),
+      sub: isNew ? (st.grundId && byId(D.styles, st.grundId) ? "Variant av " + byId(D.styles, st.grundId).namn : "") : [isGrund(st) ? "Grundstyle" : "", st.leverantor, st.sasong, st.drop].filter(Boolean).join(" · "),
       body,
       foot,
       ctx: { refresh: () => { if (!isNew && !byId(D.styles, st._id)) { closeSheet(); return; } renderVariants(); renderPlan(); renderGallery(); renderProd(); renderSamples(); renderEanTable(); if (!isNew) { renderFarger(); renderLogInto(logUl, current().logg); } } },

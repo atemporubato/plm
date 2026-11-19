@@ -306,7 +306,7 @@ table.ledger { width: 100%; border-collapse: collapse; min-width: 960px; }
 .thumb-x { position: absolute; top: 4px; right: 4px; width: 24px; height: 24px; border: 0; background: var(--ink); color: var(--paper); cursor: pointer; font-size: 16px; line-height: 1; }
 .thumb-hero { position: absolute; left: 0; right: 0; bottom: 0; border: 0; background: rgba(33,33,33,.75); color: #F8F7F0; font-family: var(--f-label); font-size: 8.5px; letter-spacing: .08em; text-transform: uppercase; padding: 5px 4px; cursor: pointer; }
 .dropzone { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; padding: 10px 12px; border: 1px dashed var(--line-strong); margin-top: 10px; }
-.dropzone.over { border-color: var(--ink); background: var(--indigo-soft); }
+.dropzone.over, .tile-empty.over { border-color: var(--ink); background: var(--indigo-soft); outline: 1px solid var(--ink); }
 .lightbox { position: fixed; inset: 0; background: rgba(20, 20, 18, .92); z-index: 60; display: grid; place-items: center; }
 .lightbox img { max-width: 92vw; max-height: 92vh; object-fit: contain; box-shadow: var(--shadow); }
 .lb-x, .lb-prev, .lb-next { position: absolute; border: 0; background: transparent; color: #F8F7F0; font-size: 40px; line-height: 1; cursor: pointer; padding: 10px 16px; }
