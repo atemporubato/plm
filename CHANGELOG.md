@@ -6,6 +6,15 @@ och importeras med `node tools/import-dokument.js`, och main går live på plm.a
 
 Versionsnumrering: små ändringar ger punktversion (v9.1, v9.2 …). Nytt heltal (v10) bara vid stora ändringar.
 
+## v9.2 (2026-11-19)
+
+Dagligt mejl kl. 10 med notiser (spec: claude/notiser-spec-v9.2.md i projektet RUBATO PLM). Ingen ändring i appen, ingen dataimport, ingen schemaändring.
+- `api/notiser.js` körs av Vercel cron (08:00 och 09:00 UTC – skickar första körningen efter 10:00 svensk tid, en gång per dag). Mejl bara till den som har minst en notis, med "Att göra" och "Att känna till" och länkar rakt in i PLM.
+- Reglerna ligger i `api/_lib/notiser.js` (A–D och 1–25 utom 21, som kräver ett fält för fotosample-storlek på PO). Ingen får notis om sin egen ändring (sista loggraden).
+- Tillståndet (förra körningens ögonblicksbild och skickade påminnelser) sparas i dokument, collection "_notiser", id "state". Första körningen sparar bara en baslinje.
+- Logga och typsnitt för mejlet ligger i web/mail/.
+- Miljövariabler: MS_TENANT_ID, MS_CLIENT_ID, MS_CLIENT_SECRET, MAIL_FROM (Microsoft Graph, Mail.Send), CRON_SECRET. Valfri NOTISER_TEST_TILL skickar alla mejl till en adress med ämnet "[TEST → namn]". Saknas Microsoft-nycklarna skickas inget och tillståndet står still.
+
 ## v9.1 (2026-11-12)
 
 Endast kodändring, ingen dataimport.
