@@ -4,7 +4,7 @@
   // Elliots COO-vy ligger orörd som läget "Lista".
   const MX_SECTIONS = [["drop", "Drops", "Ny drop"], ["pr", "PR-träffar", "Ny PR-träff"], ["in_residence", "In Residence", "Nytt In Residence"], ["massa", "Mässor", "Ny mässa"], ["invigning", "Lokaler", "Ny invigning"]];
   const MX_PARENT_FAS = { drop: "lansering" };
-  const MX_DROP_LABELS = ["Drop 1", "Drop 2", "Drop 3", "Tailoring", "Coats"];
+  const MX_DROP_LABELS = ["Drop 1", "Drop 2", "Drop 3", "RYC", "Tailoring", "Coats"];
   const mxStore = {
     get(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
     set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }

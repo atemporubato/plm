@@ -6,6 +6,12 @@ och importeras med `node tools/import-dokument.js`, och main går live på plm.a
 
 Versionsnumrering: små ändringar ger punktversion (v9.1, v9.2 …). Nytt heltal (v10) bara vid stora ändringar.
 
+## v10.1 (2026-11-23)
+
+- Området Produkt har undertexten "From idea to drop".
+- "RYC" finns som förslag på drop-namn (Kollektion och matrisen i Lanseringar). Själva droppen läggs upp i appen: säsong SS27, namn RYC.
+- En flagga kan lösas direkt på saken den gäller ("Markera löst" i den röda raden överst i arket), inte bara i rutan överst i fliken.
+
 ## v10 (2026-11-23)
 
 Ny navigering, nytt idéflöde med Design-flik, flaggor och hela systemet på engelska. Ingen dataimport och ingen schemaändring: inga fält tas bort eller skrivs om.

@@ -61,7 +61,7 @@ import * as P from "./platform.js";
   const sizesOf = (st) => (st && st.storlekar && st.storlekar.length ? st.storlekar : defaultSizes(st && st.kategori));
   const LAGE_TEXT = { gron: "On track", gul: "Tight", rod: "Will be late", okand: "Date missing", ingen: "Set date", paus: "Pausad", skip: "Kastad" };
   const LAGE_ORDER = { rod: 0, gul: 1, okand: 2, gron: 3, ingen: 4, klar: 5, paus: 6, skip: 7 };
-  const DROP_NAMES = ["Drop 1", "Drop 2", "Drop 3", "Tailoring", "Core"];
+  const DROP_NAMES = ["Drop 1", "Drop 2", "Drop 3", "RYC", "Tailoring", "Core"];
   const KATEGORIER = ["Byxor", "Ytterplagg", "Skjortor", "Stickat & Jersey", "Accessoarer", "Skrädderi"];
   const PO_STATUS = ["Placeholder", "Inskickad", "PO bekräftad", "I produktion", "Skickad", "Inlevererad", "Problem", "Avbruten"];
   const PO_OPEN = ["Inskickad", "PO bekräftad", "I produktion", "Skickad", "Problem"];
@@ -3376,7 +3376,7 @@ import * as P from "./platform.js";
   // Elliots COO-vy ligger orörd som läget "Lista".
   const MX_SECTIONS = [["drop", "Drops", "New drop"], ["pr", "PR events", "New PR event"], ["in_residence", "In Residence", "New In Residence"], ["massa", "Fairs", "New fair"], ["invigning", "Premises", "New opening"]];
   const MX_PARENT_FAS = { drop: "lansering" };
-  const MX_DROP_LABELS = ["Drop 1", "Drop 2", "Drop 3", "Tailoring", "Coats"];
+  const MX_DROP_LABELS = ["Drop 1", "Drop 2", "Drop 3", "RYC", "Tailoring", "Coats"];
   const mxStore = {
     get(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
     set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
@@ -4160,7 +4160,7 @@ import * as P from "./platform.js";
     const reset = () => acts.replaceChildren(h("button", { class: "btn small", type: "button", text: "Open", onclick: () => openFlagTarget(f) }), canWrite && db ? h("button", { class: "btn small primary", type: "button", text: "Löst", onclick: () => ask() }) : null);
     const ask = () => { const i = h("input", { type: "text", placeholder: "What was done? (optional)", style: "min-width:200px" }); acts.replaceChildren(i, h("button", { class: "btn small primary", type: "button", text: "Mark resolved", onclick: () => resolveFlag(f, i.value.trim()) }), h("button", { class: "btn small", type: "button", text: "Cancel", onclick: reset })); i.focus(); };
     reset();
-    return h("div", { class: "flagrow" }, h("span", { class: "pill s-Problem", text: "Flag" }), h("div", null, h("div", { class: "ft" }, h("b", { text: f.titel || f.ref }), " – ", f.text || ""), h("div", { class: "fm", text: [f.avNamn ? "of " + f.avNamn : "", when, (f.till || []).length ? "to " + f.till.map(personName).join(", ") : ""].filter(Boolean).join(" · ") })), acts);
+    return h("div", { class: "flagrow" }, h("span", { class: "pill s-Problem", text: "Flag" }), h("div", null, h("div", { class: "ft" }, h("b", { text: f.titel || f.ref }), " – ", f.text || ""), h("div", { class: "fm", text: [f.avNamn ? "flagged by " + f.avNamn : "", when, (f.till || []).length ? "to " + f.till.map(personName).join(", ") : ""].filter(Boolean).join(" · ") })), acts);
   }
   function renderFlags() {
     const box = $("flagbox"); if (!box) return;
@@ -4178,7 +4178,8 @@ import * as P from "./platform.js";
     document.querySelectorAll("#tabs .tab").forEach((b) => { const tn = b.querySelector(".tn"); if (tn) tn.dataset.flags = perTab[b.dataset.tab] ? String(perTab[b.dataset.tab]) : ""; });
     document.querySelectorAll("#areas .area").forEach((b) => { const n = (AREA_TABS[b.dataset.area] || []).filter(tabAllowed).reduce((a, t) => a + (perTab[t] || 0), 0); const el = b.querySelector("b"); if (el) el.dataset.flags = n ? String(n) : ""; });
   }
-  const flagNote = (typ, ref) => { const fs = flagsFor(typ, ref); return fs.length ? h("div", { class: "flagnote" }, fs.map((f) => h("div", null, h("b", { text: "Flagged" + (f.avNamn ? " of " + f.avNamn : "") + ": " }), f.text || ""))) : null; };
+  // Flaggan syns också på själva saken, med en knapp för att lösa den där man står.
+  const flagNote = (typ, ref) => { const fs = flagsFor(typ, ref); return fs.length ? h("div", { class: "flagnote" }, fs.map((f) => h("div", { style: "display:flex;gap:10px;align-items:baseline;justify-content:space-between;flex-wrap:wrap" }, h("span", null, h("b", { text: (f.avNamn ? "Flagged by " + f.avNamn : "Flagged") + ": " }), f.text || ""), canWrite && db ? h("button", { class: "btn small", type: "button", text: "Mark resolved", onclick: async (e) => { const row = e.target.parentElement; e.target.disabled = true; await resolveFlag(f, ""); row.remove(); } }) : null))) : null; };
 
   // ---------- sheet ----------
   let sheetCtx = null;

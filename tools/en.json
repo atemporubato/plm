@@ -1534,7 +1534,10 @@
   "Flagga problem": "Flag problem",
   "Skriv ut etikett": "Print label",
   "Justera meter": "Adjust metres",
-  "Levererat": "Delivered"
+  "Levererat": "Delivered",
+  "Från idé till drop": "From idea to drop",
+  "Flaggad av": "Flagged by",
+  "flaggad av": "flagged by"
  },
  "values": {
   "Storleksset": "Size set",
