@@ -63,7 +63,8 @@ import * as P from "./platform.js";
   const LAGE_ORDER = { rod: 0, gul: 1, okand: 2, gron: 3, ingen: 4, klar: 5, paus: 6, skip: 7 };
   const DROP_NAMES = ["Drop 1", "Drop 2", "Drop 3", "RYC", "Tailoring", "Core"];
   const KATEGORIER = ["Byxor", "Ytterplagg", "Skjortor", "Stickat & Jersey", "Accessoarer", "Skrädderi"];
-  const PO_STATUS = ["Placeholder", "Inskickad", "PO bekräftad", "I produktion", "Skickad", "Inlevererad", "Problem", "Avbruten"];
+  // v10.11: Inskickad och I produktion finns inte längre som egna lägen – båda räknas som PO bekräftad (äldre data läses om i poStatusNorm).
+  const PO_STATUS = ["Placeholder", "PO bekräftad", "Skickad", "Inlevererad", "Problem", "Avbruten"];
   const PO_OPEN = ["Inskickad", "PO bekräftad", "I produktion", "Skickad", "Problem"];
   const PO_COMMITTED = ["PO bekräftad", "I produktion", "Skickad", "Inlevererad"];
   const PO_PLANNED = ["Placeholder", "Inskickad", "Problem"];
@@ -76,7 +77,7 @@ import * as P from "./platform.js";
   const PO_SKALOR = { "XS–XXL": ["XS", "S", "M", "L", "XL", "XXL"], "44–58": ["44", "46", "48", "50", "52", "54", "56", "58"] };
   const skalaAv = (list) => { if (!list || !list.length) return null; const up = list.map((x) => String(x).trim().toUpperCase()); for (const k of Object.keys(PO_SKALOR)) if (up.every((x) => PO_SKALOR[k].includes(x))) return k; return null; };
   const sortSizes = (list) => { const k = skalaAv(list); if (!k) return list; const o = PO_SKALOR[k]; return list.slice().sort((a, b) => o.indexOf(String(a).trim().toUpperCase()) - o.indexOf(String(b).trim().toUpperCase())); };
-  const poStatusNorm = (x) => (x === "Utkast" ? "Placeholder" : PO_STATUS.includes(x) ? x : x ? "Inskickad" : "Placeholder");
+  const poStatusNorm = (x) => (x === "Utkast" ? "Placeholder" : PO_STATUS.includes(x) ? x : x ? "PO bekräftad" : "Placeholder");
 
   // ---------- DOM helpers ----------
   // Engelsk visning av värden som sparas på svenska i databasen (status, kategori, plats …). Listan är tom i källan;
@@ -1417,7 +1418,7 @@ import * as P from "./platform.js";
     .sort((a, b) => String((plan(a) || {}).po || "9999").localeCompare(String((plan(b) || {}).po || "9999")) || (a.namn || "").localeCompare(b.namn || "", "sv"));
   // Redo att beställa ligger som en egen ruta ihop med Flaggat överst i Produktion tills PO:n är inskickad.
   function readyCard(items) {
-    const card = h("section", { class: "card flagbox ready" }, h("div", { class: "card-head" }, h("h3", { text: "Ready to order" }), h("span", { class: "sub", text: items.length + (items.length === 1 ? " approved style without a placed PO" : " approved styles without a placed PO") + " – set quantities and colours and place the order." + " Stays here until the PO is submitted." })));
+    const card = h("section", { class: "card flagbox ready" }, h("div", { class: "card-head" }, h("h3", { text: "Ready to order" }), h("span", { class: "sub", text: items.length + (items.length === 1 ? " approved style without a placed PO" : " approved styles without a placed PO") + " – set quantities and colours and place the order." + " Stays here until the PO is confirmed." })));
     for (const st of items) {
       const p = plan(st); const ph = poLinesOf(st._id).map((x) => x.po).find((po) => poStatusNorm(po.status) === "Placeholder");
       const cols = (st.farger || []).filter(Boolean);
@@ -1431,23 +1432,19 @@ import * as P from "./platform.js";
     }
     return card;
   }
-  const PO_STEPS = ["Placeholder", "Inskickad", "PO bekräftad", "I produktion", "Skickad", "Inlevererad"];
   const PO_GROUPS = [
     { key: "ordered", titel: "Ordered", desc: "confirmed by the supplier – committed money" },
-    { key: "sent", titel: "Submitted", desc: "sent to the supplier, not confirmed yet" },
     { key: "prelim", titel: "Preliminary", desc: "placeholders – planned, nothing ordered" },
     { key: "done", titel: "Delivered", desc: "in the warehouse" },
     { key: "cancel", titel: "Cancelled", desc: "not counted" }
   ];
-  const poGroup = (p) => { const s = poStatusNorm(p.status); return s === "Placeholder" ? "prelim" : s === "Inlevererad" ? "done" : s === "Avbruten" ? "cancel" : ["PO bekräftad", "I produktion", "Skickad"].includes(s) ? "ordered" : "sent"; };
-  const PO_STAGE_TEXT = { "Placeholder": "Preliminary · not ordered", "Inskickad": "Submitted · awaiting confirmation", "PO bekräftad": "Ordered · confirmed", "I produktion": "Ordered · in production", "Skickad": "Ordered · shipped", "Inlevererad": "Inlevererad", "Avbruten": "Avbruten", "Problem": "Problem · not confirmed" };
+  const poGroup = (p) => { const s = poStatusNorm(p.status); return s === "Placeholder" ? "prelim" : s === "Inlevererad" ? "done" : s === "Avbruten" ? "cancel" : "ordered"; };
+  const PO_STAGE_TEXT = { "Placeholder": "Preliminary · not ordered", "PO bekräftad": "Ordered · confirmed", "Skickad": "Ordered · shipped", "Inlevererad": "Inlevererad", "Avbruten": "Avbruten", "Problem": "Problem" };
   function poStagePill(p) {
     const s = poStatusNorm(p.status), g = poGroup(p);
     const pill = h("span", { class: "pill pg-" + g, text: PO_STAGE_TEXT[s] || s });
-    const i = PO_STEPS.indexOf(s);
-    const steps = h("span", { class: "po-steps", title: PO_STEPS.map(tv).join(" → ") }, PO_STEPS.map((_, k) => h("i", { class: i >= 0 && k <= i ? "on" : "" })));
     const l = poLate(p);
-    return h("span", { style: "display:inline-flex;gap:8px;align-items:center;flex-wrap:wrap" }, pill, steps, l ? h("span", { class: "pill s-Problem", title: poLateText(p, l), text: "Problem · late " + l.dagar + " d" }) : null);
+    return h("span", { style: "display:inline-flex;gap:8px;align-items:center;flex-wrap:wrap" }, pill, l ? h("span", { class: "pill s-Problem", title: poLateText(p, l), text: "Problem · late " + l.dagar + " d" }) : null);
   }
   const ProdView = {
     mount(root) {
@@ -1455,13 +1452,12 @@ import * as P from "./platform.js";
       const upd = () => { this.update(); persist(); };
       this.strip = makeStrip([
         { key: "ordered", label: "Beställt" },
-        { key: "sent", label: "Submitted" },
         { key: "prelim", label: "Preliminary", cls: "t-prelim" }
       ], st, () => { this.seg.sync(); upd(); });
       const q = searchBox("q_prod", "Search PO, product, colour, fabric …", st, () => this.update());
       this.fSeason = filterSelect("f_p_season", "All seasons", st, "season", upd);
       this.fLev = filterSelect("f_p_lev", "All suppliers", st, "lev", upd);
-      this.seg = makeSeg([["aktiva", "Active"], ["Placeholder", "Placeholder"], ["Inskickad", "Inskickad"], ["PO bekräftad", "Confirmed"], ["I produktion", "I produktion"], ["Inlevererad", "Inlevererad"], ["alla", "All"]], st, "status", upd);
+      this.seg = makeSeg([["aktiva", "Active"], ["Placeholder", "Placeholder"], ["PO bekräftad", "Confirmed"], ["Inlevererad", "Inlevererad"], ["alla", "All"]], st, "status", upd);
       this.count = h("span", { class: "count" });
       this.cards = h("div", { class: "cards" });
       const open = (e) => { if (e.target.closest("button")) return; const tr = e.target.closest("tr[data-po], .card-head[data-po]"); if (tr) openPo(tr.dataset.po); };
@@ -1490,15 +1486,16 @@ import * as P from "./platform.js";
       const inSeason = D.po.filter((p) => !season || norm(poSeason(p)) === norm(season));
       const gsum = (g) => inSeason.filter((p) => poGroup(p) === g).reduce((a, p) => a + poTotal(p), 0);
       const gn = (g) => inSeason.filter((p) => poGroup(p) === g).length;
-      if (!["ordered", "sent", "prelim"].includes(st.view)) st.view = null;
-      this.strip.set({ ordered: fmtTkr(gsum("ordered")), sent: fmtTkr(gsum("sent")), prelim: fmtTkr(gsum("prelim")) },
-        { ordered: gn("ordered") + " PO confirmed or in production", sent: gn("sent") + " PO awaiting confirmation", prelim: gn("prelim") + " placeholders, nothing ordered" });
+      if (!["ordered", "prelim"].includes(st.view)) st.view = null;
+      if (["Inskickad", "I produktion"].includes(st.status)) st.status = "aktiva";
+      this.strip.set({ ordered: fmtTkr(gsum("ordered")), prelim: fmtTkr(gsum("prelim")) },
+        { ordered: gn("ordered") + " PO confirmed", prelim: gn("prelim") + " placeholders, nothing ordered" });
       this.seg.sync();
       const list = D.po.filter((p) => {
         const ps = poStatusNorm(p.status);
         if (season && norm(poSeason(p)) !== norm(season)) return false;
         switch (st.view) {
-          case "ordered": case "sent": case "prelim": if (poGroup(p) !== st.view) return false; break;
+          case "ordered": case "prelim": if (poGroup(p) !== st.view) return false; break;
           default:
             if (st.status === "aktiva" && !(PO_OPEN.includes(ps) || ps === "Placeholder")) return false;
             if (st.status !== "aktiva" && st.status !== "alla" && ps !== st.status) return false;
@@ -1507,7 +1504,7 @@ import * as P from "./platform.js";
         if (q && ![p._id, p.nr, p.leverantor, p.sasong, p.drop, p.status, p.kommentar, (p.rader || []).map((r) => [r.produkt, r.farg, r.tyg].join(" ")).join(" ")].join(" ").toLowerCase().includes(q)) return false;
         return true;
       });
-      const gOrder = { ordered: 0, sent: 1, prelim: 2, done: 3, cancel: 4 };
+      const gOrder = { ordered: 0, prelim: 2, done: 3, cancel: 4 };
       const order = { Skickad: 0, "I produktion": 1, "PO bekräftad": 2, Problem: 3, Inskickad: 4, Placeholder: 5, Inlevererad: 6, Avbruten: 7 };
       list.sort((a, b) => gOrder[poGroup(a)] - gOrder[poGroup(b)] || (order[poStatusNorm(a.status)] ?? 9) - (order[poStatusNorm(b.status)] ?? 9) || (poEta(a) || "9999").localeCompare(poEta(b) || "9999") || String(a.nr || a._id).localeCompare(String(b.nr || b._id), "sv"));
       const cards = [];
@@ -1683,7 +1680,7 @@ import * as P from "./platform.js";
       }
       box.append(grid);
       const foot = h("div", { class: "budget-foot" });
-      foot.append(h("span", { text: "Black = placed (confirmed POs), grey = planned (placeholders and submitted)." }));
+      foot.append(h("span", { text: "Black = placed (confirmed POs), grey = planned (placeholders)." }));
       if (total != null && sumBudget && Math.round(sumBudget) !== Math.round(total)) foot.append(h("span", { text: "The categories add up to " + fmtTkr(sumBudget) + " – " + fmtTkr(total - sumBudget) + " of the frame is unallocated." }));
       if (per["Okategoriserat"].lagt || per["Okategoriserat"].plan) foot.append(h("span", { class: "late-text", text: "Lines without a category are not counted against any category – set a category on the style." }));
       if (edit) foot.append(h("span", { class: "spacer" }), h("button", { class: "btn small", type: "button", text: "Cancel", onclick: () => { this.budgetEdit = false; this.update(); } }),
@@ -1771,7 +1768,7 @@ import * as P from "./platform.js";
       const belopp = total * (num(t.andel) || 0) / 100;
       const rec = paid[i] || null;
       // Antagande: förfallna betalningar på inlevererade POs, och förskott på POs som är i produktion/skickade, är betalda tills någon bockar ur
-      const antagenBetald = !rec && !!datum && datum < todayISO() && (st === "Inlevererad" || (["I produktion", "Skickad"].includes(st) && ["order", "produktion"].includes(t.vid)));
+      const antagenBetald = !rec && !!datum && datum < todayISO() && (st === "Inlevererad" || (["PO bekräftad", "Skickad"].includes(st) && ["order", "produktion"].includes(t.vid)));
       const typ = (num(t.andel) ?? 0) + " % " + (t.vid === "faktura" ? (num(t.dagar) || 0) + " d net" : VID_LABEL[t.vid] || t.vid);
       return { po, typ, belopp, valuta: cur, beloppValuta: belopp / rate, datum, betald: rec ? !!rec.betald : antagenBetald, antagenBetald, antagna: !vill, idx: i, kalla: vill ? "villkor" : "antagande", datumKalla: base ? (t.vid === "leverans" && !isISO(po.etaLager) ? "beräknad" : t.vid !== "leverans" && !isISO(po.bekraftadEx) && !isISO(po.orderDatum) ? "beräknad" : "") : "" };
     });
@@ -2367,7 +2364,7 @@ import * as P from "./platform.js";
       cards.push(fotohangCard(season));
       cards.push(hangerCard(season));
       this.cards.replaceChildren(...cards);
-      if (!list.length) this.cards.prepend(h("div", { class: "empty" }, h("strong", { text: "No " + (st.typ === "alla" ? "products" : "new styles") + " with a placed PO" + (season ? " in " + season : "") }), h("span", { text: "Products appear here once the PO is placed (Submitted or later). Choose \"All seasons\" or \"All types\" to see more." })));
+      if (!list.length) this.cards.prepend(h("div", { class: "empty" }, h("strong", { text: "No " + (st.typ === "alla" ? "products" : "new styles") + " with a placed PO" + (season ? " in " + season : "") }), h("span", { text: "Products appear here once the PO is placed (Confirmed or later). Choose \"All seasons\" or \"All types\" to see more." })));
       this.count.textContent = list.length + (st.typ === "alla" ? " products" : " new styles") + " with a placed PO" + (season ? " in " + season : " (all seasons)");
     }
   };

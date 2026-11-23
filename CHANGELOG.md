@@ -6,6 +6,15 @@ och importeras med `node tools/import-dokument.js`, och main går live på plm.a
 
 Versionsnumrering: små ändringar ger punktversion (v9.1, v9.2 …). Nytt heltal (v10) bara vid stora ändringar.
 
+## v10.11 (2026-11-23)
+
+Färre PO-lägen och renare PO-kort. Ingen data skrivs om: äldre statusar läses om när de visas.
+- Lägena Inskickad och I produktion är borta. Kvar: Placeholder, PO bekräftad, Skickad, Inlevererad, Problem, Avbruten. POs som har Inskickad eller I produktion sparat visas och räknas som PO bekräftad (och sparas så nästa gång PO:n sparas).
+- Följden: gruppen "Inskickade" och rutan "Inskickat" överst i Produktion är borta, liksom filterknapparna. En PO som tidigare var Inskickad räknas nu som beställd (bundna pengar). Problem ligger under Beställda.
+- Stegmarkeringen (de fyllda rutorna) på PO-kortet är borta.
+- Förskott som förfallit antas betalda för bekräftade POs (tidigare först vid I produktion); går att bocka ur som förut.
+- Notismejlet om "PO submitted" (api/_lib/notiser.js) skickas inte längre eftersom läget inte kan väljas.
+
 ## v10.10 (2026-11-23)
 
 Enklare PO-formulär. Ingen data ändras, sparade fält på befintliga POs ligger kvar.
