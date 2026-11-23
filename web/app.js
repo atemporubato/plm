@@ -116,7 +116,7 @@ import * as P from "./platform.js";
   const problemPill = (items) => { const ps = items.filter((x) => x.status === "Problem"); if (!ps.length) return statusPill(items[0] && items[0].status); return h("button", { class: "pill s-Problem clickable", type: "button", text: "Problem" + (ps.length > 1 ? " ×" + ps.length : ""), title: "Show the problem", onclick: (e) => { e.stopPropagation(); openProblem(ps); } }); };
   function openProblem(ps) {
     const body = ps.map((x) => h("section", { class: "panel", style: "margin-bottom:10px" },
-      h("h3", { class: "sec-title", text: styleName(x) + " · " + (fargText(x.farg) || x._id) + " · " + (x.version || "") }),
+      h("h3", { class: "sec-title", text: styleName(x) + " · " + (sampleFarg(x) || x._id) + " · " + (x.version || "") }),
       h("p", { style: "font-size:16px;margin:6px 0", text: x.kommentar || "No problem described – open the sample and write what is wrong." }),
       x.andringar ? h("p", { class: "sub", text: "Changes: " + x.andringar }) : null,
       h("p", { class: "sub", text: [x._id, x.leverantor, isISO(x.bestalld) ? "ordered " + fmtDate(x.bestalld) : "", expected(x) ? "expected " + fmtDate(expected(x)) : ""].filter(Boolean).join(" · ") }),
@@ -396,6 +396,42 @@ import * as P from "./platform.js";
   const colourHex = (name) => { const n = String(name || "").toLowerCase(); for (const [re, hex] of COLOUR_MAP) if (re.test(n)) return hex; return ""; };
   const colourDot = (name, extraClass) => { const hex = colourHex(name); return h("i", { class: "dot cdot" + (extraClass ? " " + extraClass : ""), style: hex ? "background:" + hex + (/^#(f|e)/.test(hex) ? ";border:1px solid #bbb" : "") : "", title: name || "" }); };
   const fargText = (f) => { const raw = String(f || "").trim(); const words = raw.replace(/^(?:col(?:ou?r)?\.?\s*)?[#0-9][0-9a-z]*[\s.:\-–]+/i, "").split(/[\s,]+/).filter(Boolean); const kept = words.filter((w) => !/\d/.test(w) && !/^col(?:ou?r)?\.?$/i.test(w)); const out = (kept.length ? kept : words).join(" ").replace(/[\s.:\-–]+$/, ""); return out ? out[0].toUpperCase() + out.slice(1) : raw; };
+  // De 15 vanligaste färgerna i Shopify (räknat på produkttitlar i hela katalogen, 23 nov 2026). Rullistan för färg utgår från dem.
+  const FARGER_STD = ["Navy", "Black", "Brown", "Cream", "White", "Natural", "Ecru", "Khaki", "Dark Brown", "Indigo", "Charcoal", "Beige", "Tobacco", "Pink", "Olive"];
+  // En sample kan ha flera färger (farger). Äldre samples har bara farg – den läses som en färg. farg sparas alltid med (färgerna med komma emellan).
+  const sampleColours = (x) => { const a = x && Array.isArray(x.farger) ? x.farger.map((c) => String(c || "").trim()).filter(Boolean) : []; return a.length ? a : x && x.farg ? [String(x.farg)] : []; };
+  const sampleFarg = (x) => sampleColours(x).map((c) => fargText(c) || c).join(", ");
+  const colourChips = (x) => sampleColours(x).map((c) => h("span", { class: "swatch" }, colourDot(fargText(c) || c), fargText(c) || c));
+  // Rullista per färg + "Lägg till färg". Första rullistan får id:t, så etiketten pekar rätt.
+  function colourPicker(id, values, ro) {
+    const OTHER = "__annan";
+    const list = h("div", { class: "colours" });
+    const rows = []; let seq = 0;
+    const addBtn = ro ? null : h("button", { class: "btn small add", type: "button", text: "+ Add colour", onclick: () => addRow("", true) });
+    const syncRm = () => rows.forEach((r) => { if (r.rm) r.rm.hidden = rows.length < 2; });
+    function addRow(val, focus) {
+      const v = String(val || "").trim();
+      const std = FARGER_STD.find((c) => norm(c) === norm(v));
+      const rid = seq++ ? id + "_" + seq : id;
+      const sel = selectEl(rid, [["", "Choose colour …"]].concat(FARGER_STD.map((c) => [c, c]), [[OTHER, "Other colour …"]]), std || (v ? OTHER : ""));
+      const txt = inp(rid + "_txt", std ? "" : v, { placeholder: "Type the colour", "aria-label": "Other colour" });
+      const dot = h("span");
+      const r = { get: () => (sel.value === OTHER ? txt.value.trim() : sel.value), rm: null };
+      r.rm = ro ? null : h("button", { class: "btn small rm", type: "button", text: "×", title: "Remove colour", "aria-label": "Remove colour", onclick: () => { rows.splice(rows.indexOf(r), 1); r.el.remove(); syncRm(); } });
+      r.el = h("div", { class: "colour-row" }, dot, sel, txt, r.rm);
+      const sync = () => { const other = sel.value === OTHER; txt.hidden = !other; r.el.classList.toggle("other", other); dot.replaceChildren(colourDot(r.get())); };
+      sel.addEventListener("change", () => { sync(); if (sel.value === OTHER) txt.focus(); });
+      txt.addEventListener("input", sync);
+      if (ro) { sel.disabled = true; txt.disabled = true; }
+      rows.push(r); if (addBtn) list.insertBefore(r.el, addBtn); else list.append(r.el);
+      sync(); syncRm();
+      if (focus) sel.focus();
+    }
+    if (addBtn) list.append(addBtn);
+    const vs = (values || []).filter(Boolean);
+    (vs.length ? vs : [""]).forEach((v) => addRow(v));
+    return { el: list, get: () => rows.map((r) => r.get()).filter(Boolean).filter((v, i, a) => a.findIndex((x) => norm(x) === norm(v)) === i) };
+  }
   const expanded = new Set();
   const groupKeyOf = (s) => (s.styleId || "p:" + norm(s.produkt)) + "|" + norm(s.version) + "|" + norm(s.leverantor);
   const sampleImages = (s) => (Array.isArray(s.bilder) ? s.bilder.filter(Boolean) : []);
@@ -745,7 +781,9 @@ import * as P from "./platform.js";
   }
   async function write(coll, id, patch) {
     if (!db) { toast("The database is not available in this view."); return false; }
-    try { await serial(coll + "/" + id, () => db.collection(coll).doc(id).update(patch)); return true; } catch (e) { writeError(e); return false; }
+    // En style som blir Godkänd är redo att beställa: Elliot får ett direktmejl (bara hostad, servern skickar högst ett per style).
+    const becameReady = coll === "styles" && patch && patch.status === "Godkänd" && (() => { const c = byId(D.styles, id); return !!c && styleStatusNorm(c.status) !== "Godkänd"; })();
+    try { await serial(coll + "/" + id, () => db.collection(coll).doc(id).update(patch)); if (becameReady) notifyReady(id); return true; } catch (e) { writeError(e); return false; }
   }
   async function create(coll, id, body) {
     if (!db) { toast("The database is not available in this view."); return false; }
@@ -1037,7 +1075,7 @@ import * as P from "./platform.js";
       td("Version", null, chip(s.version || "–")),
       placeCell,
       td("Supplier", null, s.leverantor || ""),
-      td("Colour", null, s.farg ? h("span", { class: "swatch" }, h("i", { class: "dot s-" + (s.status || "x") }), fargText(s.farg)) : ""),
+      td("Colour", null, sampleColours(s).length ? h("div", { class: "swatches" }, colourChips(s)) : ""),
       td("Status", "c-status", problemPill([s])),
       td("Outcome", null, h("span", { class: "chips", style: "margin-top:0" }, utfallParts(s))),
       td("Expected", "c-exp", expCell(s)),
@@ -1063,7 +1101,7 @@ import * as P from "./platform.js";
     const sSeasons = uniq(items.map((x) => x.sasong));
     if (sSeasons.length && (!stn || sSeasons.some((x) => norm(x) !== norm(stn.sasong)))) subBits.push("intended " + sSeasons.join("/"));
     else if (stn && stn.sasong) subBits.push(stn.sasong + (stn.drop ? " " + stn.drop : ""));
-    const colours = h("div", { class: "swatches" }, items.slice().sort((a, b) => fargText(a.farg).localeCompare(fargText(b.farg), "sv")).map((x) => h("button", { class: "swatch btn-swatch" + (x.status === "Problem" ? " problem" : ""), type: "button", title: x._id + " · " + (x.status || "") + (platsText(x) ? " · " + platsText(x) : ""), onclick: (e) => { e.stopPropagation(); openSample(x._id); } }, h("i", { class: "dot s-" + (x.status || "x") }), fargText(x.farg) || x._id, x.platsTyp === "Hängare" ? h("span", { class: "h", text: "H" + (x.hangare || "?") }) : null)));
+    const colours = h("div", { class: "swatches" }, items.slice().sort((a, b) => sampleFarg(a).localeCompare(sampleFarg(b), "sv")).map((x) => h("button", { class: "swatch btn-swatch" + (x.status === "Problem" ? " problem" : isWaiting(x) ? " wait" : ""), type: "button", title: x._id + " · " + (x.status || "") + (platsText(x) ? " · " + platsText(x) : ""), onclick: (e) => { e.stopPropagation(); openSample(x._id); } }, sampleColours(x).map((c) => colourDot(fargText(c) || c)), sampleFarg(x) || x._id, x.platsTyp === "Hängare" ? h("span", { class: "h", text: "H" + (x.hangare || "?") }) : null)));
     const statuses = uniq(items.map((x) => x.status));
     const placeCell = td("Hängare", null);
     const hangers = uniq(items.filter((x) => x.platsTyp === "Hängare").map((x) => x.hangare || "?"));
@@ -1375,25 +1413,22 @@ import * as P from "./platform.js";
   // Tre lägen som ska synas på håll: Beställd (leverantören har bekräftat – bundna pengar), Inskickad (skickad men inte bekräftad)
   // och Preliminär (placeholder, inget beställt). Inlevererade och avbrutna ligger för sig.
   // När en sample godkänns blir stylen Godkänd. Här syns den i Produktion tills den ligger på en PO som är inskickad.
-  const readyToOrder = (season) => D.styles.filter((s) => styleStatusNorm(s.status) === "Godkänd" && !s.grund && !hasPlacedPo(s) && (!season || !s.sasong || norm(s.sasong) === norm(season)))
+  const readyToOrder = () => (designOnly() || ME.leverantor ? [] : D.styles.filter((s) => styleStatusNorm(s.status) === "Godkänd" && !s.grund && !hasPlacedPo(s)))
     .sort((a, b) => String((plan(a) || {}).po || "9999").localeCompare(String((plan(b) || {}).po || "9999")) || (a.namn || "").localeCompare(b.namn || "", "sv"));
-  function orderInbox(items) {
-    const card = h("section", { class: "card inbox" }, h("div", { class: "card-head" }, h("h3", { text: "Ready to order" }), h("span", { class: "sub", text: items.length + (items.length === 1 ? " approved style without a placed PO" : " approved styles without a placed PO") + " – set quantities and colours and place the order." })));
-    const { t, tb } = table([["Style"], ["Season"], ["Supplier"], ["PO by"], ["", "num"]]);
-    for (const s of items) {
-      const img = styleImage(s); const p = plan(s); const ph = poLinesOf(s._id).map((x) => x.po).find((po) => poStatusNorm(po.status) === "Placeholder");
-      const cols = (s.farger || []).filter(Boolean);
-      const mk = () => openPo(null, { leverantor: s.leverantor || "", sasong: s.sasong || ProdView.seasonInView() || "", rader: (cols.length ? cols : [""]).map((farg) => ({ styleId: s._id, produkt: s.namn, farg, typ: s.typ || "Nyhet", storlekar: (s.storlekar || []).slice() })) });
-      tb.append(h("tr", { tabIndex: 0, dataset: { style: s._id } },
-        td("", "c-main", h("div", { style: "display:flex;gap:10px;align-items:flex-start" }, img ? h("img", { class: "rowthumb", style: "margin-top:0", src: imgUrl(img), alt: "", loading: "lazy" }) : null,
-          h("div", null, h("div", { class: "prod", text: s.namn }), h("div", { class: "sub", text: [styleKategori(s), cols.length ? cols.length + (cols.length === 1 ? " colour" : " colours") : "colours not set"].filter(Boolean).join(" · ") })))),
-        td("Season", "mono", [s.sasong, s.drop].filter(Boolean).join(" · ") || "–"),
-        td("Supplier", null, s.leverantor || h("span", { class: "muted", text: "–" })),
-        td("PO by", "mono", p && p.po ? h("div", null, fmtDate(p.po), h("div", { class: "days " + (diffDays(p.po) < 0 ? "late" : diffDays(p.po) <= 14 ? "soon" : ""), text: fmtDays(diffDays(p.po)) })) : h("span", { class: "muted", text: "–" })),
-        td("", "num", canWrite && db ? h("div", { style: "display:flex;gap:6px;justify-content:flex-end;flex-wrap:wrap" }, ph ? h("button", { class: "btn small", type: "button", text: "Open " + (ph.nr || "placeholder"), onclick: (e) => { e.stopPropagation(); openPo(ph._id); } }) : null, h("button", { class: "btn small primary", type: "button", text: "Create PO", onclick: (e) => { e.stopPropagation(); mk(); } })) : null)));
+  // Redo att beställa ligger som en egen ruta ihop med Flaggat överst i Produktion tills PO:n är inskickad.
+  function readyCard(items) {
+    const card = h("section", { class: "card flagbox ready" }, h("div", { class: "card-head" }, h("h3", { text: "Ready to order" }), h("span", { class: "sub", text: items.length + (items.length === 1 ? " approved style without a placed PO" : " approved styles without a placed PO") + " – set quantities and colours and place the order." + " Stays here until the PO is submitted." })));
+    for (const st of items) {
+      const p = plan(st); const ph = poLinesOf(st._id).map((x) => x.po).find((po) => poStatusNorm(po.status) === "Placeholder");
+      const cols = (st.farger || []).filter(Boolean);
+      const mk = () => openPo(null, { leverantor: st.leverantor || "", sasong: st.sasong || ProdView.seasonInView() || "", rader: (cols.length ? cols : [""]).map((farg) => ({ styleId: st._id, produkt: st.namn, farg, typ: st.typ || "Nyhet", storlekar: (st.storlekar || []).slice() })) });
+      const bits = [[st.sasong, st.drop].filter(Boolean).join(" "), st.leverantor, cols.length ? cols.length + (cols.length === 1 ? " colour" : " colours") : "colours not set"].filter(Boolean).join(" · ");
+      card.append(h("div", { class: "flagrow", dataset: { style: st._id } }, h("span", { class: "pill", text: "Godkänd" }),
+        h("div", null, h("div", { class: "ft" }, h("b", { text: st.namn }), " – ", bits), h("div", { class: "fm", text: (p && p.note) || "No PO schedule yet." })),
+        h("div", { class: "fa" }, h("button", { class: "btn small", type: "button", text: "Open style", onclick: () => openStyle(st._id, null, { full: true }) }),
+          canWrite && db && ph ? h("button", { class: "btn small", type: "button", text: "Open " + (ph.nr || "placeholder"), onclick: () => openPo(ph._id) }) : null,
+          canWrite && db ? h("button", { class: "btn small primary", type: "button", text: "Create PO", onclick: mk }) : null)));
     }
-    tb.addEventListener("click", (e) => { if (e.target.closest("button, img")) return; const tr = e.target.closest("tr[data-style]"); if (tr) openStyle(tr.dataset.style, null, { full: true }); });
-    card.append(h("div", { class: "ledger-wrap" }, t));
     return card;
   }
   const PO_STEPS = ["Placeholder", "Inskickad", "PO bekräftad", "I produktion", "Skickad", "Inlevererad"];
@@ -1433,13 +1468,12 @@ import * as P from "./platform.js";
       this.cards.addEventListener("click", open);
       this.cards.addEventListener("keydown", (e) => { if (e.key === "Enter") open(e); });
       this.empty = h("div", { class: "empty", hidden: true });
-      this.ready = h("div", { hidden: true });
       this.budget = h("section", { class: "budget", "aria-label": "Budget" });
       this.pay = h("section", { class: "card", "aria-label": "Payments" });
       this.tl = h("div", { class: "cards" });
       this.budgetEdit = false;
       root.append(h("p", { class: "lede", text: "All purchase orders by season: drop, ETA warehouse, status and cost. Payments are under Suppliers. The budget per category is at the bottom." }),
-        this.ready, this.strip.el, h("section", { class: "filters", "aria-label": "Filter" }, q, this.fSeason.el, this.fLev.el, this.seg.el, this.count), this.cards, this.empty, this.budget);
+        this.strip.el, h("section", { class: "filters", "aria-label": "Filter" }, q, this.fSeason.el, this.fLev.el, this.seg.el, this.count), this.cards, this.empty, this.budget);
     },
     seasonInView() {
       const st = UI.prod;
@@ -1454,8 +1488,6 @@ import * as P from "./platform.js";
       this.fLev.fill(uniq(D.po.map((p) => p.leverantor)));
       const season = this.seasonInView();
       const inSeason = D.po.filter((p) => !season || norm(poSeason(p)) === norm(season));
-      const ready = ME.leverantor ? [] : readyToOrder(st.season);
-      this.ready.hidden = !ready.length; this.ready.replaceChildren(...(ready.length ? [orderInbox(ready)] : []));
       const gsum = (g) => inSeason.filter((p) => poGroup(p) === g).reduce((a, p) => a + poTotal(p), 0);
       const gn = (g) => inSeason.filter((p) => poGroup(p) === g).length;
       if (!["ordered", "sent", "prelim"].includes(st.view)) st.view = null;
@@ -1813,7 +1845,7 @@ import * as P from "./platform.js";
     function lineEditor(r, idx) {
       const st = r.styleId ? byId(D.styles, r.styleId) : null;
       const fProdN = inp("l_prod_" + idx, r.produkt || (st ? st.namn : ""), { list: "dlStyle", autocomplete: "off", placeholder: "Product (style)" });
-      const fFarg = inp("l_farg_" + idx, r.farg, { placeholder: "Colour" });
+      const fFarg = inp("l_farg_" + idx, r.farg, { placeholder: "Colour", list: "dlFarger", autocomplete: "off" });
       const fTyp = selectEl("l_typ_" + idx, STYLE_TYP, r.typ || (st ? st.typ : "Nyhet") || "Nyhet");
       const fTyg = inp("l_tyg_" + idx, r.tyg, { list: "dlTyg", autocomplete: "off", placeholder: "Tyg" });
       const fStorl = inp("l_storl_" + idx, (r.storlekar && r.storlekar.length ? r.storlekar : sizesOf(st)).join(", "), { placeholder: "Sizes, e.g. 46, 48, 50" });
@@ -2250,7 +2282,7 @@ import * as P from "./platform.js";
           for (const p of pos) poCell.append(h("div", { style: "display:flex;gap:6px;align-items:center;flex-wrap:wrap" }, h("button", { class: "linkish", type: "button", text: p.nr || p._id, onclick: (e) => { e.stopPropagation(); openPo(p._id); } }), poStatusPill(p)));
           poCell.append(es[0] ? h("div", null, h("span", { class: "mono", text: "Delivery " + fmtDate(es[0]) }), h("span", { class: "days " + (diffDays(es[0]) < 0 ? "late" : diffDays(es[0]) <= 14 ? "soon" : ""), text: " · " + fmtDays(diffDays(es[0])) })) : h("div", { class: "muted", text: "ETA missing" }));
           const fotoCell = td("Fotosample", null, h("div", null, h("span", { class: "pill fs-" + (f.key === "godkand" ? "saknas" : f.key), text: f.label })));
-          if (f.all && f.all.length) fotoCell.append(h("div", { class: "sub" }, f.all.map((x, i) => h("button", { class: "linkish", type: "button", text: (i ? " · " : "") + x._id + (fargText(x.farg) ? " " + fargText(x.farg) : "") + (x.status === "Mottagen" && platsText(x) ? " (" + platsText(x) + ")" : ""), onclick: (e) => { e.stopPropagation(); openSample(x._id); } }))));
+          if (f.all && f.all.length) fotoCell.append(h("div", { class: "sub" }, f.all.map((x, i) => h("button", { class: "linkish", type: "button", text: (i ? " · " : "") + x._id + (sampleFarg(x) ? " " + sampleFarg(x) : "") + (x.status === "Mottagen" && platsText(x) ? " (" + platsText(x) + ")" : ""), onclick: (e) => { e.stopPropagation(); openSample(x._id); } }))));
           else if (f.sample) fotoCell.append(h("div", { class: "sub" }, h("button", { class: "linkish", type: "button", text: f.sample._id + (platsText(f.sample) ? " · " + platsText(f.sample) : ""), onclick: (e) => { e.stopPropagation(); openSample(f.sample._id); } })));
           if (!ro) {
             const acts = h("div", { class: "quick", style: "margin-top:6px" });
@@ -2292,7 +2324,7 @@ import * as P from "./platform.js";
       tb.append(h("tr", { tabIndex: 0, dataset: { id: s._id } },
         td("Hook", null, h("span", { class: "hanger", text: "Fotohäng" + (s.hangare ? " " + s.hangare : "") })),
         td("", "c-main", h("div", { class: "prod", text: styleName(s) }), h("div", { class: "sub", text: [st ? st.sasong : seasonOf(s), st ? st.drop : "", s.version].filter(Boolean).join(" · ") })),
-        td("Colour", null, fargText(s.farg) || "–"),
+        td("Colour", null, sampleColours(s).length ? h("div", { class: "swatches" }, colourChips(s)) : "–"),
         td("Sample", null, tag(s._id), h("span", { class: "sub", text: " " + (s.status || "") })),
         td("E-com images", null, st ? h("span", { class: "pill es-" + slug(st.ecomBilder || "x"), text: st.ecomBilder || "not planned" }) : ""),
         td("Image", null, imgs.length ? h("img", { class: "rowthumb", style: "margin-top:0", src: imgUrl(imgs[0]), alt: "", loading: "lazy", onclick: (e) => { e.stopPropagation(); openLightbox(imgs, imgs[0]); } }) : h("span", { class: "muted", text: "–" }))));
@@ -2416,7 +2448,7 @@ import * as P from "./platform.js";
       tb.append(h("tr", { tabIndex: 0, dataset: { id: s._id } },
         td("Hängare", null, s.platsTyp === "Hängare" ? h("span", { class: "hanger", text: "Hanger " + (s.hangare || "?") }) : s.platsTyp ? h("span", { class: "place", text: s.platsTyp }) : h("span", { class: "flag", text: "No location" })),
         td("", "c-main", h("div", { class: "prod", text: styleName(s) }), h("div", { class: "sub", text: [st.sasong, st.drop, typLabel(st), styleKategori(st)].filter(Boolean).join(" · ") })),
-        td("Colour", null, fargText(s.farg) || "–"),
+        td("Colour", null, sampleColours(s).length ? h("div", { class: "swatches" }, colourChips(s)) : "–"),
         td("Sample", null, tag(s._id), h("span", { class: "sub", text: " " + (s.version || "") })),
         td("Style status", null, styleStatusPill(st)),
         td("Image", null, imgs.length ? h("img", { class: "rowthumb", style: "margin-top:0", src: imgUrl(imgs[0]), alt: "", loading: "lazy", onclick: (e) => { e.stopPropagation(); openLightbox(imgs, imgs[0]); } }) : h("span", { class: "muted", text: "–" }))));
@@ -3416,6 +3448,13 @@ import * as P from "./platform.js";
     if (!res.ok) return null;
     return res.json();
   }
+  // Redo att beställa: direktmejl till Elliot när en style blir godkänd. Servern skickar högst ett mejl per style.
+  async function hostedNotifyReady(id) {
+    const { data: { session } } = await P.supabase.auth.getSession();
+    const res = await fetch("/api/redo", { method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer " + (session ? session.access_token : "") }, body: JSON.stringify({ id }) });
+    if (!res.ok) return null;
+    return res.json();
+  }
 
   // ---------- COO: matrisvy (hosted-only) ----------
   // Kritisk linje per drop och per event. Rader = föräldrar (hor_till tom, matris satt), kolumner = mallens faser
@@ -4066,6 +4105,7 @@ import * as P from "./platform.js";
     set("c_ean", D.styles.reduce((n, s) => n + (s.ean || []).length, 0));
   }
   function refreshLists() {
+    if (!$("dlFarger").options.length) $("dlFarger").replaceChildren(...FARGER_STD.map((v) => new Option(v, v)));
     $("dlLev").replaceChildren(...uniq(D.lev.map((l) => l.namn).concat(D.samples.map((s) => s.leverantor), D.styles.map((s) => s.leverantor))).map((v) => new Option(v, v)));
     $("dlTyg").replaceChildren(...uniq(D.tyger.map((t) => t.namn)).map((v) => new Option(v, v)));
     $("dlPlats").replaceChildren(...uniq([EGET_LAGER].concat(D.lev.map((l) => l.namn), D.lager.map((l) => l.plats))).map((v) => new Option(v, v)));
@@ -4171,6 +4211,7 @@ import * as P from "./platform.js";
     if (f.typ === "sample") openSample(f.ref); else if (f.typ === "po") openPo(f.ref); else if (f.typ === "drop") openDrop(f.ref); else if (f.typ === "handelse") openEvent(f.ref);
     else if (f.typ === "style") { if (f.tab === "design" || designOnly()) openDesign(f.ref); else openStyle(f.ref, null, { full: true }); }
   }
+  function notifyReady(id) { try { if (typeof hostedNotifyReady === "function") Promise.resolve(hostedNotifyReady(id)).catch((e) => console.error(e)); } catch (e) { console.error(e); } }
   async function notifyFlag(id) { try { if (typeof hostedNotifyFlag === "function") return await hostedNotifyFlag(id); } catch (e) { console.error(e); } return null; }
   function openFlag(o) {
     const fText = h("textarea", { id: "f_flagtext", rows: 4, placeholder: "What is the problem, and what needs to happen?" });
@@ -4212,16 +4253,19 @@ import * as P from "./platform.js";
   function renderFlags() {
     const box = $("flagbox"); if (!box) return;
     const fs = flagsOpen(UI.tab); const late = UI.tab === "produktion" && !designOnly() ? latePos() : [];
-    if (!fs.length && !late.length) { box.hidden = true; box.replaceChildren(); }
+    const ready = UI.tab === "produktion" ? readyToOrder() : [];
+    if (!fs.length && !late.length && !ready.length) { box.hidden = true; box.replaceChildren(); }
+    else if (!fs.length && !late.length) { box.replaceChildren(readyCard(ready)); box.hidden = false; }
     else {
       const n = fs.length + late.length;
       const card = h("section", { class: "card flagbox" }, h("div", { class: "card-head" }, h("h3", { text: "Flagged" }), h("span", { class: "sub", text: n + (n === 1 ? " item" : " items") + " that need resolving. They stay here until the problem is solved." })));
       for (const f of fs) card.append(flagRow(f));
       for (const x of late) card.append(h("div", { class: "flagrow" }, h("span", { class: "pill s-Problem", text: "Late" }), h("div", null, h("div", { class: "ft" }, h("b", { text: (x.p.nr || x.p._id) + (x.p.leverantor ? " · " + x.p.leverantor : "") }), " – ", poLateText(x.p, x.l)), h("div", { class: "fm", text: "Automatic. Disappears when the ETA changes or the PO is delivered." })), h("div", { class: "fa" }, h("button", { class: "btn small", type: "button", text: "Open PO", onclick: () => openPo(x.p._id) }))));
-      box.replaceChildren(card); box.hidden = false;
+      box.replaceChildren(...[card].concat(ready.length ? [readyCard(ready)] : [])); box.hidden = false;
     }
     const perTab = {}; for (const f of flagsOpen()) perTab[f.tab] = (perTab[f.tab] || 0) + 1;
     if (!designOnly() && latePos().length) perTab.produktion = (perTab.produktion || 0) + latePos().length;
+    if (readyToOrder().length) perTab.produktion = (perTab.produktion || 0) + readyToOrder().length;
     document.querySelectorAll("#tabs .tab").forEach((b) => { const tn = b.querySelector(".tn"); if (tn) tn.dataset.flags = perTab[b.dataset.tab] ? String(perTab[b.dataset.tab]) : ""; });
     document.querySelectorAll("#areas .area").forEach((b) => { const n = (AREA_TABS[b.dataset.area] || []).filter(tabAllowed).reduce((a, t) => a + (perTab[t] || 0), 0); const el = b.querySelector("b"); if (el) el.dataset.flags = n ? String(n) : ""; });
   }
@@ -4307,7 +4351,7 @@ import * as P from "./platform.js";
     const newWrap = field("New style", fNewStyle, { full: true }); newWrap.hidden = true;
     const fVersion = selectEl("f_version", VERSIONS, s.version || "Proto 1");
     const fLev = inp("f_lev", s.leverantor, { list: "dlLev", autocomplete: "off" });
-    const fFarg = inp("f_farg", s.farg);
+    const fFarg = colourPicker("f_farg", sampleColours(s), ro);
     const fTyg = inp("f_tyg", tygName(s), { list: "dlTyg", autocomplete: "off", placeholder: "e.g. Japan Blue inhouse – Westpoint Canvas 223" });
     const fStorlek = inp("f_storlek", s.storlek, { placeholder: "e.g. M or 50" });
     const fSas = seasonSelect("f_ssas", s.sasong, "– Same as the style –");
@@ -4345,7 +4389,7 @@ import * as P from "./platform.js";
       h("h3", { class: "sec-title full", text: "Product" }),
       field("Style", fStyle, { full: true }), newWrap,
       field("Version", fVersion), field("Supplier", fLev),
-      field("Colour", fFarg, isNew ? { hint: "Several colours? Separate them with commas – one sample is created per colour." } : undefined), field("Size", fStorlek),
+      h("div", { class: "field" }, h("label", { for: "f_farg", text: "Colour" }), fFarg.el), field("Size", fStorlek),
       field("Tyg", fTyg, { hint: "Type freely or choose a fabric that already exists." }), field("Intended season", fSas, { hint: "Which collection the sample is aimed at – drives prioritisation" }),
       field("Price", fPris), field("Currency", fValuta),
       h("h3", { class: "sec-title full", text: "Delivery" }),
@@ -4416,7 +4460,6 @@ import * as P from "./platform.js";
       if (cur.status === "Mottagen" && beslutNorm(cur.beslut) !== "Godkänd") add("Approve", async () => { if (await quickUpdate(cur, { beslut: "Godkänd", utvarderad: true }, "Godkänd")) await approveStyleFrom(cur); }, true);
       if (cur.status === "Mottagen" || cur.beslut) add("Ny runda", () => newRound(cur));
       if (isArchived(cur)) add("Pick up again", () => restoreSample(cur), true);
-      if (!isArchived(cur)) add("Same in more colours", () => { const w = isWaiting(cur); openSample(null, { styleId: cur.styleId || null, produkt: cur.produkt || "", version: cur.version, leverantor: cur.leverantor || "", tygId: cur.tygId || null, storlek: cur.storlek || "", sasong: cur.sasong || "", prisBelopp: cur.prisBelopp, prisValuta: cur.prisValuta, farg: "", status: w ? cur.status : "Beställd", bestalld: w && cur.bestalld ? cur.bestalld : todayISO(), ledtid: cur.ledtid, forvantad: w ? cur.forvantad || null : null, tracking: w ? cur.tracking || "" : "" }); });
       if (["Mottagen", "Problem"].includes(cur.status) && beslutNorm(cur.beslut) !== "Pausad") add("Pause → archive", () => quickUpdate(cur, { beslut: "Pausad", utvarderad: true }, "Paused – in the Archive"));
       if (["Mottagen", "Problem"].includes(cur.status) && beslutNorm(cur.beslut) !== "Kastad") add("Drop → archive", () => quickUpdate(cur, { beslut: "Kastad", utvarderad: true }, "Dropped – in the Archive"));
       if (cur.status !== "Problem" && cur.status !== "Mottagen") add("Flag problem", () => openFlag({ typ: "sample", ref: cur._id, titel: cur._id + " " + styleName(cur) + (cur.version ? " · " + cur.version : ""), tab: "samples", after: (text) => { const c2 = byId(D.samples, cur._id) || cur; return write("samples", cur._id, { status: "Problem", andrad: new Date().toISOString(), logg: (c2.logg || []).concat(logEntry("Flagged as a problem: " + text)) }); } }));
@@ -4470,7 +4513,7 @@ import * as P from "./platform.js";
         const st = byId(D.styles, styleId);
         const tygId = await resolveTyg(fTyg.value.trim(), lev);
         const o = {
-          styleId: styleId || null, produkt: st ? st.namn : (s.produkt || ""), version: fVersion.value, leverantor: lev, farg: fFarg.value.trim(), tygId, storlek: fStorlek.value.trim(), sasong: fSas.value.trim(),
+          styleId: styleId || null, produkt: st ? st.namn : (s.produkt || ""), version: fVersion.value, leverantor: lev, farg: fFarg.get().join(", "), farger: fFarg.get(), tygId, storlek: fStorlek.value.trim(), sasong: fSas.value.trim(),
           prisBelopp: num(fPris.value), prisValuta: fValuta.value || null, status: fStatus.value, bestalld: fBest.value || null, ledtid: num(fLed.value), forvantad: fForv.value || null,
           mottagen: fMott.value || null, tracking: fTrack.value.trim(), p1Skickad: fP1.value || null, p2Skickad: fP2.value || null,
           platsTyp: fPlats.value, hangare: fPlats.value === "Hängare" || fPlats.value === "Fotohäng" ? fHang.value.trim() : "", platsNotering: fPNot.value.trim(), beslut: fBeslut.value, andringar: fAndr.value.trim(), kommentar: fKom.value.trim(),
@@ -4479,24 +4522,7 @@ import * as P from "./platform.js";
         if (!o.forvantad && o.bestalld && o.ledtid > 0) o.forvantad = addDays(o.bestalld, o.ledtid);
         if (o.beslut) o.utvarderad = true;
         const now = new Date().toISOString();
-        const colours = isNew ? o.farg.split(/\s*[,;\n]\s*/).filter(Boolean) : [];
-        if (isNew && colours.length > 1) {
-          // En sample per färg, i övrigt likadana. Varje får sitt eget ID.
-          const made = [];
-          for (const farg of colours) {
-            const nid = await freshId("samples", D.samples, "S", 3);
-            const body = Object.assign({ id: nid, material: "", utvarderad: !!o.beslut, bilder: [], logg: [logEntry("Sample created (" + o.status + "), one of " + colours.length + " colours")], andrad: now }, o, { farg });
-            if (!(await create("samples", nid, body))) break;
-            if (!byId(D.samples, nid)) D.samples.push(Object.assign({}, body, { _id: nid }));
-            made.push(nid);
-          }
-          if (made.length) {
-            if (o.beslut === "Godkänd") await approveStyleFrom(Object.assign({ _id: made[0] }, o));
-            if (st && isIdea(st)) await write("styles", st._id, { status: "Sampling", andrad: now, logg: (st.logg || []).concat(logEntry("First samples ordered (" + made.join(", ") + ") – the idea is now in sampling")) });
-            toast(made.length + " samples created: " + made.join(", "));
-            closeSheet(); scheduleRefresh();
-          }
-        } else if (isNew) {
+        if (isNew) {
           const nid = await freshId("samples", D.samples, "S", 3);
           const body = Object.assign({ id: nid, material: "", utvarderad: !!o.beslut, bilder: [], logg: [logEntry("Sample created (" + o.status + ")")], andrad: now }, o);
           if (await create("samples", nid, body)) {

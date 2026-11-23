@@ -1571,7 +1571,15 @@
   "färg": "colour",
   "färger ej satta": "colours not set",
   "Skapa PO": "Create PO",
-  "är godkänd – den ligger nu under Produktion som redo att beställa": "is approved – it is now under Production as ready to order"
+  "är godkänd – den ligger nu under Produktion som redo att beställa": "is approved – it is now under Production as ready to order",
+  "+ Lägg till färg": "+ Add colour",
+  "Välj färg …": "Choose colour …",
+  "Annan färg …": "Other colour …",
+  "Skriv färgen": "Type the colour",
+  "Annan färg": "Other colour",
+  "Ta bort färgen": "Remove colour",
+  "Ingen tidsplan för PO ännu.": "No PO schedule yet.",
+  "Ligger kvar här tills PO:n är inskickad.": "Stays here until the PO is submitted."
  },
  "values": {
   "Storleksset": "Size set",

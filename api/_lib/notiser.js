@@ -190,7 +190,7 @@ function compute({ state, docs, settings = {}, persons = [], now = new Date() })
       const dk = (st.design && st.design.klar) || "";
       if (dk && p && p.d !== dk) add(["carl"], item("DK:" + st._id + ":" + dk, "veta", "Design", "Design done: " + st.namn + " – sent to sampling", kort((st.design || {}).kommentar), L.style(st), "Open style"), (st.design || {}).av);
       if (!p) continue;
-      if (s !== p.s && s === "Godkänd") add(["elliot"], item("6:" + st._id, "gora", "Approved", st.namn + " approved – set quantities and colours", [st.sasong, st.drop, st.leverantor].filter(Boolean).join(" · "), L.style(st), "Open style"), actor);
+      if (s !== p.s && s === "Godkänd" && !(settings._redoMejlad || []).includes(st._id)) add(["elliot"], item("6:" + st._id, "gora", "Approved", st.namn + " approved – set quantities and colours", [st.sasong, st.drop, st.leverantor].filter(Boolean).join(" · "), L.style(st), "Open style"), actor);
       if (s !== p.s && ["Pausad", "Kastad"].includes(s)) add(["alex", "elliot"], item("18s:" + st._id + ":" + s, "veta", "Decision", st.namn + ": " + en(s).toLowerCase(), kort(st.kommentar), L.style(st), "Open style"), actor);
       if ((st.ecomBilder || "") !== p.e && st.ecomBilder === "Retuscherade") add(["jakob", "oliver"], item("12:" + st._id, "veta", "Images", "E-com images ready for " + st.namn, "Retouched" + (actorName(actor) ? " by " + actorName(actor) : ""), L.ecom, "Open E-com"), actor);
     }
@@ -344,7 +344,7 @@ function compute({ state, docs, settings = {}, persons = [], now = new Date() })
 
 /* ---------- mejlet ---------- */
 const esc = (s) => String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-function renderMail({ name, items, base, intro }) {
+function renderMail({ name, items, base, intro, heading, reason }) {
   const INK = "#212121", PAPER = "#F8F7F0", LINE = "#E0E0DB", MUTED = "#6b6b68";
   const LBL = "'Mars Extended','Helvetica Neue',Helvetica,Arial,sans-serif", TXT = "'Bembo Book MT Pro',Georgia,'Times New Roman',serif", DISP = "'Vogue','Bembo Book MT Pro',Georgia,serif";
   const gora = items.filter((x) => x.block === "gora"), veta = items.filter((x) => x.block !== "gora");
@@ -361,9 +361,9 @@ function renderMail({ name, items, base, intro }) {
 <div style="font:400 30px/1.1 ${DISP};color:${INK};margin-top:18px">Samples <span style="color:${MUTED}">&amp; production</span></div></td></tr>
 <tr><td style="padding:24px 34px 4px"><div style="font:400 24px/1.2 ${DISP};color:${INK}">${intro ? "Hi" : "Good morning"} ${esc(name)}</div>
 <div style="font:16px/1.5 ${TXT};color:${MUTED};margin-top:6px">${esc(intro || "This is what has happened in PLM since yesterday that concerns you.")}</div></td></tr>
-<tr><td style="padding:0 34px 8px"><table role="presentation" width="100%" cellspacing="0" cellpadding="0">${section(intro ? "Flagged" : "To do", gora)}${section("To know", veta)}</table></td></tr>
+<tr><td style="padding:0 34px 8px"><table role="presentation" width="100%" cellspacing="0" cellpadding="0">${section(heading || (intro ? "Flagged" : "To do"), gora)}${section("To know", veta)}</table></td></tr>
 <tr><td style="padding:20px 34px 30px"><a href="${esc(base)}" style="display:inline-block;background:${INK};color:${PAPER};font:400 11px ${LBL};letter-spacing:.14em;text-transform:uppercase;padding:13px 20px;text-decoration:none">Open PLM</a>
-<div style="font:13px/1.5 ${TXT};color:${MUTED};margin-top:18px">${intro ? "Sent because someone flagged this for you." : "A summary of what has happened since 10:00 yesterday."} Decisions and comments are written in PLM – do not reply to this email.</div></td></tr>
+<div style="font:13px/1.5 ${TXT};color:${MUTED};margin-top:18px">${esc(reason || (intro ? "Sent because someone flagged this for you." : "A summary of what has happened since 10:00 yesterday."))} Decisions and comments are written in PLM – do not reply to this email.</div></td></tr>
 </table></td></tr></table></body></html>`;
   return { subject, html };
 }

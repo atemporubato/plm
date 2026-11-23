@@ -6,6 +6,18 @@ och importeras med `node tools/import-dokument.js`, och main går live på plm.a
 
 Versionsnumrering: små ändringar ger punktversion (v9.1, v9.2 …). Nytt heltal (v10) bara vid stora ändringar.
 
+## v10.4 (2026-11-23)
+
+Färger på samples, Redo att beställa som Flaggat, luftigare rullistor. Ingen dataimport; inga fält tas bort eller skrivs om.
+- Färg på en sample väljs i en rullista med de 15 vanligaste färgerna i Shopify (räknat på produkttitlar i hela katalogen: Navy, Black, Brown, Cream, White, Natural, Ecru, Khaki, Dark Brown, Indigo, Charcoal, Beige, Tobacco, Pink, Olive). "Annan färg …" ger fritext, så leverantörens egna färgnamn går fortfarande att skriva.
+- En sample kan ha flera färger: "+ Lägg till färg" ger en rullista till. Det är en och samma sample (ett ID, en ruta), precis som en PO med flera rader. Färgerna sparas i nya fältet farger; farg finns kvar och innehåller färgerna med komma emellan, så äldre samples, sök, etiketter och export fungerar som förut. Äldre samples läses som en färg och skrivs inte om förrän de sparas.
+- Ersätter v10.3:s "en sample per färg" (kommaseparerat) och knappen "Samma i fler färger".
+- Färgkort på samples: listan och de grupperade raderna visar färgprickar i plaggets färg (samma som på PO-korten). I grupperade rader betyder streckad ram att samplen inte är mottagen än och röd ram problem.
+- Färg på PO-rader föreslår samma 15 färger (fritext som förut).
+- "Redo att beställa" ligger nu som en ruta i samma form som Flaggat överst i Produktion och räknas in i flaggsiffran på fliken. Den ligger kvar tills PO:n är inskickad.
+- Direktmejl till Elliot när en style blir godkänd (ny endpoint /api/redo). Högst ett mejl per style, inget mejl om Elliot själv godkände, och 10-mejlet upprepar inte samma sak. Markeringen sparas i dokument (collection "_notiser", id "redo-<style>") – stylen skrivs aldrig från servern. Kräver samma Microsoft-nycklar i Vercel som övriga mejl.
+- Rullistor har egen pil med luft till kanten och mer marginal till vänster.
+
 ## v10.3 (2026-11-23)
 
 Från Alex: samples i flera färger, och godkända styles ska synas i Produktion. Ingen dataimport, inga fält ändras.
