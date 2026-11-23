@@ -6,6 +6,16 @@ och importeras med `node tools/import-dokument.js`, och main går live på plm.a
 
 Versionsnumrering: små ändringar ger punktversion (v9.1, v9.2 …). Nytt heltal (v10) bara vid stora ändringar.
 
+## v10.12 (2026-11-23)
+
+ETA-regel, automatiska Shopify-bilder för NOOS/restock och layoutfixar. Ingen data skrivs om i bulk.
+- Regel: ETA lager = ex-factory (bekräftad, annars önskad) + 5 dagar, överallt (PO-kort, tidslinjer, betalningsplan, CSV). ETA-fältet i PO:n är uträknat och går inte att skriva in. Ett äldre sparat ETA-datum används bara när PO:n saknar ex-factory. Leverantörens fraktdagar används inte längre för ETA.
+- Regel (bara hostad): NOOS- och restock-styles utan bild får produktbilden från Shopify automatiskt när appen laddas. api/bild.js söker på stylens namn och svarar bara vid säker träff (samma produktnamn före " in <färg>"); annars lämnas stylen orörd. Varje style provas högst en gång i veckan per webbläsare. Kräver SHOPIFY_STORE/SHOPIFY_CLIENT_ID/SHOPIFY_CLIENT_SECRET (samma som api/shopify.js).
+- En PO utan leverantör får den ur prefixet i PO-numret (EMI-… = Eminento) när den visas, och sparas så nästa gång PO:n sparas.
+- Style-korten: statusetiketten radbryts i stället för att krocka med Nyhet/Restock/NOOS-taggen.
+- Sökfältet i sidhuvudet är vänsterställt i linje med första knappen.
+- Ingressen överst i Produktion är borta.
+
 ## Shopify-bilder via servern (2026-11-23)
 
 "Hämta Shopify-bilder" fungerar även när webbläsaren inte får läsa bilden. Artefakten oförändrad (v10.11), ingen data ändras.

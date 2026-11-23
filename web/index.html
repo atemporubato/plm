@@ -186,8 +186,8 @@ header.top { display: flex; flex-wrap: wrap; align-items: flex-end; justify-cont
 .brand h1 { font-family: var(--f-display); font-weight: 400; font-size: clamp(26px, 3.6vw, 34px); line-height: 1.05; margin: 0; letter-spacing: .01em; text-wrap: balance; }
 .brand h1 em { font-style: normal; color: var(--muted); }
 .brand p { margin: 0; color: var(--muted); font-size: 15px; max-width: min(70ch, 100%); }
-.actions { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
-.hdr-right { display: grid; gap: 10px; justify-items: end; min-width: 0; max-width: 100%; }
+.actions { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-start; }
+.hdr-right { display: grid; gap: 10px; justify-items: start; min-width: 0; max-width: 100%; }
 .gsearch { width: min(420px, 100%); }
 .gsearch input { width: 100%; padding: 8px 12px; border: 1px solid var(--line-strong); background: var(--surface); font-size: 15px; }
 .srch-sec { display: grid; gap: 8px; }
@@ -356,7 +356,7 @@ table.ledger { width: 100%; border-collapse: collapse; min-width: 960px; }
 .pcard .pimg { aspect-ratio: 3 / 4; background: var(--indigo-soft); overflow: hidden; position: relative; display: grid; place-items: center; }
 .pcard .pimg img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .pcard .pimg .noimg { font-family: var(--f-label); font-size: 9px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); text-align: center; padding: 10px; }
-.pcard .pimg .pill { position: absolute; left: 8px; top: 8px; }
+.pcard .pimg .pill { position: absolute; left: 8px; top: 8px; max-width: calc(100% - 100px); white-space: normal; overflow-wrap: anywhere; text-align: left; line-height: 1.25; font-size: 9px; letter-spacing: .03em; padding: 3px 6px; }
 .typtag { position: absolute; right: 8px; top: 8px; font-family: var(--f-label); font-size: 9px; letter-spacing: .1em; text-transform: uppercase; padding: 3px 7px; background: var(--surface); border: 1px solid var(--ink); color: var(--ink); }
 .typtag.t-nyhet { background: var(--ink); color: var(--paper); }
 .typtag.t-noos { background: var(--surface); }

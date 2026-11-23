@@ -259,7 +259,9 @@ import * as P from "./platform.js";
     return out.sort((a, b) => a.localeCompare(b, "sv"));
   }
   function derivePo() {
-    D.po = RAW.po.map((p) => { const ds = poStyleDrops(p); const raw = String(p.drop || "").trim(); return ds.length && !p.dropEgen ? Object.assign({}, p, { drop: ds.join(" + "), _drops: ds, _dropRaw: raw, _dropFranStyles: true }) : Object.assign({}, p, { _drops: raw ? [raw] : [], _dropRaw: raw, _dropFranStyles: false }); });
+    // Saknar PO:n leverantör tas den ur prefixet i PO-numret (EMI-… = Eminento).
+    const levAvNr = (p) => { if (p.leverantor) return p; const kod = String(p.nr || p._id || "").split("-")[0].toUpperCase(); const l = kod ? D.lev.find((x) => String(x.kod || "").toUpperCase() === kod) : null; return l ? Object.assign({}, p, { leverantor: l.namn }) : p; };
+    D.po = RAW.po.map(levAvNr).map((p) => { const ds = poStyleDrops(p); const raw = String(p.drop || "").trim(); return ds.length && !p.dropEgen ? Object.assign({}, p, { drop: ds.join(" + "), _drops: ds, _dropRaw: raw, _dropFranStyles: true }) : Object.assign({}, p, { _drops: raw ? [raw] : [], _dropRaw: raw, _dropFranStyles: false }); });
   }
   // Vad en flyttad lansering betyder för leveranserna: nytt "i lager senast" och vilka PO som inte hinner.
   function launchImpact(sasong, dropNamn, nyLansering) {
@@ -326,7 +328,10 @@ import * as P from "./platform.js";
   }
   const poLateText = (p, l) => "ETA warehouse " + fmtDate(l.eta) + " – " + l.dagar + (l.dagar === 1 ? " day" : " days") + " after in stock by " + fmtDate(l.klart) + " (" + [l.drop.sasong, l.drop.namn].filter(Boolean).join(" ") + ")";
   const poStatusPill = (po) => { const x = poStatusNorm(po.status); const pill = h("span", { class: "pill ps-" + slug(x), text: x }); const l = poLate(po); return l ? h("span", { style: "display:inline-flex;gap:6px;align-items:center" }, pill, h("span", { class: "pill s-Problem", title: poLateText(po, l), text: "Problem · late " + l.dagar + " d" })) : pill; };
-  const poEta = (po) => (isISO(po.etaLager) ? po.etaLager : isISO(po.bekraftadEx) ? po.bekraftadEx : isISO(po.planeradEx) ? po.planeradEx : null);
+  // Regel (v10.12): ETA lager = ex-factory + 5 dagar, överallt. Ett sparat ETA-datum används bara när PO:n saknar ex-factory.
+  const ETA_DAGAR = 5;
+  const poEx = (po) => (isISO(po.bekraftadEx) ? po.bekraftadEx : isISO(po.planeradEx) ? po.planeradEx : null);
+  const poEta = (po) => { const ex = poEx(po); return ex ? addDays(ex, ETA_DAGAR) : isISO(po.etaLager) ? po.etaLager : null; };
   const poIsLate = (po) => { const e = poEta(po); return !!e && PO_OPEN.includes(poStatusNorm(po.status)) && diffDays(e) < 0; };
   const budgetOf = (season) => D.budget.find((b) => norm(b._id) === norm(season) || norm(b.sasong) === norm(season)) || null;
   const styleKategori = (st) => (st && KATEGORIER.includes(st.kategori) ? st.kategori : (st && st.kategori) || "");
@@ -1321,10 +1326,9 @@ import * as P from "./platform.js";
     const items = pos.map((p) => {
       const start = isISO(p.orderDatum) ? p.orderDatum : isISO(p.importerad) ? p.importerad : (p.andrad || "").slice(0, 10);
       const ex = isISO(p.bekraftadEx) ? p.bekraftadEx : isISO(p.planeradEx) ? p.planeradEx : null;
-      let eta = isISO(p.etaLager) ? p.etaLager : null;
-      if (!eta && ex) eta = addDays(ex, fraktFor(p.leverantor));
-      if (!eta && isISO(start) && num(p.produktionstid) != null) eta = addDays(start, num(p.produktionstid) + fraktFor(p.leverantor));
-      return { p, start: isISO(start) ? start : null, ex, eta, est: !isISO(p.etaLager) };
+      let eta = poEta(p);
+      if (!eta && isISO(start) && num(p.produktionstid) != null) eta = addDays(start, num(p.produktionstid) + ETA_DAGAR);
+      return { p, start: isISO(start) ? start : null, ex, eta, est: !poEta(p) };
     }).filter((x) => x.start);
     if (!items.length) return null;
     const marks = [];
@@ -1467,8 +1471,7 @@ import * as P from "./platform.js";
       this.pay = h("section", { class: "card", "aria-label": "Payments" });
       this.tl = h("div", { class: "cards" });
       this.budgetEdit = false;
-      root.append(h("p", { class: "lede", text: "All purchase orders by season: drop, ETA warehouse, status and cost. Payments are under Suppliers. The budget per category is at the bottom." }),
-        this.strip.el, h("section", { class: "filters", "aria-label": "Filter" }, q, this.fSeason.el, this.fLev.el, this.seg.el, this.count), this.cards, this.empty, this.budget);
+      root.append(this.strip.el, h("section", { class: "filters", "aria-label": "Filter" }, q, this.fSeason.el, this.fLev.el, this.seg.el, this.count), this.cards, this.empty, this.budget);
     },
     seasonInView() {
       const st = UI.prod;
@@ -1742,9 +1745,9 @@ import * as P from "./platform.js";
   function poMilestones(po) {
     const prodDays = num(po.produktionstid) ?? levNum(po.leverantor, "production time");
     const ord = isISO(po.orderDatum) ? po.orderDatum : null;
-    const frakt = fraktFor(po.leverantor);
+    const frakt = ETA_DAGAR;
     const ex = isISO(po.bekraftadEx) ? po.bekraftadEx : isISO(po.planeradEx) ? po.planeradEx : ord && prodDays != null ? addDays(ord, prodDays) : isISO(po.leveransOnskad) ? addDays(po.leveransOnskad, -frakt) : null;
-    const lev = isISO(po.etaLager) ? po.etaLager : ex ? addDays(ex, frakt) : isISO(po.leveransOnskad) ? po.leveransOnskad : null;
+    const lev = poEta(po) || (ex ? addDays(ex, frakt) : null) || (isISO(po.leveransOnskad) ? po.leveransOnskad : null);
     return { order: ord || (ex && prodDays != null ? addDays(ex, -prodDays) : null), produktion: ord || (ex && prodDays != null ? addDays(ex, -prodDays) : null), exfactory: ex, faktura: ex, leverans: lev };
   }
   // Betalningsplan per PO: manuella fält om de finns, annars leverantörens villkor (eller antagandet 100 % vid leverans)
@@ -1831,7 +1834,7 @@ import * as P from "./platform.js";
     const fBek = selectEl("f_pbek", [["", "Nej"], ["1", "Ja"]], po.orderBekraftad ? "1" : "");
     const fPlan = inp("f_pplan", po.planeradEx, { type: "date" });
     const fBekEx = inp("f_pbekex", po.bekraftadEx, { type: "date" });
-    const fEta = inp("f_peta", po.etaLager, { type: "date" });
+    const fEta = h("div", { class: "calc", id: "f_peta" });
     const fOrdD = inp("f_pordd", po.orderDatum, { type: "date" });
     const fLevO = inp("f_plevo", po.leveransOnskad, { type: "date" });
     const fLabel = area("f_plabel", po.labelInstructions == null ? PO_DEFAULTS.label : po.labelInstructions, "Label instructions for the PO file");
@@ -1856,14 +1859,18 @@ import * as P from "./platform.js";
     const syncProd = () => { const d = prodDagar(); fProd.textContent = d == null ? "–" : d < 0 ? "Ex-factory is before the order date" : d + " " + "days"; };
     [fOrdD, fPlan].forEach((x) => { x.addEventListener("input", syncProd); x.addEventListener("change", syncProd); });
     [fLev, fSas].forEach((x) => { x.addEventListener("input", syncNr); x.addEventListener("change", () => { syncNr(); syncVal(); }); });
-    syncProd(); syncNr(); syncVal();
+    // ETA lager räknas ut: ex-factory (bekräftad, annars önskad) + 5 dagar.
+    const etaNu = () => { const ex = isISO(fBekEx.value) ? fBekEx.value : isISO(fPlan.value) ? fPlan.value : null; return ex ? addDays(ex, ETA_DAGAR) : isISO(po.etaLager) ? po.etaLager : null; };
+    const syncEta = () => { const e = etaNu(); fEta.textContent = e ? fmtDate(e) : "–"; };
+    [fPlan, fBekEx].forEach((x) => { x.addEventListener("input", syncEta); x.addEventListener("change", syncEta); });
+    syncProd(); syncNr(); syncVal(); syncEta();
     const form = h("form", { class: "form three", id: "poForm", autocomplete: "off", onsubmit: (e) => e.preventDefault() },
       h("h3", { class: "sec-title full", text: "Order" }),
       h("div", { class: "field" }, h("label", { for: "f_pnr", text: "PO no." }), fNr, nrHint), field("Supplier", fLev), field("Status", fStatus),
       field("Season", fSas), h("div", { class: "field" }, h("label", { for: "f_pdrop", text: "Drop" }), fDrop, dropHint, flyttaWrap), h("div"),
       h("h3", { class: "sec-title full", text: "Schedule" }),
       field("Order date", fOrdD), field("Requested ex-factory", fPlan), field("Production time", fProd, { hint: "Calculated: order date to ex-factory" }),
-      isNew ? null : field("Confirmed ex-factory", fBekEx), isNew ? null : field("ETA warehouse", fEta), isNew ? null : field("Requested delivery", fLevO, { hint: "Empty = the drop's \"In stock by\"" }),
+      isNew ? null : field("Confirmed ex-factory", fBekEx), isNew ? null : field("ETA warehouse", fEta, { hint: "Calculated: ex-factory + 5 days" }), isNew ? null : field("Requested delivery", fLevO, { hint: "Empty = the drop's \"In stock by\"" }),
       h("h3", { class: "sec-title full", text: "Fabric and photo sample" }),
       field("Fabric status", fTygS), field("Fotosample", fFoto, { hint: "Empty = ordered automatically for new styles" }), field("Photo sample expected", fFotoD),
       h("h3", { class: "sec-title full", text: "Övrigt" }),
@@ -2018,7 +2025,7 @@ import * as P from "./platform.js";
 
     const logUl = h("ul", { class: "log" });
     async function save() {
-      const o = { nr: fNr.value.trim(), leverantor: fLev.value.trim(), sasong: fSas.value.trim(), drop: poDropChoice().drop, dropEgen: poDropChoice().egen, status: fStatus.value, prioritet: po.prioritet || "Normal", produktionstid: prodDagar() != null && prodDagar() >= 0 ? prodDagar() : num(po.produktionstid), fotosample: fFoto.value, fotosampleLeverans: fFotoD.value || null, tygstatus: fTygS.value, orderBekraftad: fBek.value === "1", planeradEx: fPlan.value || null, bekraftadEx: fBekEx.value || null, etaLager: fEta.value || null, valuta: fVal.value || "SEK", kommentar: fKom.value.trim(),
+      const o = { nr: fNr.value.trim(), leverantor: fLev.value.trim(), sasong: fSas.value.trim(), drop: poDropChoice().drop, dropEgen: poDropChoice().egen, status: fStatus.value, prioritet: po.prioritet || "Normal", produktionstid: prodDagar() != null && prodDagar() >= 0 ? prodDagar() : num(po.produktionstid), fotosample: fFoto.value, fotosampleLeverans: fFotoD.value || null, tygstatus: fTygS.value, orderBekraftad: fBek.value === "1", planeradEx: fPlan.value || null, bekraftadEx: fBekEx.value || null, etaLager: etaNu(), valuta: fVal.value || "SEK", kommentar: fKom.value.trim(),
         orderDatum: fOrdD.value || null, leveransOnskad: fLevO.value || null, labelInstructions: fLabel.value.trim(),
         forskottBelopp: num(fFskB.value), forskottDatum: fFskD.value || null, forskottBetald: fFskP.value === "1", slutBelopp: num(fSlutB.value), slutDatum: fSlutD.value || null, slutBetald: fSlutP.value === "1" };
       if (!o.leverantor) { toast("Enter supplier."); fLev.focus(); return; }
@@ -2171,7 +2178,7 @@ import * as P from "./platform.js";
   }
   function exportPo() {
     const rows = [];
-    for (const p of D.po) for (const r of p.rader || []) { const st = byId(D.styles, r.styleId); rows.push([p.nr, p.leverantor, p.sasong, p.drop, poStatusNorm(p.status), r.produkt, r.styleId, st ? styleKategori(st) : "", r.farg, r.typ, r.tyg, r.antal, r.tygkostnad, r.styckpris, lineCost(r), p.valuta, p.tygstatus, p.orderBekraftad ? "Ja" : "Nej", p.planeradEx, p.bekraftadEx, p.etaLager, p.fotosample, p.forskottBetalt, p.slutbetalning, p.kommentar]); }
+    for (const p of D.po) for (const r of p.rader || []) { const st = byId(D.styles, r.styleId); rows.push([p.nr, p.leverantor, p.sasong, p.drop, poStatusNorm(p.status), r.produkt, r.styleId, st ? styleKategori(st) : "", r.farg, r.typ, r.tyg, r.antal, r.tygkostnad, r.styckpris, lineCost(r), p.valuta, p.tygstatus, p.orderBekraftad ? "Ja" : "Nej", p.planeradEx, p.bekraftadEx, poEta(p), p.fotosample, p.forskottBetalt, p.slutbetalning, p.kommentar]); }
     saveFile("Rubato_Produktion_" + todayISO() + ".csv", csv(["PO no.", "Supplier", "Season", "Drop", "Status", "Product", "Style ID", "Category", "Colour", "New/Restock", "Tyg", "Quantity", "Fabric cost/unit", "Unit price", "Cost", "Currency", "Fabric status", "Order confirmed", "Planned ex-factory", "Confirmed ex-factory", "ETA warehouse", "Fotosample", "Deposit paid", "Final payment", "Comment"], rows));
   }
 
@@ -3530,6 +3537,36 @@ import * as P from "./platform.js";
     const res = await fetch("/api/bild", { method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer " + (session ? session.access_token : "") }, body: JSON.stringify({ url }) });
     if (!res.ok) { let msg = "HTTP " + res.status; try { msg = (await res.json()).error || msg; } catch (e) {} throw new Error(msg); }
     return res.blob();
+  }
+  // Regel: NOOS och restock finns redan i butiken. Saknar en sådan style bild letas produktbilden upp i Shopify automatiskt
+  // när appen laddas, och hämtas in. Bara säkra träffar (samma produktnamn) – annars lämnas stylen orörd. Varje style provas
+  // högst en gång i veckan per webbläsare.
+  let autoShopifyKor = false;
+  async function hostedAutoShopify() {
+    if (autoShopifyKor || !canWrite || !db || !assets || designOnly() || ME.leverantor) return;
+    let provat = {}; try { provat = JSON.parse(localStorage.getItem("plmAutoShopify") || "{}"); } catch (e) {}
+    const nu = Date.now(), vecka = 7 * 864e5;
+    const todo = D.styles.filter((s) => ["NOOS", "Restock"].includes(s.typ) && s.namn && !s.shopifyBild && !s.bildId && !docImages(s).length && !(provat[s._id] && nu - provat[s._id] < vecka)).slice(0, 40);
+    if (!todo.length) return;
+    autoShopifyKor = true;
+    let hits = 0;
+    try {
+      const { data: { session } } = await P.supabase.auth.getSession();
+      for (const s of todo) {
+        provat[s._id] = nu;
+        try {
+          const res = await fetch("/api/bild", { method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer " + (session ? session.access_token : "") }, body: JSON.stringify({ sok: s.namn, farger: s.farger || [] }) });
+          if (!res.ok) { delete provat[s._id]; continue; }
+          const hit = (await res.json()).hit;
+          if (!hit || !hit.url) continue;
+          const cur = byId(D.styles, s._id) || s;
+          if (cur.shopifyBild || cur.bildId || docImages(cur).length) continue;
+          if (await write("styles", s._id, { shopifyBild: { url: hit.url, titel: hit.titel, handle: hit.handle, likhet: "samma", auto: true }, andrad: new Date().toISOString(), logg: (cur.logg || []).concat(logEntry("Shopify image linked automatically: " + hit.titel)) })) { Object.assign(cur, { shopifyBild: { url: hit.url, titel: hit.titel, handle: hit.handle, likhet: "samma", auto: true } }); hits++; }
+        } catch (e) { delete provat[s._id]; }
+      }
+      try { localStorage.setItem("plmAutoShopify", JSON.stringify(provat)); } catch (e) {}
+      if (hits) await importShopifyImages();
+    } finally { autoShopifyKor = false; }
   }
   // ---------- COO: matrisvy (hosted-only) ----------
   // Kritisk linje per drop och per event. Rader = föräldrar (hor_till tom, matris satt), kolumner = mallens faser
@@ -5567,10 +5604,10 @@ import * as P from "./platform.js";
       const docs = mapDocs(snap).filter(filter || (() => true));
       if (key === "drops" || key === "po") RAW[key] = docs; else D[key] = docs;
       if (key === "drops" || key === "handelser") deriveDrops();
-      if (key === "po" || key === "styles") derivePo();
+      if (key === "po" || key === "styles" || key === "lev") derivePo();
       loaded.add(key); scheduleRefresh(); openFromHash(); if (after) after();
     }, subError);
-    sub("samples", "samples"); sub("styles", "styles", null, () => { probeExternalImages(); renderDiag(); }); sub("tyger", "tyger"); sub("tyglager", "lager"); sub("leverantorer", "lev"); sub("drops", "drops"); sub("po", "po", (p) => !ME.leverantor || norm(p.leverantor) === norm(ME.leverantor)); sub("budget", "budget"); sub("refplagg", "ref"); sub("handelser", "handelser"); sub("flaggor", "flaggor"); sub("shopifypriser", "shopify");
+    sub("samples", "samples"); sub("styles", "styles", null, () => { probeExternalImages(); renderDiag(); setTimeout(hostedAutoShopify, 1500); }); sub("tyger", "tyger"); sub("tyglager", "lager"); sub("leverantorer", "lev"); sub("drops", "drops"); sub("po", "po", (p) => !ME.leverantor || norm(p.leverantor) === norm(ME.leverantor)); sub("budget", "budget"); sub("refplagg", "ref"); sub("handelser", "handelser"); sub("flaggor", "flaggor"); sub("shopifypriser", "shopify");
     db.doc("ean/pool").onSnapshot((snap) => { D.pool = snap.exists ? snap.data() : null; loaded.add("pool"); scheduleRefresh(); }, subError);
     db.doc("installningar/app").onSnapshot((snap) => { if (snap.exists) Object.assign(D.settings, snap.data()); deriveDrops(); scheduleRefresh(); }, subError);
     db.collection("eanLogg").orderBy("t", "desc").limit(50).onSnapshot((snap) => { D.logg = snap.docs.map((doc) => Object.assign({}, doc.data(), { _id: doc.id })); scheduleRefresh(); }, subError);
