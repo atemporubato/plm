@@ -6,6 +6,13 @@ och importeras med `node tools/import-dokument.js`, och main går live på plm.a
 
 Versionsnumrering: små ändringar ger punktversion (v9.1, v9.2 …). Nytt heltal (v10) bara vid stora ändringar.
 
+## Butikens måttabeller som måttreferens, historiska bilder (2026-11-23)
+
+Bara hostade delar, artefakten oförändrad (v10.15). Ingen data skrivs om i bulk.
+- Måttlistan på en style: nytt fält "Mått från butiken" med alla måttabeller i Shopify (metaobjekt size_chart, även för arkiverade produkter och utkast, t.ex. Mercer Jacket). Väljer man en fylls måttlistan i med tabellen. Ny serverfunktion api/matt.js.
+- Shopify-bilder: gäller nu alla styles som saknar bild, inte bara NOOS/restock, så historiska (arkiverade) produkter som Tennis Jacket får sin bild. För nyheter krävs att produktnamnet stämmer exakt.
+- En färg som heter något annat i butiken (Lot 1: Indigo här, Dark Blue Rinse där) paras ihop när exakt en färg och exakt en aktiv produkt i samma style_group återstår. Styles som bara fick en del av färgerna provas om. Första färgen på stylen blir huvudbild.
+
 ## v10.15 (2026-11-23)
 
 Miniatyrerna visar en bild per färg, och @-mejl som inte går iväg säger varför. Ingen data skrivs om i bulk.

@@ -56,7 +56,7 @@ function pickProduct(name, colours, products) {
   if (!pool.length) { const bases = [...new Set(cands.map(key))]; if (bases.length !== 1) return null; pool = cands; }
   const cols = (colours || []).map((c) => words(c).join(" ")).filter(Boolean);
   const score = (p) => (p.status === "ACTIVE" ? 2 : 0) + (cols.some((c) => words(p.title).join(" ").endsWith(c)) ? 1 : 0);
-  return pool.slice().sort((a, b) => score(b) - score(a))[0];
+  return Object.assign({}, pool.slice().sort((a, b) => score(b) - score(a))[0], { exact: exact.length > 0 });
 }
 // One product per colour: the title must contain the style name and the colour. If several products fit, the one with the
 // fewest other words wins; a tie between different products is ambiguous and that colour is left out.
@@ -73,20 +73,29 @@ function pickPerColour(name, colours, products) {
     const best = scored.filter((x) => (x.extra ? x.extra.split(" ").length : 0) === min);
     if (new Set(best.map((x) => x.extra)).size !== 1) continue;
     const hit = best.sort((a, b) => (b.p.status === "ACTIVE") - (a.p.status === "ACTIVE"))[0].p;
-    if (!out.some((o) => o.url === hit.image)) out.push({ farg: c, url: hit.image, titel: hit.title, handle: hit.handle });
+    if (!out.some((o) => o.url === hit.image)) out.push({ farg: c, url: hit.image, titel: hit.title, handle: hit.handle, grupp: hit.group || "", exakt: best[0].extra === "" });
   }
-  return out;
+  // A colour that is called something else in the shop (Indigo here, "Dark Blue Rinse" there): if exactly one colour is
+  // left without a match and exactly one active product in the same style group is unused, they belong together.
+  const left = (colours || []).filter((c) => words(c).length && !out.some((o) => o.farg === c));
+  const groups = [...new Set(out.map((o) => o.grupp).filter(Boolean))];
+  if (left.length === 1 && groups.length === 1 && out.length) {
+    const spare = products.filter((p) => p.group === groups[0] && p.status === "ACTIVE" && p.image && !out.some((o) => o.url === p.image));
+    if (spare.length === 1) out.push({ farg: left[0], url: spare[0].image, titel: spare[0].title, handle: spare[0].handle, grupp: groups[0], exakt: false });
+  }
+  // Same order as the colours on the style, so the first colour becomes the main image.
+  return out.sort((a, b) => (colours || []).indexOf(a.farg) - (colours || []).indexOf(b.farg));
 }
 async function searchProduct(name, colours) {
   const token = await shopifyToken();
   const q = words(name).map((w) => "title:" + w + "*").join(" ");
   const res = await fetch(`https://${env("SHOPIFY_STORE")}/admin/api/${API}/graphql.json`, { method: "POST", headers: { "Content-Type": "application/json", "X-Shopify-Access-Token": token },
-    body: JSON.stringify({ query: "query($q:String!){ products(first:100, query:$q){ nodes{ title handle status featuredMedia{ preview{ image{ url } } } } } }", variables: { q } }) });
+    body: JSON.stringify({ query: "query($q:String!){ products(first:100, query:$q){ nodes{ title handle status featuredMedia{ preview{ image{ url } } } grupp: metafield(namespace:\"custom\", key:\"style_group\"){ value } } } }", variables: { q } }) });
   const body = await res.json();
   if (body.errors) throw new Error("Shopify: " + JSON.stringify(body.errors).slice(0, 200));
-  const products = ((body.data && body.data.products && body.data.products.nodes) || []).map((n) => ({ title: n.title, handle: n.handle, status: n.status, image: n.featuredMedia && n.featuredMedia.preview && n.featuredMedia.preview.image ? n.featuredMedia.preview.image.url : null }));
+  const products = ((body.data && body.data.products && body.data.products.nodes) || []).map((n) => ({ title: n.title, handle: n.handle, status: n.status, group: n.grupp ? n.grupp.value : "", image: n.featuredMedia && n.featuredMedia.preview && n.featuredMedia.preview.image ? n.featuredMedia.preview.image.url : null }));
   const hit = pickProduct(name, colours, products);
-  return { hit: hit ? { url: hit.image, titel: hit.title, handle: hit.handle } : null, perFarg: pickPerColour(name, colours, products) };
+  return { hit: hit ? { url: hit.image, titel: hit.title, handle: hit.handle, exakt: !!hit.exact } : null, perFarg: pickPerColour(name, colours, products) };
 }
 
 module.exports = async (req, res) => {
