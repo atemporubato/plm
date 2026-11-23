@@ -5,6 +5,8 @@
 
 const env = (k) => { const v = process.env[k]; if (!v) throw new Error("Missing environment variable " + k); return v; };
 const MAX = 15 * 1024 * 1024;
+// http-adresser lyfts till https innan kontrollen (gamla länkar till butiken är ofta sparade som http).
+const https = (u) => { if (u.protocol === "http:") { u.protocol = "https:"; u.port = ""; } return u; };
 const allowed = (u) => u.protocol === "https:" && (u.hostname === "cdn.shopify.com" || /(^|\.)atemporubato\.com$/i.test(u.hostname) || /^[a-z0-9-]+\.myshopify\.com$/i.test(u.hostname));
 
 async function verifyUser(req) {
@@ -19,7 +21,8 @@ async function verifyUser(req) {
 async function get(url) {
   let u = new URL(url);
   for (let i = 0; i < 4; i++) {
-    if (!allowed(u)) throw Object.assign(new Error("Address not allowed: " + u.hostname), { status: 400 });
+    https(u);
+    if (!allowed(u)) throw Object.assign(new Error("Address not allowed: " + u.protocol + "//" + u.hostname), { status: 400 });
     const r = await fetch(u, { redirect: "manual", headers: { "User-Agent": "RubatoPLM/1.0", Accept: "image/avif,image/webp,image/*,text/html;q=0.8" } });
     if (r.status >= 300 && r.status < 400 && r.headers.get("location")) { u = new URL(r.headers.get("location"), u); continue; }
     return { r, u };
@@ -34,8 +37,8 @@ module.exports = async (req, res) => {
     let raw = String((req.body && req.body.url) || "").trim();
     if (raw.startsWith("//")) raw = "https:" + raw;
     let first;
-    try { first = new URL(raw); } catch (e) { return res.status(400).json({ error: "Not a valid address" }); }
-    if (!allowed(first)) return res.status(400).json({ error: "Address not allowed: " + first.hostname });
+    try { first = https(new URL(raw)); } catch (e) { return res.status(400).json({ error: "Not a valid address" }); }
+    if (!allowed(first)) return res.status(400).json({ error: "Address not allowed: " + first.protocol + "//" + first.hostname });
     let { r, u } = await get(first.toString());
     if (!r.ok) return res.status(502).json({ error: "Shopify answered " + r.status });
     let type = (r.headers.get("content-type") || "").split(";")[0].trim().toLowerCase();
