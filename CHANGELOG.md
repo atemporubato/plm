@@ -6,6 +6,12 @@ och importeras med `node tools/import-dokument.js`, och main går live på plm.a
 
 Versionsnumrering: små ändringar ger punktversion (v9.1, v9.2 …). Nytt heltal (v10) bara vid stora ändringar.
 
+## Måttabeller ur produktbeskrivningarna (2026-11-23)
+
+Bara servern, artefakten oförändrad (v10.15).
+- api/matt.js läser nu även måttabellen i produktbeskrivningen (HTML-tabell) för produkter som saknar size_chart-objekt, t.ex. Tennis Jacket och äldre Nonpareil-plagg. Båda uppläggen tolkas (storlekar som rader eller som kolumner). En post per produktnamn; färgerna delar tabell.
+- vercel.json: api/matt.js får köra upp till 30 s (går igenom hela produktkatalogen, svaret sparas i 10 min).
+
 ## Butikens måttabeller som måttreferens, historiska bilder (2026-11-23)
 
 Bara hostade delar, artefakten oförändrad (v10.15). Ingen data skrivs om i bulk.

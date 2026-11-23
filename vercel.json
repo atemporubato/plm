@@ -25,5 +25,10 @@
       "path": "/api/notiser",
       "schedule": "0 9 * * *"
     }
-  ]
+  ],
+  "functions": {
+    "api/matt.js": {
+      "maxDuration": 30
+    }
+  }
 }
