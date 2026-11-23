@@ -6,6 +6,12 @@ och importeras med `node tools/import-dokument.js`, och main går live på plm.a
 
 Versionsnumrering: små ändringar ger punktversion (v9.1, v9.2 …). Nytt heltal (v10) bara vid stora ändringar.
 
+## Ikon (2026-11-23)
+
+Rubato-loggan som ikon i stället för den tomma globen. Ingen data ändras, artefakten oförändrad.
+- favicon.png/.ico, apple-touch-icon.png (vit bakgrund) och icon-512.png i web/, gjorda ur web/mail/logo.png.
+- tools/build.mjs (och web/index.html) länkar ikonerna och sätter og:title/og:image så länkförhandsvisningar visar loggan.
+
 ## v10.9 (2026-11-23)
 
 Renare PO-kort, prioritet bort, bilddiagnos-rutan bort. Ingen data ändras.

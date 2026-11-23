@@ -94,7 +94,11 @@ const html = `<!doctype html>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Rubato PLM</title>
 <meta name="robots" content="noindex">
-<link rel="icon" href="data:,">
+<link rel="icon" type="image/png" sizes="64x64" href="/favicon.png">
+<link rel="icon" href="/favicon.ico" sizes="any">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<meta property="og:title" content="Rubato PLM">
+<meta property="og:image" content="https://plm.atemporubato.com/icon-512.png">
 ${head}
 </head>
 <body>
