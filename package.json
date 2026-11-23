@@ -3,5 +3,9 @@
   "private": true,
   "scripts": {
     "start": "python3 -m http.server 3000 -d web"
+  },
+  "devDependencies": {
+    "acorn": "^8.19.0",
+    "acorn-walk": "^8.3.5"
   }
 }

@@ -5,7 +5,7 @@ import * as P from "./platform.js";
   const LIB_PDF = "https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js";
   const LIB_QR = "https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js";
   const $ = (id) => document.getElementById(id);
-  const MONTHS = ["jan", "feb", "mar", "apr", "maj", "jun", "jul", "aug", "sep", "okt", "nov", "dec"];
+  const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
   const SAMPLE_STATUS = ["Beställd", "Skickad", "Mottagen", "Problem", "Returnerad"];
   const WAITING = ["Beställd", "Skickad"];
@@ -13,27 +13,41 @@ import * as P from "./platform.js";
   const VERSIONS = ["Proto 1", "Proto 2", "Proto 3", "Proto 4", "Proto 5", "Fotosample", "Produktionssample", "Storleksset"];
   const PLATSER = ["Hängare", "Fotohäng", "På plåtning", "Testas", "Utlånad", "Gåva", "Såld", "Hos leverantör", "Arkiv"];
   const PO_PLACED = ["Inskickad", "PO bekräftad", "I produktion", "Skickad", "Inlevererad", "Problem"];
-  const FOTOSAMPLE_PO = [["", "– ej beställd (beställs automatiskt när PO:n läggs)"], ["Beställd", "Beställd"], ["Inne", "Inne fysiskt"], ["Ej aktuell", "Ej aktuell (restock/NOOS)"]];
+  const FOTOSAMPLE_PO = [["", "– not ordered (ordered automatically when the PO is placed)"], ["Beställd", "Beställd"], ["Inne", "Physically in"], ["Ej aktuell", "Not applicable (restock/NOOS)"]];
   const fotoPoNorm = (v) => { const x = String(v || "").trim(); if (!x) return ""; if (/^inne$|finns|inne|mottag/i.test(x)) return "Inne"; if (/ej aktuell|saknas|nej/i.test(x)) return "Ej aktuell"; return "Beställd"; };
   const BESLUT = ["Godkänd", "Ny runda", "Pausad", "Kastad"];
   const beslutNorm = (b) => (b === "Underkänd" ? "Kastad" : (b || ""));
-  const IDEA_STATUS = ["Produktidé", "Idé under utveckling"];
-  const STYLE_STATUS = ["Produktidé", "Idé under utveckling", "Sampling", "Godkänd", "PO lagd", "I produktion", "Levererad", "Pausad", "Kastad"];
-  const styleStatusNorm = (s) => (s === "Skippad" ? "Kastad" : (s || "Sampling"));
+  // Idéflödet: Carl äger idén tills den är redo. Sedan antingen till Conor (design) eller direkt till Alex.
+  // Äldre statusnamn läses som de nya (ingen data skrivs om förrän stylen sparas nästa gång).
+  const ST_IDE = "Idé ej redo för design", ST_DESIGN = "Idé redo att designa", ST_KANBEST = "Sample kan beställas";
+  const IDEA_STATUS = [ST_IDE, ST_DESIGN, ST_KANBEST];
+  const STYLE_STATUS = [ST_IDE, ST_DESIGN, ST_KANBEST, "Sampling", "Godkänd", "PO lagd", "I produktion", "Levererad", "Pausad", "Kastad"];
+  const STATUS_GAMLA = { "Skippad": "Kastad", "Produktidé": ST_IDE, "Idé under utveckling": ST_KANBEST };
+  const styleStatusNorm = (s) => STATUS_GAMLA[s] || s || "Sampling";
   const isIdea = (st) => !!st && IDEA_STATUS.includes(styleStatusNorm(st.status));
-  const TAB_DEFS = [["bibliotek", "Bibliotek"], ["samples", "Samples"], ["ref", "Ref-plagg"], ["kollektion", "Kollektion"], ["produktion", "Produktion"], ["foto", "Foto"], ["ecom", "E-com"], ["shopify", "Shopify"], ["coo", "COO"], ["tyglager", "Lager"], ["leverantorer", "Leverantörer"]];
+  const TAB_DEFS = [["bibliotek", "Ideas"], ["design", "Design"], ["samples", "Samples"], ["ref", "Ref garments"], ["kollektion", "Collection"], ["produktion", "Production"], ["foto", "Photo"], ["ecom", "E-com"], ["shopify", "Shopify"], ["coo", "Launches"], ["tyglager", "Stock"], ["leverantorer", "Suppliers"]];
   const NEW_TABS = ["coo", "shopify"]; // flikar tillagda efter att roller kan ha sparats – visas tills rollen sparas om
+  const NEW_TABS_3 = ["design"]; // tillagda i v10 (flikVersion 3)
+  // Tre områden: Produkt är själva PLM-flödet i den ordning plagget rör sig, resten ligger vid sidan av.
+  const AREA_TABS = { produkt: ["bibliotek", "design", "samples", "kollektion", "produktion", "foto", "ecom"], planering: ["coo", "leverantorer"], register: ["tyglager", "ref", "ean", "shopify", "anvandare"] };
+  const AREA_HEAD = {
+    produkt: ["Samples <em>&amp; production</em>", "The product's path: idea, design, sample, collection, order, photo and launch. Every step has an owner."],
+    planering: ["Planning <em>&amp; finance</em>", "Launches, timeline and payments. The dates here drive the product flow."],
+    register: ["Reference <em>&amp; settings</em>", "What the products draw on: fabric and trims, reference garments, the Shopify link and users."]
+  };
+  const areaOf = (t) => Object.keys(AREA_TABS).find((a) => AREA_TABS[a].includes(t)) || "produkt";
   const ALL_TABS = TAB_DEFS.map((x) => x[0]);
   const ROLE_DEFAULTS = {
     admin: { namn: "Admin", flikar: ALL_TABS, redigera: true, fast: true },
     team: { namn: "Team", flikar: ALL_TABS, redigera: true },
-    design: { namn: "Designer", flikar: ["bibliotek", "samples", "ref", "kollektion", "foto", "coo", "tyglager"], redigera: true },
-    junior: { namn: "Junior", flikar: ["bibliotek", "samples", "ref", "kollektion", "coo", "tyglager"], redigera: true },
-    extern: { namn: "Extern partner", flikar: ["bibliotek", "kollektion"], redigera: false },
+    design: { namn: "Designer", flikar: ["bibliotek", "design", "samples", "ref", "kollektion", "foto", "coo", "tyglager"], redigera: true },
+    junior: { namn: "Junior", flikar: ["bibliotek", "design", "samples", "ref", "kollektion", "coo", "tyglager"], redigera: true },
+    formgivare: { namn: "External designer", flikar: ["design"], redigera: true },
+    extern: { namn: "External partner", flikar: ["bibliotek", "kollektion"], redigera: false },
     producent: { namn: "Producent", flikar: ["produktion"], redigera: false, leverantor: true },
-    ingen: { namn: "Ingen åtkomst", flikar: [], redigera: false, fast: true }
+    ingen: { namn: "No access", flikar: [], redigera: false, fast: true }
   };
-  const ROLE_ORDER = ["admin", "team", "design", "junior", "extern", "producent", "ingen"];
+  const ROLE_ORDER = ["admin", "team", "design", "junior", "formgivare", "extern", "producent", "ingen"];
   const PROD_STATUS = ["PO lagd", "I produktion", "Levererad"];
   const STYLE_TYP = ["Nyhet", "Restock", "NOOS"];
   const TYP_LABEL = { Nyhet: "New", Restock: "Re-stock", NOOS: "NOOS" };
@@ -45,7 +59,7 @@ import * as P from "./platform.js";
   const SIZE_PRESETS = [["XS–XXL", "XS, S, M, L, XL, XXL"], ["44–58", "44, 46, 48, 50, 52, 54, 56, 58"], ["One size", "One size"]];
   const defaultSizes = (kategori) => (["Byxor", "Skrädderi"].includes(kategori) ? ["44", "46", "48", "50", "52", "54", "56", "58"] : ["Skjortor", "Stickat & Jersey", "Ytterplagg"].includes(kategori) ? ["XS", "S", "M", "L", "XL", "XXL"] : []);
   const sizesOf = (st) => (st && st.storlekar && st.storlekar.length ? st.storlekar : defaultSizes(st && st.kategori));
-  const LAGE_TEXT = { gron: "I fas", gul: "Snävt", rod: "Hinner inte", okand: "Datum saknas", ingen: "Sätt datum", paus: "Pausad", skip: "Kastad" };
+  const LAGE_TEXT = { gron: "On track", gul: "Tight", rod: "Will be late", okand: "Date missing", ingen: "Set date", paus: "Pausad", skip: "Kastad" };
   const LAGE_ORDER = { rod: 0, gul: 1, okand: 2, gron: 3, ingen: 4, klar: 5, paus: 6, skip: 7 };
   const DROP_NAMES = ["Drop 1", "Drop 2", "Drop 3", "Tailoring", "Core"];
   const KATEGORIER = ["Byxor", "Ytterplagg", "Skjortor", "Stickat & Jersey", "Accessoarer", "Skrädderi"];
@@ -61,28 +75,32 @@ import * as P from "./platform.js";
   const poStatusNorm = (x) => (x === "Utkast" ? "Placeholder" : PO_STATUS.includes(x) ? x : x ? "Inskickad" : "Placeholder");
 
   // ---------- DOM helpers ----------
+  // Engelsk visning av värden som sparas på svenska i databasen (status, kategori, plats …). Listan är tom i källan;
+  // den engelska byggen (tools/i18n.mjs) fyller i den. Datan skrivs aldrig om – bara det som visas.
+  const EN_VAL = {"Storleksset":"Size set","På plåtning":"At photo shoot","Testas":"Being tested","Utlånad":"On loan","Gåva":"Gift","Såld":"Sold","Hos leverantör":"At supplier","Arkiv":"Archive","Ej aktuell":"Not applicable","Idé ej redo för design":"Idea – not ready for design","Idé redo att designa":"Idea – ready for design","Sample kan beställas":"Sample can be ordered","Delvis slut":"Partly sold out","Utgått":"Discontinued","Rubato (eget lager)":"Rubato (own stock)","Accessoarer":"Accessories","Hög":"High","Låg":"Low","Hos fabrik":"At factory","Beställt":"Ordered","På väg":"On its way","Saknas":"Missing","Eget lager":"Own stock","Hängare":"Hanger","Planerade":"Planned","Bokad":"Booked","Planerad":"Planned","Tyg":"Fabric","Producent":"Manufacturer","Övrigt":"Other","Okända":"Unknown","Nej":"No","Ja":"Yes","Ej betalt":"Not paid","Betalt":"Paid","Skickat":"Sent","Hos leverantören":"At the supplier","På väg tillbaka":"On its way back","Förlorat":"Lost","Mottagen":"Received","Beställd":"Ordered","Skickad":"Shipped","Returnerad":"Returned","Fotosample":"Photo sample","Produktionssample":"Production sample","Fotohäng":"Photo rail","Inskickad":"Submitted","PO bekräftad":"PO confirmed","I produktion":"In production","Inlevererad":"Delivered","Inne":"In","Godkänd":"Approved","Ny runda":"New round","Pausad":"Paused","Kastad":"Dropped","Underkänd":"Rejected","Skippad":"Dropped","PO lagd":"PO placed","Levererad":"Delivered","Nyhet":"New","Slut":"Sold out","I lager":"In stock","Förbrukad":"Used up","Byxor":"Trousers","Skrädderi":"Tailoring","Skjortor":"Shirts","Stickat & Jersey":"Knitwear & Jersey","Ytterplagg":"Outerwear","Avbruten":"Cancelled","Utkast":"Draft","Inställd":"Cancelled","Fotade":"Shot","Retuscherade":"Retouched","Publicerade":"Published","Fotad":"Shot","Klar":"Done","Utan säsong":"No season","Okategoriserat":"Uncategorised","Bekräftade":"Confirmed","Att förhandla":"To negotiate","Tillbaka hos Rubato":"Back at Rubato","Pågår":"Ongoing","Förfallet":"Overdue","Senare":"Later","Löst":"Resolved","Öppen":"Open","beräknad":"estimated","Produktidé":"Idea – not ready for design","Idé under utveckling":"Sample can be ordered"};
+  const tv = (s) => { if (typeof s !== "string" || !s) return s; const v = EN_VAL[s]; if (v != null) return v; if (s.includes(" · ")) return s.split(" · ").map(tv).join(" · "); const m = /^(.*\D) (\d+[a-z]?)$/.exec(s); return m && EN_VAL[m[1]] != null ? EN_VAL[m[1]] + " " + m[2] : s; };
   function h(tag, props, ...kids) {
     const e = document.createElement(tag);
     if (props) for (const [k, v] of Object.entries(props)) {
       if (v == null || v === false) continue;
       if (k === "class") e.className = v;
-      else if (k === "text") e.textContent = v;
+      else if (k === "text") e.textContent = tv(v);
       else if (k === "dataset") Object.assign(e.dataset, v);
       else if (k.startsWith("on") && typeof v === "function") e.addEventListener(k.slice(2), v);
       else if (typeof v !== "string" && k in e) e[k] = v;
-      else e.setAttribute(k, v === true ? "" : String(v));
+      else e.setAttribute(k, v === true ? "" : (k === "title" || k === "placeholder" || k === "aria-label") ? tv(String(v)) : String(v));
     }
-    for (const k of kids.flat(2)) if (k != null && k !== false) e.append(k.nodeType ? k : String(k));
+    for (const k of kids.flat(2)) if (k != null && k !== false) e.append(k.nodeType ? k : tv(String(k)));
     return e;
   }
   function inp(id, value, attrs) { const e = h("input", Object.assign({ id, type: "text" }, attrs || {})); e.value = value == null ? "" : String(value); return e; }
   function area(id, value, placeholder) { const e = h("textarea", { id, placeholder: placeholder || null }); e.value = value == null ? "" : String(value); return e; }
   function selectEl(id, options, value) {
     const e = h("select", { id });
-    for (const o of options) { const [v, l] = Array.isArray(o) ? o : [o, o]; e.add(new Option(l, v)); }
+    for (const o of options) { const [v, l] = Array.isArray(o) ? o : [o, o]; e.add(new Option(tv(l), v)); }
     const val = value == null ? "" : String(value);
     const has = [...e.options].some((o) => o.value === val);
-    if (!has && val !== "") e.add(new Option(val, val));
+    if (!has && val !== "") e.add(new Option(tv(val), val));
     e.value = has || val !== "" ? val : (e.options[0] ? e.options[0].value : "");
     return e;
   }
@@ -95,15 +113,15 @@ import * as P from "./platform.js";
   const chip = (t, cls) => h("span", { class: "chip " + (cls || ""), text: t });
   const statusPill = (s) => h("span", { class: "pill s-" + (s || "x"), text: s || "–" });
   // Problem-status i listan är klickbar: visar vad problemet är utan att öppna hela samplen.
-  const problemPill = (items) => { const ps = items.filter((x) => x.status === "Problem"); if (!ps.length) return statusPill(items[0] && items[0].status); return h("button", { class: "pill s-Problem clickable", type: "button", text: "Problem" + (ps.length > 1 ? " ×" + ps.length : ""), title: "Visa problemet", onclick: (e) => { e.stopPropagation(); openProblem(ps); } }); };
+  const problemPill = (items) => { const ps = items.filter((x) => x.status === "Problem"); if (!ps.length) return statusPill(items[0] && items[0].status); return h("button", { class: "pill s-Problem clickable", type: "button", text: "Problem" + (ps.length > 1 ? " ×" + ps.length : ""), title: "Show the problem", onclick: (e) => { e.stopPropagation(); openProblem(ps); } }); };
   function openProblem(ps) {
     const body = ps.map((x) => h("section", { class: "panel", style: "margin-bottom:10px" },
       h("h3", { class: "sec-title", text: styleName(x) + " · " + (fargText(x.farg) || x._id) + " · " + (x.version || "") }),
-      h("p", { style: "font-size:16px;margin:6px 0", text: x.kommentar || "Inget problem beskrivet – öppna samplen och skriv vad som är fel." }),
-      x.andringar ? h("p", { class: "sub", text: "Ändringar: " + x.andringar }) : null,
-      h("p", { class: "sub", text: [x._id, x.leverantor, isISO(x.bestalld) ? "beställd " + fmtDate(x.bestalld) : "", expected(x) ? "väntas " + fmtDate(expected(x)) : ""].filter(Boolean).join(" · ") }),
-      h("div", { class: "quick" }, h("button", { class: "btn small", type: "button", text: "Öppna sample", onclick: () => openSample(x._id) }), canWrite && db ? h("button", { class: "btn small", type: "button", text: "Problemet löst → Beställd", onclick: async () => { await write("samples", x._id, { status: "Beställd", andrad: new Date().toISOString(), logg: (x.logg || []).concat(logEntry("Problem markerat som löst")) }); closeSheet(); } }) : null)));
-    openSheet({ tag: "Problem", title: ps.length === 1 ? styleName(ps[0]) : ps.length + " samples med problem", sub: "", body, foot: footButtons({}) });
+      h("p", { style: "font-size:16px;margin:6px 0", text: x.kommentar || "No problem described – open the sample and write what is wrong." }),
+      x.andringar ? h("p", { class: "sub", text: "Changes: " + x.andringar }) : null,
+      h("p", { class: "sub", text: [x._id, x.leverantor, isISO(x.bestalld) ? "ordered " + fmtDate(x.bestalld) : "", expected(x) ? "expected " + fmtDate(expected(x)) : ""].filter(Boolean).join(" · ") }),
+      h("div", { class: "quick" }, h("button", { class: "btn small", type: "button", text: "Open sample", onclick: () => openSample(x._id) }), canWrite && db ? h("button", { class: "btn small", type: "button", text: "Problem solved → Ordered", onclick: async () => { await write("samples", x._id, { status: "Beställd", andrad: new Date().toISOString(), logg: (x.logg || []).concat(logEntry("Problem marked as solved")) }); closeSheet(); } }) : null)));
+    openSheet({ tag: "Problem", title: ps.length === 1 ? styleName(ps[0]) : ps.length + " samples with problems", sub: "", body, foot: footButtons({}) });
   }
   const lagePill = (p) => h("span", { class: "lage l-" + p.lage, text: p.lage === "klar" ? p.label : (LAGE_TEXT[p.lage] || p.label) });
   function table(cols) {
@@ -131,10 +149,10 @@ import * as P from "./platform.js";
   const daysBetween = (a, b) => Math.round((toUTC(b) - toUTC(a)) / 864e5);
   const diffDays = (iso) => daysBetween(todayISO(), iso);
   const fmtDate = (iso) => { if (!isISO(iso)) return ""; const [y, m, d] = iso.split("-").map(Number); return d + " " + MONTHS[m - 1] + (y !== new Date().getFullYear() ? " " + String(y).slice(2) : ""); };
-  const fmtDays = (n) => (n < 0 ? (-n) + " d sen" : n === 0 ? "idag" : n + " d kvar");
+  const fmtDays = (n) => (n < 0 ? (-n) + " d late" : n === 0 ? "today" : n + " d left");
 
   // ---------- state ----------
-  const D = { samples: [], styles: [], tyger: [], lager: [], lev: [], drops: [], po: [], budget: [], ref: [], pool: null, logg: [], settings: { utvarderingDagar: 7, standardFrakt: 7, marginalGul: 14 }, anvandare: [], narvaro: [], roller: { roller: {}, standardRoll: "team" }, handelser: [], shopify: [] };
+  const D = { flaggor: [], samples: [], styles: [], tyger: [], lager: [], lev: [], drops: [], po: [], budget: [], ref: [], pool: null, logg: [], settings: { utvarderingDagar: 7, standardFrakt: 7, marginalGul: 14 }, anvandare: [], narvaro: [], roller: { roller: {}, standardRoll: "team" }, handelser: [], shopify: [] };
   const loaded = new Set();
   let db = null, user = null, downloads = null, assets = null, myId = null, myName = "", canWrite = true, canAdmin = false, platformWrite = true, isGuest = false;
   const ME = { roll: "team", flikar: ALL_TABS, redigera: true, leverantor: "" };
@@ -186,12 +204,12 @@ import * as P from "./platform.js";
     return xs.length ? { avg: Math.round(xs.reduce((a, b) => a + b, 0) / xs.length), n: xs.length } : null;
   }
   const styleOf = (s) => (s ? byId(D.styles, s.styleId) : null);
-  const styleName = (s) => { const st = styleOf(s); return st ? st.namn : (s.produkt || "Utan style"); };
+  const styleName = (s) => { const st = styleOf(s); return st ? st.namn : (s.produkt || "No style"); };
   const tygOf = (s) => (s ? byId(D.tyger, s.tygId) : null);
   const tygName = (s) => { const t = tygOf(s); return t ? t.namn : (s.material || ""); };
   const seasonOf = (s) => { if (s.sasong) return s.sasong; const st = styleOf(s); return (st && st.sasong) || ""; };
   const isArchived = (s) => { if (["Kastad", "Pausad"].includes(beslutNorm(s.beslut))) return true; const st = styleOf(s); return !!st && ["Pausad", "Kastad"].includes(styleStatusNorm(st.status)); };
-  const platsText = (s) => (!s.platsTyp ? "" : s.platsTyp === "Hängare" ? "Hängare " + (s.hangare || "?") : s.platsTyp === "Fotohäng" ? "Fotohäng" + (s.hangare ? " " + s.hangare : "") : s.platsTyp);
+  const platsText = (s) => (!s.platsTyp ? "" : s.platsTyp === "Hängare" ? "Hanger " + (s.hangare || "?") : s.platsTyp === "Fotohäng" ? "Fotohäng" + (s.hangare ? " " + s.hangare : "") : s.platsTyp);
   const versionRank = (v) => { const m = /^Proto (\d+)/.exec(v || ""); if (m) return Number(m[1]); return { Fotosample: 50, Produktionssample: 60, Storleksset: 70 }[v] ?? 99; };
   const nextVersion = (v) => { const m = /^Proto (\d+)/.exec(v || ""); return m ? "Proto " + (Number(m[1]) + 1) : (v || "Proto 1"); };
   function samplesOfStyle(id) {
@@ -250,24 +268,24 @@ import * as P from "./platform.js";
   }
   function launchImpactText(sasong, dropNamn, nyLansering) {
     const i = launchImpact(sasong, dropNamn, nyLansering); if (!i) return "";
-    return "I lager senast " + (i.eget ? "ligger kvar på " + fmtDate(i.klart) + " (eget datum på droppen)" : "blir " + fmtDate(i.klart)) + ". " +
-      (i.sena.length ? i.sena.length + " PO hinner inte: " + i.sena.map((x) => (x.po.nr || x.po._id) + " (+" + x.dagar + " d)").join(", ") + "." : i.pos.length ? "Alla " + i.pos.length + " PO hinner." : "Inga öppna PO i droppen.") +
-      (i.utanEta.length ? " " + i.utanEta.length + " PO saknar ETA." : "");
+    return "In stock by " + (i.eget ? "stays at " + fmtDate(i.klart) + " (the drop has its own date)" : "becomes " + fmtDate(i.klart)) + ". " +
+      (i.sena.length ? i.sena.length + " PO will be late: " + i.sena.map((x) => (x.po.nr || x.po._id) + " (+" + x.dagar + " d)").join(", ") + "." : i.pos.length ? "All " + i.pos.length + " PO are on time." : "No open PO in the drop.") +
+      (i.utanEta.length ? " " + i.utanEta.length + " PO have no ETA." : "");
   }
   // Rullistor i stället för fritext, så att säsong och drop alltid pekar på registret.
   function seasonSelect(id, value, emptyLabel) {
     const y = new Date().getFullYear() % 100; const gen = []; for (let i = y - 1; i <= y + 2; i++) gen.push("SS" + i, "AW" + i);
     const seen = new Set();
     const all = gen.concat(D.drops.map((d) => d.sasong), D.styles.map((s) => s.sasong), D.po.map((p) => p.sasong)).map((x) => String(x || "").trim()).filter((x) => { const k = norm(x); if (!x || seen.has(k)) return false; seen.add(k); return true; }).sort((a, b) => seasonRank(a) - seasonRank(b) || a.localeCompare(b, "sv"));
-    return selectEl(id, [["", emptyLabel || "– Ingen säsong –"]].concat(all.map((x) => [x, x])), value || "");
+    return selectEl(id, [["", emptyLabel || "– No season –"]].concat(all.map((x) => [x, x])), value || "");
   }
   function dropSelect(id, value, seasonEl) {
     const e = h("select", { id });
     const names = () => dropsOfSeason(seasonEl.value).map((d) => d.namn);
     e.refill = (keep) => {
       const ns = names(); const hit = ns.find((n) => norm(n) === norm(keep));
-      e.replaceChildren(new Option("– Ingen drop, bara säsong –", ""), ...ns.map((n) => new Option(n, n)));
-      if (keep && !hit) e.add(new Option(keep + " (finns inte som drop i " + (seasonEl.value || "säsongen") + ")", keep));
+      e.replaceChildren(new Option("– No drop, season only –", ""), ...ns.map((n) => new Option(n, n)));
+      if (keep && !hit) e.add(new Option(keep + " (not a drop in " + (seasonEl.value || "the season") + ")", keep));
       e.value = hit || keep || "";
     };
     e.refill(String(value || "").trim());
@@ -282,10 +300,10 @@ import * as P from "./platform.js";
     return d && isISO(d.klartSenast) ? { date: d.klartSenast, from: "drop" } : null;
   }
   const nextEta = (st) => { const etas = (Array.isArray(st.produktion) ? st.produktion : []).filter((r) => r.status !== "Inlevererad" && isISO(r.eta)).map((r) => r.eta).sort(); return etas[0] || null; };
-  const lageCell = (st, p) => { if (p.lage === "klar") { const e = nextEta(st); return e ? [h("span", { class: "sub", text: "ETA lager " }), h("span", { class: "mono", text: fmtDate(e) })] : [h("span", { class: "muted", text: "–" })]; } return [lagePill(p)]; };
+  const lageCell = (st, p) => { if (p.lage === "klar") { const e = nextEta(st); return e ? [h("span", { class: "sub", text: "ETA warehouse " }), h("span", { class: "mono", text: fmtDate(e) })] : [h("span", { class: "muted", text: "–" })]; } return [lagePill(p)]; };
   const fmtM = (n) => Number(n).toLocaleString("sv-SE", { maximumFractionDigits: 1 });
-  const fmtSEK = (n) => (n == null || isNaN(n) ? "–" : Math.round(Number(n)).toLocaleString("sv-SE") + " kr");
-  const fmtTkr = (n) => (n == null || isNaN(n) ? "–" : (Math.round(Number(n) / 1000)).toLocaleString("sv-SE") + " tkr");
+  const fmtSEK = (n) => (n == null || isNaN(n) ? "–" : Math.round(Number(n)).toLocaleString("sv-SE") + " SEK");
+  const fmtTkr = (n) => (n == null || isNaN(n) ? "–" : (Math.round(Number(n) / 1000)).toLocaleString("sv-SE") + " k SEK");
   // Styckpris på raden, annars stylens inköpspris (originalvaluta × dagens kurs) – så att restocks räknas rätt utan att priset skrivs om.
   const lineUnit = (r) => { const p = num(r.styckpris); if (p != null) return { pris: p, kalla: "rad" }; const st = r.styleId ? byId(D.styles, r.styleId) : null; if (st && num(st.inkopspris) && fx(st.inkopsValuta || "SEK")) return { pris: num(st.inkopspris) * fx(st.inkopsValuta || "SEK"), kalla: "style" }; return null; };
   const lineCost = (r) => { const a = num(r.antal), u = lineUnit(r), t = num(r.tygkostnad) || 0; return a == null || !u ? (num(r.kostnad) ?? null) : a * (u.pris + t); };
@@ -293,7 +311,16 @@ import * as P from "./platform.js";
   const poUnits = (po) => (po.rader || []).reduce((a, r) => a + (num(r.antal) || 0), 0);
   const poSeason = (po) => po.sasong || "";
   const poLinesOf = (styleId) => { const out = []; for (const po of D.po) for (const r of po.rader || []) if (r.styleId === styleId) out.push({ po, r }); return out; };
-  const poStatusPill = (po) => { const x = poStatusNorm(po.status); return h("span", { class: "pill ps-" + slug(x), text: x }); };
+  // Försenad leverans: ETA lager ligger efter droppens "I lager senast". Räknas fram, sparas inte – försvinner när ETA ändras eller PO:n är inlevererad.
+  function poLate(p) {
+    if (!p || ["Avbruten", "Inlevererad"].includes(poStatusNorm(p.status))) return null;
+    const eta = poEta(p); if (!eta) return null;
+    const d = (p._drops && p._drops.length ? p._drops : [p.drop]).map((n) => dropOf({ sasong: p.sasong, drop: n })).filter((x) => x && isISO(x.klartSenast)).sort((a, b) => a.klartSenast.localeCompare(b.klartSenast))[0];
+    if (!d || eta <= d.klartSenast) return null;
+    return { eta, klart: d.klartSenast, dagar: daysBetween(d.klartSenast, eta), drop: d };
+  }
+  const poLateText = (p, l) => "ETA warehouse " + fmtDate(l.eta) + " – " + l.dagar + (l.dagar === 1 ? " day" : " days") + " after in stock by " + fmtDate(l.klart) + " (" + [l.drop.sasong, l.drop.namn].filter(Boolean).join(" ") + ")";
+  const poStatusPill = (po) => { const x = poStatusNorm(po.status); const pill = h("span", { class: "pill ps-" + slug(x), text: x }); const l = poLate(po); return l ? h("span", { style: "display:inline-flex;gap:6px;align-items:center" }, pill, h("span", { class: "pill s-Problem", title: poLateText(po, l), text: "Problem · late " + l.dagar + " d" })) : pill; };
   const poEta = (po) => (isISO(po.etaLager) ? po.etaLager : isISO(po.bekraftadEx) ? po.bekraftadEx : isISO(po.planeradEx) ? po.planeradEx : null);
   const poIsLate = (po) => { const e = poEta(po); return !!e && PO_OPEN.includes(poStatusNorm(po.status)) && diffDays(e) < 0; };
   const budgetOf = (season) => D.budget.find((b) => norm(b._id) === norm(season) || norm(b.sasong) === norm(season)) || null;
@@ -311,12 +338,12 @@ import * as P from "./platform.js";
     return n;
   }
   const lotsOf = (tygId) => (tygId ? D.lager.filter((l) => l.tygId === tygId) : []);
-  const lotName = (l) => { const t = tygOf(l); return t ? t.namn : (l.tygNamn || "Okänt tyg"); };
+  const lotName = (l) => { const t = tygOf(l); return t ? t.namn : (l.tygNamn || "Unknown fabric"); };
   // Lager: partier är antingen tyg (meter) eller trims (antal st). Partier utan typ är tyg.
   const isTrims = (l) => !!l && l.typ === "trims";
   const lotQty = (l) => num(isTrims(l) ? l.antal : l.meter);
-  const fmtSt = (n) => Math.round(Number(n)).toLocaleString("sv-SE") + " st";
-  const fmtQty = (l, n) => (isTrims(l) ? fmtSt(n) : "ca " + fmtM(n) + " m");
+  const fmtSt = (n) => Math.round(Number(n)).toLocaleString("sv-SE") + " pcs";
+  const fmtQty = (l, n) => (isTrims(l) ? fmtSt(n) : "approx. " + fmtM(n) + " m");
   const reservedName = (l) => { const st = l.reserveradFor ? byId(D.styles, l.reserveradFor) : null; return st ? st.namn : ""; };
   function stockSummary(tygId) {
     const lots = lotsOf(tygId).filter((l) => l.status === "I lager");
@@ -325,10 +352,10 @@ import * as P from "./platform.js";
   }
   function stockText(tygId) {
     const s = stockSummary(tygId);
-    if (!s.lots.length) return s.bestallda ? s.bestallda + (s.bestallda === 1 ? " parti beställt" : " partier beställda") : "";
+    if (!s.lots.length) return s.bestallda ? s.bestallda + (s.bestallda === 1 ? " batch ordered" : " batches ordered") : "";
     const parts = [];
-    if (s.known) parts.push("ca " + fmtM(s.meter) + " m");
-    if (s.unknown) parts.push(s.unknown + (s.unknown === 1 ? " parti utan meter" : " partier utan meter"));
+    if (s.known) parts.push("approx. " + fmtM(s.meter) + " m");
+    if (s.unknown) parts.push(s.unknown + (s.unknown === 1 ? " batch without metres" : " batches without metres"));
     return parts.join(" + ") + (s.platser.length ? " · " + s.platser.join(", ") : "");
   }
 
@@ -341,7 +368,7 @@ import * as P from "./platform.js";
   const kategoriOf = (s) => styleKategori(styleOf(s));
   const imgUrl = (id) => (/^https?:\/\//.test(String(id)) ? String(id) : P.assets.url(id));
   const shopUrl = (st) => (st && st.shopifyBild && st.shopifyBild.url) || "";
-  const shopTitle = (st) => (st && st.shopifyBild ? (st.shopifyBild.titel || "Shopify") + (st.shopifyBild.likhet === "liknande" ? " (liknande produkt)" : "") : "");
+  const shopTitle = (st) => (st && st.shopifyBild ? (st.shopifyBild.titel || "Shopify") + (st.shopifyBild.likhet === "liknande" ? " (similar product)" : "") : "");
   // Färgnamn -> ungefärlig färg för chipsens prick. Först träff vinner; okänd färg blir grå.
   const COLOUR_MAP = [
     [/signal red|röd|\bred\b|persimmon|rust|brick|wine|burgundy|bordeaux/, "#b5362f"],
@@ -411,16 +438,16 @@ import * as P from "./platform.js";
     const n = shopTodo().length;
     if (extImg !== false || !n || !["bibliotek", "kollektion", "produktion", "foto"].includes(UI.tab)) { el.hidden = true; el.replaceChildren(); return; }
     el.hidden = false;
-    el.replaceChildren(h("span", { text: "Bilddiagnos: webbläsaren får inte visa bilder direkt från Shopify i den här appen (" + n + " styles berörs). " }),
-      canWrite && assets ? h("button", { class: "linkish", type: "button", text: "Hämta Shopify-bilder till appen", onclick: importShopifyImages }) : h("span", { text: "Be Elliot köra \"Hämta Shopify-bilder\"." }),
-      h("span", { class: "sub", text: " Fungerar inte det heller blockeras även hämtningen – då behöver bilderna läggas in via Claude (se chatten)." }));
+    el.replaceChildren(h("span", { text: "Image check: the browser is not allowed to show images straight from Shopify in this app (" + n + " styles affected). " }),
+      canWrite && assets ? h("button", { class: "linkish", type: "button", text: "Fetch Shopify images into the app", onclick: importShopifyImages }) : h("span", { text: "Ask Elliot to run \"Fetch Shopify images\"." }),
+      h("span", { class: "sub", text: " If that does not work either, the fetch is blocked as well – the images then have to be added through Claude (see the chat)." }));
   }
   async function importShopifyImages() {
-    if (!assets) { toast("Kräver Contributor-behörighet eller mer."); return; }
+    if (!assets) { toast("Requires Contributor access or higher."); return; }
     const todo = shopTodo();
-    if (!todo.length) { toast("Alla Shopify-bilder är redan hämtade till appen."); return; }
+    if (!todo.length) { toast("All Shopify images have already been fetched into the app."); return; }
     let ok = 0, fail = 0; const failed = [];
-    banner("Hämtar " + todo.length + " bilder från Shopify till appen …");
+    banner("Fetching " + todo.length + " images from Shopify into the app …");
     for (const s0 of todo) {
       try {
         const u = new URL(shopUrl(s0)); u.searchParams.set("width", "1200");
@@ -432,16 +459,16 @@ import * as P from "./platform.js";
         const r = await assets.upload(small, small.type ? undefined : { type: "image/jpeg" });
         const cur = byId(D.styles, s0._id) || s0;
         const now = new Date().toISOString();
-        if (await write("styles", s0._id, { bilder: docImages(cur).concat([r.id]), bildId: cur.bildId || r.id, andrad: now, logg: (cur.logg || []).concat(logEntry("Shopify-bild hämtad till appen: " + shopTitle(cur))) })) ok++; else { fail++; failed.push(s0.namn); }
+        if (await write("styles", s0._id, { bilder: docImages(cur).concat([r.id]), bildId: cur.bildId || r.id, andrad: now, logg: (cur.logg || []).concat(logEntry("Shopify image fetched into the app: " + shopTitle(cur))) })) ok++; else { fail++; failed.push(s0.namn); }
       } catch (e) { fail++; failed.push(s0.namn); }
-      banner("Hämtar bilder … " + (ok + fail) + " av " + todo.length);
+      banner("Fetching images … " + (ok + fail) + " of " + todo.length);
     }
-    banner(fail ? "Kunde inte hämta " + fail + " av " + todo.length + " bilder (" + failed.slice(0, 4).join(", ") + (failed.length > 4 ? " …" : "") + "). Appens säkerhetsregler stoppar hämtning från cdn.shopify.com – bilderna måste då läggas in via Claude." : "");
+    banner(fail ? "Could not fetch " + fail + " of " + todo.length + " images (" + failed.slice(0, 4).join(", ") + (failed.length > 4 ? " …" : "") + "). The app's security rules block fetching from cdn.shopify.com – the images then have to be added through Claude." : "");
     if (ok) extImg = null;
-    toast(ok + (ok === 1 ? " bild hämtad" : " bilder hämtade") + (fail ? ", " + fail + " misslyckades" : ""));
+    toast(ok + (ok === 1 ? " image fetched" : " images fetched") + (fail ? ", " + fail + " failed" : ""));
     renderActions();
   }
-  const imageSource = (st) => { const img = styleImage(st); if (!img) return ""; if (img === shopUrl(st)) return "Shopify"; if (samplesOfStyle(st._id).some((x) => sampleImages(x).includes(img))) return "Sample"; if (st.bildAuto && img === st.bildId) return st.farger && st.farger.length > 1 && (st.bilder || []).length > 1 ? "Färgöversikt" : "Shopify"; const g = st.grundId ? byId(D.styles, st.grundId) : null; if (g && (img === g.bildId || docImages(g)[0] === img || img === shopUrl(g))) return "Grundstyle"; return ""; };
+  const imageSource = (st) => { const img = styleImage(st); if (!img) return ""; if (img === shopUrl(st)) return "Shopify"; if (samplesOfStyle(st._id).some((x) => sampleImages(x).includes(img))) return "Sample"; if (st.bildAuto && img === st.bildId) return st.farger && st.farger.length > 1 && (st.bilder || []).length > 1 ? "Colour overview" : "Shopify"; const g = st.grundId ? byId(D.styles, st.grundId) : null; if (g && (img === g.bildId || docImages(g)[0] === img || img === shopUrl(g))) return "Base style"; return ""; };
   const styleAllImages = (st) => uniq(docImages(st).concat(st.bildId ? [st.bildId] : [], st._id ? samplesOfStyle(st._id).flatMap(sampleImages) : [], shopUrl(st) ? [shopUrl(st)] : []));
   const grundOf = (st) => (st && st.grundId ? byId(D.styles, st.grundId) : null);
   const variantsOf = (id) => D.styles.filter((s) => s.grundId === id).sort((a, b) => seasonRank(b.sasong) - seasonRank(a.sasong) || (a.namn || "").localeCompare(b.namn || "", "sv"));
@@ -453,17 +480,17 @@ import * as P from "./platform.js";
   function fotoState(st) {
     const xs = fotoSamplesOf(st);
     const got = xs.filter((x) => x.status === "Mottagen");
-    if (got.length) { const onRack = got.find((x) => x.platsTyp === "Fotohäng") || got[0]; return { key: "finns", label: "Inne fysiskt" + (platsText(onRack) ? " · " + platsText(onRack) : ""), sample: onRack, all: got, onRack: got.some((x) => x.platsTyp === "Fotohäng") }; }
+    if (got.length) { const onRack = got.find((x) => x.platsTyp === "Fotohäng") || got[0]; return { key: "finns", label: "Physically in" + (platsText(onRack) ? " · " + platsText(onRack) : ""), sample: onRack, all: got, onRack: got.some((x) => x.platsTyp === "Fotohäng") }; }
     const wait = xs.filter(isWaiting);
-    if (wait.length) { const e = wait.map(expected).filter(Boolean).sort()[0]; return { key: "vantas", label: "Beställd" + (e ? " · väntas " + fmtDate(e) : " · datum saknas"), sample: wait[0], all: wait }; }
+    if (wait.length) { const e = wait.map(expected).filter(Boolean).sort()[0]; return { key: "vantas", label: "Beställd" + (e ? " · expected " + fmtDate(e) : " · date missing"), sample: wait[0], all: wait }; }
     const pos = poLinesOf(st._id).map((x) => x.po).filter((p) => !PO_DRAFT.includes(poStatusNorm(p.status)));
     const po = pos.find((p) => fotoPoNorm(p.fotosample) === "Inne");
-    if (po) return { key: "finns", label: "Inne fysiskt (enligt PO " + (po.nr || "") + ")", sample: null, all: [], onRack: false };
+    if (po) return { key: "finns", label: "Physically in (per PO " + (po.nr || "") + ")", sample: null, all: [], onRack: false };
     const po2 = pos.find((p) => fotoPoNorm(p.fotosample) === "Beställd");
-    if (po2) return { key: "vantas", label: "Beställd via PO " + (po2.nr || "") + (isISO(po2.fotosampleLeverans) ? " · väntas " + fmtDate(po2.fotosampleLeverans) : ""), sample: null, all: [] };
+    if (po2) return { key: "vantas", label: "Ordered via PO " + (po2.nr || "") + (isISO(po2.fotosampleLeverans) ? " · expected " + fmtDate(po2.fotosampleLeverans) : ""), sample: null, all: [] };
     const any = samplesOfStyle(st._id).find((x) => x.status === "Mottagen" && beslutNorm(x.beslut) === "Godkänd" && !isArchived(x));
-    if (any) return { key: "godkand", label: "Ej beställd · godkänd sample kan fotas", sample: any, all: [] };
-    return { key: "saknas", label: "Ej beställd", sample: null, all: [] };
+    if (any) return { key: "godkand", label: "Not ordered · an approved sample can be photographed", sample: any, all: [] };
+    return { key: "saknas", label: "Not ordered", sample: null, all: [] };
   }
   const hasPlacedPo = (st) => poLinesOf(st._id).some((x) => PO_PLACED.includes(poStatusNorm(x.po.status)));
   // Beställer fotosample för en style: en sample per färg på lagda PO-rader (annars en), version Fotosample.
@@ -480,10 +507,10 @@ import * as P from "./platform.js";
     const made = [];
     for (const farg of (colours.length ? colours : [""])) {
       const nid = await freshId("samples", D.samples, "S", 3);
-      const body = { id: nid, styleId: st._id, produkt: st.namn, version: "Fotosample", leverantor: lev, farg, tygId: st.tygId || (last ? last.tygId : null) || null, material: "", storlek: "", sasong: st.sasong || (p0 && p0.sasong) || "", prisBelopp: null, prisValuta: null, status: "Beställd", bestalld: start, ledtid: sl, forvantad: forv, mottagen: null, tracking: "", p1Skickad: null, p2Skickad: null, platsTyp: "", hangare: "", platsNotering: "", beslut: "", utvarderad: false, markt: false, mattGodkanda: null, mattKommentar: "", andringar: "", kommentar: p0 ? "Fotosample till PO " + (p0.nr || p0._id) : "Fotosample", bilder: [], fotosampleViaPo: p0 ? (p0.nr || p0._id) : "", logg: [logEntry("Fotosample beställd" + (p0 ? " via PO " + (p0.nr || p0._id) : "") + (who ? " – initierad av " + who : ""))], andrad: new Date().toISOString() };
+      const body = { id: nid, styleId: st._id, produkt: st.namn, version: "Fotosample", leverantor: lev, farg, tygId: st.tygId || (last ? last.tygId : null) || null, material: "", storlek: "", sasong: st.sasong || (p0 && p0.sasong) || "", prisBelopp: null, prisValuta: null, status: "Beställd", bestalld: start, ledtid: sl, forvantad: forv, mottagen: null, tracking: "", p1Skickad: null, p2Skickad: null, platsTyp: "", hangare: "", platsNotering: "", beslut: "", utvarderad: false, markt: false, mattGodkanda: null, mattKommentar: "", andringar: "", kommentar: p0 ? "Photo sample for PO " + (p0.nr || p0._id) : "Fotosample", bilder: [], fotosampleViaPo: p0 ? (p0.nr || p0._id) : "", logg: [logEntry("Photo sample ordered" + (p0 ? " via PO " + (p0.nr || p0._id) : "") + (who ? " – initiated by " + who : ""))], andrad: new Date().toISOString() };
       if (await create("samples", nid, body)) { if (!byId(D.samples, nid)) D.samples.push(Object.assign({}, body, { _id: nid })); made.push(nid); }
     }
-    if (made.length) await write("styles", st._id, { andrad: new Date().toISOString(), logg: (st.logg || []).concat(logEntry("Fotosample beställd: " + made.join(", ") + (p0 ? " (PO " + (p0.nr || p0._id) + ")" : ""))) });
+    if (made.length) await write("styles", st._id, { andrad: new Date().toISOString(), logg: (st.logg || []).concat(logEntry("Photo sample ordered: " + made.join(", ") + (p0 ? " (PO " + (p0.nr || p0._id) + ")" : ""))) });
     return made;
   }
   // Bilder: allt webbläsaren kan läsa plus HEIC/HEIF (iPhone). Allt som inte redan är en liten JPG/PNG/WebP/GIF
@@ -521,14 +548,14 @@ import * as P from "./platform.js";
     return blob || (webSafe ? file : null);
   }
   async function uploadImages(files) {
-    if (!assets) { toast("Bilduppladdning kräver Editor-behörighet på appen."); return []; }
+    if (!assets) { toast("Uploading images requires Editor access to the app."); return []; }
     const ids = [];
     for (const f of files) {
       let blob = null;
       try { blob = await shrinkImage(f, 1600); } catch (e) {}
-      if (!blob) { toast("Kunde inte läsa " + (f.name || "filen") + " – ladda upp en bild (JPG, PNG, HEIC, WebP …)."); continue; }
+      if (!blob) { toast("Could not read " + (f.name || "the file") + " – upload an image (JPG, PNG, HEIC, WebP …)."); continue; }
       try { const r = await assets.upload(blob, blob.type ? undefined : { type: "image/jpeg" }); ids.push(r.id); }
-      catch (e) { const c = e && e.code; toast(c === "too_large" ? "Bilden är för stor (max 20 MB)." : c === "unsupported_type" ? "Filtypen stöds inte – använd JPG, PNG, HEIC eller WebP." : c === "quota_or_state" ? "Bildlagringen är full." : "Kunde inte ladda upp bilden."); }
+      catch (e) { const c = e && e.code; toast(c === "too_large" ? "The image is too large (max 20 MB)." : c === "unsupported_type" ? "File type not supported – use JPG, PNG, HEIC or WebP." : c === "quota_or_state" ? "Image storage is full." : "Could not upload the image."); }
     }
     return ids;
   }
@@ -537,8 +564,8 @@ import * as P from "./platform.js";
     const g = h("div", { class: "gallery" });
     for (const id of ids) {
       const fig = h("figure", { class: "thumb" + (opts.hero === id ? " hero" : "") }, h("img", { src: imgUrl(id), alt: "", loading: "lazy", onclick: () => openLightbox(ids, id) }));
-      if (opts.onRemove) fig.append(h("button", { class: "thumb-x", type: "button", title: "Ta bort bild", "aria-label": "Ta bort bild", text: "×", onclick: () => opts.onRemove(id) }));
-      if (opts.onHero) fig.append(h("button", { class: "thumb-hero", type: "button", text: opts.hero === id ? "Huvudbild" : "Gör till huvudbild", onclick: () => opts.onHero(id) }));
+      if (opts.onRemove) fig.append(h("button", { class: "thumb-x", type: "button", title: "Remove image", "aria-label": "Remove image", text: "×", onclick: () => opts.onRemove(id) }));
+      if (opts.onHero) fig.append(h("button", { class: "thumb-hero", type: "button", text: opts.hero === id ? "Main image" : "Make main image", onclick: () => opts.onHero(id) }));
       g.append(fig);
     }
     return g;
@@ -556,8 +583,8 @@ import * as P from "./platform.js";
   }
   function imageDrop(onFiles, label) {
     const input = h("input", { type: "file", accept: IMG_ACCEPT, multiple: true, hidden: true, onchange: () => { if (input.files.length) onFiles([...input.files]); input.value = ""; } });
-    const btn = h("button", { class: "btn small", type: "button", text: label || "+ Lägg till bilder", onclick: () => input.click() });
-    const zone = h("div", { class: "dropzone" }, btn, h("span", { class: "hint", text: "eller dra hit bilder – JPG, PNG, HEIC, skärmdumpar" }), input);
+    const btn = h("button", { class: "btn small", type: "button", text: label || "+ Add images", onclick: () => input.click() });
+    const zone = h("div", { class: "dropzone" }, btn, h("span", { class: "hint", text: "or drag images here – JPG, PNG, HEIC, screenshots" }), input);
     zone._onFiles = onFiles;
     return zone;
   }
@@ -584,21 +611,21 @@ import * as P from "./platform.js";
     e.preventDefault();
     const z = dropZoneFor(e); setDragZone(null);
     const all = [...e.dataTransfer.files];
-    if (!z) { if (all.length) toast("Släpp bilden på en bildruta (\"+ Lägg till bilder\")."); return; }
+    if (!z) { if (all.length) toast("Drop the image on an image box (\"+ Add images\")."); return; }
     const fs = all.filter(isImageFile);
-    if (fs.length) z._onFiles(fs); else if (all.length) toast("Bara bilder kan läggas till här (JPG, PNG, HEIC, WebP …).");
+    if (fs.length) z._onFiles(fs); else if (all.length) toast("Only images can be added here (JPG, PNG, HEIC, WebP …).");
   });
   // Generic image block for a document (style, drop, ref-plagg, tyg). For a new, unsaved document
   // the ids are kept in opts.pending and saved together with the document.
   // Tom bildruta i Bibliotek/Kollektion: kategori + vad som saknas, och uppladdning direkt från kortet (skiss, referens eller foto).
   function emptyTile(s, xs) {
-    const what = isIdea(s) ? "Skiss eller referensbild saknas" : (xs && xs.length ? "Foto på samplen saknas" : "Ingen sample än – lägg en skiss");
+    const what = isIdea(s) ? "Sketch or reference image missing" : (xs && xs.length ? "Photo of the sample missing" : "No sample yet – add a sketch");
     const box = h("div", { class: "noimg tile-empty" }, h("span", { class: "kat", text: styleKategori(s) || typLabel(s) || "" }), h("span", { class: "what", text: what }));
     if (assets && canWrite && db) {
-      const addFiles = async (files) => { if (!files.length) return; toast("Laddar upp " + files.length + (files.length === 1 ? " bild …" : " bilder …")); const ids = await uploadImages(files); if (!ids.length) return; const cur = byId(D.styles, s._id) || s; await write("styles", s._id, { bilder: (cur.bilder || []).concat(ids), bildId: cur.bildId && !cur.bildAuto ? cur.bildId : ids[0], bildAuto: false, andrad: new Date().toISOString(), logg: (cur.logg || []).concat(logEntry(ids.length + (ids.length === 1 ? " bild" : " bilder") + " uppladdad från Bibliotek")) }); toast("Bild sparad"); };
+      const addFiles = async (files) => { if (!files.length) return; toast("Uploading " + files.length + (files.length === 1 ? " image …" : " images …")); const ids = await uploadImages(files); if (!ids.length) return; const cur = byId(D.styles, s._id) || s; await write("styles", s._id, { bilder: (cur.bilder || []).concat(ids), bildId: cur.bildId && !cur.bildAuto ? cur.bildId : ids[0], bildAuto: false, andrad: new Date().toISOString(), logg: (cur.logg || []).concat(logEntry(ids.length + (ids.length === 1 ? " image" : " images") + " uploaded from Ideas")) }); toast("Image saved"); };
       const input = h("input", { type: "file", accept: IMG_ACCEPT, multiple: true, hidden: true, onchange: () => { const files = [...input.files]; input.value = ""; addFiles(files); } });
       box._onFiles = addFiles;
-      box.append(h("button", { class: "btn small", type: "button", text: "+ Lägg till bild", onclick: (e) => { e.stopPropagation(); input.click(); } }), input);
+      box.append(h("button", { class: "btn small", type: "button", text: "+ Add image", onclick: (e) => { e.stopPropagation(); input.click(); } }), input);
       box.addEventListener("click", (e) => e.stopPropagation());
     }
     return box;
@@ -609,24 +636,24 @@ import * as P from "./platform.js";
     function render() {
       const cur = opts.current ? opts.current() : null;
       const ids = opts.pending ? opts.pending.slice() : docImages(cur);
-      sec.replaceChildren(h("h3", { class: "sec-title", text: (opts.title || "Bilder") + (ids.length ? " (" + ids.length + ")" : "") }));
+      sec.replaceChildren(h("h3", { class: "sec-title", text: (opts.title || "Images") + (ids.length ? " (" + ids.length + ")" : "") }));
       if (ids.length) sec.append(gallery(ids, { hero: opts.hero ? opts.hero() : null, onHero: ro || !opts.onHero ? null : opts.onHero, onRemove: ro ? null : async (id) => {
-        if (!confirm("Ta bort bilden för alla?")) return;
+        if (!confirm("Remove the image for everyone?")) return;
         if (opts.pending) { opts.pending.splice(opts.pending.indexOf(id), 1); render(); try { if (assets) await assets.delete(id); } catch (e) {} return; }
         const left = ids.filter((x) => x !== id);
-        if (await opts.save(left, "Bild borttagen")) { try { if (assets && opts.deleteAsset !== false) await assets.delete(id); } catch (e) {} render(); }
+        if (await opts.save(left, "Image removed")) { try { if (assets && opts.deleteAsset !== false) await assets.delete(id); } catch (e) {} render(); }
       } }));
-      else sec.append(h("p", { class: "hint", text: opts.empty || "Inga bilder ännu." }));
+      else sec.append(h("p", { class: "hint", text: opts.empty || "No images yet." }));
       if (!ro && assets) sec.append(imageDrop(async (files) => {
-        const busy = h("p", { class: "hint", text: "Laddar upp " + files.length + " bild(er) …" }); sec.append(busy);
+        const busy = h("p", { class: "hint", text: "Uploading " + files.length + " image(s) …" }); sec.append(busy);
         const got = await uploadImages(files);
         if (!got.length) { busy.remove(); return; }
         if (opts.pending) { opts.pending.push(...got); render(); return; }
         const now = opts.pending ? ids : docImages(opts.current());
-        await opts.save(now.concat(got), got.length + (got.length === 1 ? " bild tillagd" : " bilder tillagda"));
+        await opts.save(now.concat(got), got.length + (got.length === 1 ? " image added" : " images added"));
         render();
       }, opts.addLabel));
-      else if (!ro && !assets) sec.append(h("p", { class: "hint", text: "Bilder kan bara laddas upp av den som har Contributor-behörighet eller mer på appen." }));
+      else if (!ro && !assets) sec.append(h("p", { class: "hint", text: "Images can only be uploaded by someone with Contributor access or higher to the app." }));
     }
     render();
     sec.render = render;
@@ -640,7 +667,7 @@ import * as P from "./platform.js";
     if (b) out.push(chip(b === "Godkänd" ? "Godkänd" : b, "b-" + slug(b)));
     if (isArchived(s)) out.push(chip("Arkiv", "b-arkiv"));
     const st = styleOf(s);
-    if (st) { const ss = styleStatusNorm(st.status); if (PROD_STATUS.includes(ss) || ss === "Pausad" || ss === "Kastad") out.push(h("span", { class: "pill st-" + slug(ss), text: ss === "Pausad" ? "Style pausad" : ss === "Kastad" ? "Style kastad" : ss })); }
+    if (st) { const ss = styleStatusNorm(st.status); if (PROD_STATUS.includes(ss) || ss === "Pausad" || ss === "Kastad") out.push(h("span", { class: "pill st-" + slug(ss), text: ss === "Pausad" ? "Style paused" : ss === "Kastad" ? "Style dropped" : ss })); }
     return out;
   }
 
@@ -653,13 +680,13 @@ import * as P from "./platform.js";
     if (PROD_STATUS.includes(status)) return Object.assign(r, { lage: "klar", label: status });
     r.utv = num(D.settings.utvarderingDagar) ?? 7;
     r.frakt = fraktFor(st.leverantor);
-    r.prod = levNum(st.leverantor, "produktionstid");
-    r.buff = levNum(st.leverantor, "buffert") || 0;
+    r.prod = levNum(st.leverantor, "production time");
+    r.buff = levNum(st.leverantor, "buffer") || 0;
     r.sl = levNum(st.leverantor, "sampleLedtid");
     const dl = deadlineOf(st);
-    if (!dl) return Object.assign(r, { note: st.sasong && st.drop ? "Sätt \"I lager senast\" på stylen eller på " + st.sasong + " " + st.drop + "." : "Sätt \"I lager senast\" för att få en tidsplan." });
+    if (!dl) return Object.assign(r, { note: st.sasong && st.drop ? "Set \"In stock by\" on the style or on " + st.sasong + " " + st.drop + "." : "Set \"In stock by\" to get a timeline." });
     r.deadline = dl.date; r.deadlineFrom = dl.from;
-    if (r.prod == null) return Object.assign(r, { lage: "okand", note: "Produktionstid saknas för " + (st.leverantor || "leverantören") + "." });
+    if (r.prod == null) return Object.assign(r, { lage: "okand", note: "Production time missing for " + (st.leverantor || "the supplier") + "." });
     r.ex = addDays(dl.date, -r.frakt);
     r.po = addDays(r.ex, -(r.prod + r.buff));
     r.inne = addDays(r.po, -r.utv);
@@ -672,22 +699,22 @@ import * as P from "./platform.js";
     let lage;
     if (!needsSample || xs.some((x) => x.beslut === "Godkänd")) {
       lage = grade(r.poDays);
-      r.note = r.poDays < 0 ? "PO-datumet " + fmtDate(r.po) + " har passerat." : "Lägg PO senast " + fmtDate(r.po) + ".";
+      r.note = r.poDays < 0 ? "The PO date " + fmtDate(r.po) + " has passed." : "Place the PO by " + fmtDate(r.po) + ".";
     } else if (!xs.length) {
       const ref = r.best || r.inne; const m = diffDays(ref);
       lage = grade(m);
-      r.note = (r.best ? "Ingen sample ännu. Beställ senast " + fmtDate(r.best) : "Ingen sample ännu. Den behövs senast " + fmtDate(r.inne)) + ".";
+      r.note = (r.best ? "No sample yet. Order by " + fmtDate(r.best) : "No sample yet. It is needed by " + fmtDate(r.inne)) + ".";
     } else {
       let arrival = null;
       for (const x of xs) {
         const a = x.status === "Mottagen" ? todayISO() : expected(x);
         if (a && (!arrival || a < arrival)) arrival = a;
       }
-      if (!arrival) { lage = "okand"; r.note = "Ingen sample har leveransdatum. Den behövs senast " + fmtDate(r.inne) + "."; }
+      if (!arrival) { lage = "okand"; r.note = "No sample has a delivery date. It is needed by " + fmtDate(r.inne) + "."; }
       else {
         const m = daysBetween(arrival, r.inne);
         lage = grade(m);
-        r.note = (arrival === todayISO() ? "Sample inne" : "Sample väntas " + fmtDate(arrival)) + ", behövs senast " + fmtDate(r.inne) + ".";
+        r.note = (arrival === todayISO() ? "Sample in" : "Sample expected " + fmtDate(arrival)) + ", needed by " + fmtDate(r.inne) + ".";
       }
       const pg = grade(r.poDays);
       const sev = { gron: 0, okand: 1, gul: 2, rod: 3 };
@@ -712,16 +739,16 @@ import * as P from "./platform.js";
   function serial(key, fn) { const prev = chains.get(key) || Promise.resolve(); const next = prev.catch(() => {}).then(fn); chains.set(key, next); return next; }
   function writeError(e) {
     const code = e && e.code;
-    if (code === "invalid_argument") { platformWrite = false; canWrite = false; applyWriteMode(); toast("Du har bara läsbehörighet här."); }
-    else if (code === "quota_exceeded") toast("Databasen är full. Ta bort gamla poster och försök igen.");
-    else toast("Kunde inte spara. Försök igen om en stund.");
+    if (code === "invalid_argument") { platformWrite = false; canWrite = false; applyWriteMode(); toast("You only have read access here."); }
+    else if (code === "quota_exceeded") toast("The database is full. Remove old records and try again.");
+    else toast("Could not save. Try again in a moment.");
   }
   async function write(coll, id, patch) {
-    if (!db) { toast("Databasen är inte tillgänglig i den här vyn."); return false; }
+    if (!db) { toast("The database is not available in this view."); return false; }
     try { await serial(coll + "/" + id, () => db.collection(coll).doc(id).update(patch)); return true; } catch (e) { writeError(e); return false; }
   }
   async function create(coll, id, body) {
-    if (!db) { toast("Databasen är inte tillgänglig i den här vyn."); return false; }
+    if (!db) { toast("The database is not available in this view."); return false; }
     try { await serial(coll + "/" + id, () => db.collection(coll).doc(id).set(body)); return true; } catch (e) { writeError(e); return false; }
   }
   async function remove(coll, id) {
@@ -743,7 +770,7 @@ import * as P from "./platform.js";
     if (k === "mattFran") return refName(v);
     if (k === "shopifyBild") return v && v.url ? v.url : "";
     if (k === "tygId") { const t = byId(D.tyger, v); return t ? t.namn : String(v); }
-    if (typeof v === "boolean") return v ? "ja" : "nej";
+    if (typeof v === "boolean") return v ? "yes" : "no";
     if (isISO(v)) return fmtDate(v);
     return String(v);
   }
@@ -753,30 +780,30 @@ import * as P from "./platform.js";
       if (!(k in labels)) continue;
       const a = showVal(k, before[k]), b = showVal(k, after[k]);
       if (a === b) continue;
-      if (k === "status") out.push("Status: " + (a || "–") + " → " + (b || "–"));
-      else if (k === "kommentar" || k === "andringar") out.push(labels[k] + " ändrad");
-      else if (k === "utvarderad") out.push(after[k] ? "Markerad utvärderad" : "Utvärdering borttagen");
-      else out.push(labels[k] + ": " + (b || "tom"));
+      if (k === "status") out.push("Status: " + (tv(a) || "–") + " → " + (tv(b) || "–"));
+      else if (k === "kommentar" || k === "andringar") out.push(labels[k] + " changed");
+      else if (k === "utvarderad") out.push(after[k] ? "Marked as evaluated" : "Evaluation removed");
+      else out.push(labels[k] + ": " + (b || "empty"));
     }
     return out;
   }
   async function renderLogInto(ul, items) {
     const list = (items || []).slice().reverse();
-    if (!list.length) { ul.replaceChildren(h("li", { class: "sub", text: "Inga händelser ännu." })); return; }
+    if (!list.length) { ul.replaceChildren(h("li", { class: "sub", text: "No events yet." })); return; }
     const ids = [...new Set(list.map((i) => i.av).filter(Boolean))];
     let ps = {};
     try { if (user && ids.length) ps = await user.profiles(ids); } catch (e) {}
     ul.replaceChildren(...list.map((i) => {
       const d = new Date(i.t);
       const when = isNaN(d) ? "" : d.getDate() + " " + MONTHS[d.getMonth()] + " " + String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0");
-      const who = i.av ? ((ps[i.av] && ps[i.av].name) || "Någon i teamet") : "Import";
+      const who = i.av ? ((ps[i.av] && ps[i.av].name) || "Someone in the team") : "Import";
       return h("li", null, h("time", { text: when }), h("div", null, h("div", { text: i.text || "" }), h("div", { class: "who", text: who })));
     }));
   }
 
   // ---------- strip / seg / filter widgets ----------
   function makeStrip(defs, state, onChange) {
-    const el = h("section", { class: "strip", "aria-label": "Lägesbild" });
+    const el = h("section", { class: "strip", "aria-label": "Overview" });
     el.style.setProperty("--cols", String(defs.length));
     const parts = {};
     for (const d of defs) {
@@ -801,7 +828,7 @@ import * as P from "./platform.js";
       if (!items.length) return;
       const cur = state[key];
       s.replaceChildren(new Option(first, ""));
-      items.forEach((v) => s.add(new Option(v, v)));
+      items.forEach((v) => s.add(new Option(tv(v), v)));
       if (items.includes(cur)) s.value = cur; else { s.value = ""; state[key] = ""; }
     } };
   }
@@ -812,28 +839,28 @@ import * as P from "./platform.js";
   }
 
   // ---------- idéer överlämnade till Alex ----------
-  const ideaInbox = () => D.styles.filter((s) => styleStatusNorm(s.status) === "Idé under utveckling").sort((a, b) => String((b.overlamnad && b.overlamnad.t) || b.andrad || "").localeCompare(String((a.overlamnad && a.overlamnad.t) || a.andrad || "")));
+  const ideaInbox = () => D.styles.filter((s) => styleStatusNorm(s.status) === ST_KANBEST).sort((a, b) => String((b.overlamnad && b.overlamnad.t) || b.andrad || "").localeCompare(String((a.overlamnad && a.overlamnad.t) || a.andrad || "")));
   function fillNames(nodes) {
     const ids = uniq(nodes.map((n) => n.dataset.uid));
     if (!user || !ids.length) return;
     user.profiles(ids).then((ps) => nodes.forEach((n) => { const p = ps[n.dataset.uid]; if (p && p.name) n.textContent = p.name; })).catch(() => {});
   }
   function inboxCard(items, full) {
-    const card = h("section", { class: "card inbox" }, h("div", { class: "card-head" }, h("h3", { text: "Idéer att sampla" }), h("span", { class: "sub", text: items.length + (items.length === 1 ? " idé överlämnad från Bibliotek" : " idéer överlämnade från Bibliotek") + " – beställ en sample så flyttar stylen till Sampling." })));
-    if (!items.length) { card.append(h("p", { class: "hint", style: "padding:12px 16px", text: "Inga idéer väntar just nu. Carl skickar idéer hit från Bibliotek." })); return card; }
-    const { t, tb } = table([["Idé"], ["Säsong"], ["Tyg"], ["Från"], ["", "num"]]);
+    const card = h("section", { class: "card inbox" }, h("div", { class: "card-head" }, h("h3", { text: "Sample kan beställas" }), h("span", { class: "sub", text: items.length + (items.length === 1 ? " style ready for a sample" : " styles ready for a sample") + " – from Design or straight from Carl. Order a sample and the style moves to Sampling." })));
+    if (!items.length) { card.append(h("p", { class: "hint", style: "padding:12px 16px", text: "Nothing is waiting right now. Styles arrive here when Conor has finished the design, or straight from Carl." })); return card; }
+    const { t, tb } = table([["Idea"], ["Season"], ["Tyg"], ["From"], ["", "num"]]);
     const who = [];
     for (const s of items) {
       const img = styleImage(s);
-      const by = h("span", { class: "who", dataset: { uid: (s.overlamnad && s.overlamnad.av) || "" }, text: "Teamet" }); if (by.dataset.uid) who.push(by);
+      const by = h("span", { class: "who", dataset: { uid: (s.overlamnad && s.overlamnad.av) || "" }, text: "The team" }); if (by.dataset.uid) who.push(by);
       const when = s.overlamnad && s.overlamnad.t ? fmtDate(String(s.overlamnad.t).slice(0, 10)) : "";
       tb.append(h("tr", { tabIndex: 0, dataset: { style: s._id } },
         td("", "c-main", h("div", { style: "display:flex;gap:10px;align-items:flex-start" }, img ? h("img", { class: "rowthumb", style: "margin-top:0", src: imgUrl(img), alt: "", loading: "lazy", onclick: (e) => { e.stopPropagation(); openLightbox(styleAllImages(s), img); } }) : null,
-          h("div", null, h("div", { class: "prod", text: s.namn }), h("div", { class: "sub", text: [styleKategori(s), s.leverantor, grundOf(s) ? "variant av " + grundOf(s).namn : ""].filter(Boolean).join(" · ") }), s.beskrivning ? h("div", { class: "note", text: s.beskrivning }) : null))),
-        td("Säsong", "mono", [s.sasong, s.drop].filter(Boolean).join(" · ")),
+          h("div", null, h("div", { class: "prod", text: s.namn }), h("div", { class: "sub", text: [styleKategori(s), s.leverantor, grundOf(s) ? "variant of " + grundOf(s).namn : ""].filter(Boolean).join(" · ") }), s.beskrivning ? h("div", { class: "note", text: s.beskrivning }) : null))),
+        td("Season", "mono", [s.sasong, s.drop].filter(Boolean).join(" · ")),
         td("Tyg", null, styleTyg(s) || h("span", { class: "muted", text: "–" })),
-        td("Från", null, h("div", null, by, when ? h("div", { class: "sub mono", text: when }) : null)),
-        td("", "num", canWrite && db ? h("div", { style: "display:flex;gap:6px;justify-content:flex-end;flex-wrap:wrap" }, h("button", { class: "btn small", type: "button", text: "Öppna idé", onclick: (e) => { e.stopPropagation(); openStyle(s._id); } }), h("button", { class: "btn small primary", type: "button", text: "Beställ sample", onclick: (e) => { e.stopPropagation(); openSample(null, { styleId: s._id, leverantor: s.leverantor || "", version: "Proto 1", tygId: s.tygId || null }); } })) : null)));
+        td("From", null, h("div", null, by, when ? h("div", { class: "sub mono", text: when }) : null)),
+        td("", "num", canWrite && db ? h("div", { style: "display:flex;gap:6px;justify-content:flex-end;flex-wrap:wrap" }, h("button", { class: "btn small", type: "button", text: "Open idea", onclick: (e) => { e.stopPropagation(); openStyle(s._id); } }), h("button", { class: "btn small primary", type: "button", text: "Order sample", onclick: (e) => { e.stopPropagation(); openSample(null, { styleId: s._id, leverantor: s.leverantor || "", version: "Proto 1", tygId: s.tygId || null }); } })) : null)));
     }
     tb.addEventListener("click", (e) => { if (e.target.closest("input, select, button, img")) return; const tr = e.target.closest("tr[data-style]"); if (tr) openStyle(tr.dataset.style); });
     tb.addEventListener("keydown", (e) => { if (e.key !== "Enter") return; const tr = e.target.closest("tr[data-style]"); if (tr) openStyle(tr.dataset.style); });
@@ -848,36 +875,36 @@ import * as P from "./platform.js";
       const st = UI.samples;
       const upd = () => { this.update(); persist(); };
       this.strip = makeStrip([
-        { key: "ideer", label: "Idéer att sampla" },
-        { key: "waiting", label: "Väntar på leverans" },
-        { key: "late", label: "Försenade", cls: "t-late" },
+        { key: "ideer", label: "Ideas to sample" },
+        { key: "waiting", label: "Awaiting delivery" },
+        { key: "late", label: "Late", cls: "t-late" },
         { key: "problem", label: "Problem", cls: "t-late" },
-        { key: "remind", label: "Påminn nu", cls: "t-warn" },
-        { key: "evaluate", label: "Att utvärdera" },
-        { key: "mark", label: "Omärkta", cls: "t-late" },
-        { key: "measure", label: "Ej mätta", cls: "t-warn" },
-        { key: "place", label: "Saknar plats" }
+        { key: "remind", label: "Remind now", cls: "t-warn" },
+        { key: "evaluate", label: "To evaluate" },
+        { key: "mark", label: "Unlabelled", cls: "t-late" },
+        { key: "measure", label: "Not measured", cls: "t-warn" },
+        { key: "place", label: "No location" }
       ], st, () => { this.seg.sync(); upd(); });
-      const q = searchBox("q_samples", "Sök style, tyg, färg, ID, hängare …", st, () => this.update());
-      this.fLev = filterSelect("f_s_lev", "Alla leverantörer", st, "lev", upd);
-      this.fSeason = filterSelect("f_s_season", "Alla säsonger", st, "season", upd);
-      this.fPlats = filterSelect("f_s_plats", "Alla platser", st, "plats", upd);
-      this.seg = makeSeg([["aktiva", "Aktiva"], ["Beställd", "Beställd"], ["Skickad", "Skickad"], ["Problem", "Problem"], ["Mottagen", "Mottagen"], ["hangare", "Kollektionshängare"], ["produktion", "Gått till produktion"], ["arkiv", "Arkiv"], ["alla", "Alla"]], st, "status", upd);
-      const grp = selectEl("f_s_group", [["kategori", "Gruppera per kategori"], ["style", "Gruppera per style"], ["sasong", "Gruppera per säsong"], ["lev", "Gruppera per leverantör"], ["none", "Ingen gruppering"]], st.group);
+      const q = searchBox("q_samples", "Search style, fabric, colour, ID, hanger …", st, () => this.update());
+      this.fLev = filterSelect("f_s_lev", "All suppliers", st, "lev", upd);
+      this.fSeason = filterSelect("f_s_season", "All seasons", st, "season", upd);
+      this.fPlats = filterSelect("f_s_plats", "All locations", st, "plats", upd);
+      this.seg = makeSeg([["aktiva", "Active"], ["Beställd", "Beställd"], ["Skickad", "Skickad"], ["Problem", "Problem"], ["Mottagen", "Mottagen"], ["hangare", "Collection rail"], ["produktion", "Gone to production"], ["arkiv", "Arkiv"], ["alla", "All"]], st, "status", upd);
+      const grp = selectEl("f_s_group", [["kategori", "Group by category"], ["style", "Group by style"], ["sasong", "Group by season"], ["lev", "Group by supplier"], ["none", "No grouping"]], st.group);
       grp.addEventListener("change", () => { st.group = grp.value; upd(); });
       this.count = h("span", { class: "count" });
       this.selCount = h("span");
       this.tray = h("div", { class: "tray", hidden: true }, this.selCount,
-        h("button", { class: "btn small primary", type: "button", text: "Skriv ut etiketter", onclick: () => openLabels([...selected]) }),
-        h("button", { class: "btn small", type: "button", text: "Rensa val", onclick: () => { selected.clear(); this.update(); } }));
+        h("button", { class: "btn small primary", type: "button", text: "Print labels", onclick: () => openLabels([...selected]) }),
+        h("button", { class: "btn small", type: "button", text: "Clear selection", onclick: () => { selected.clear(); this.update(); } }));
       this.allBox = h("input", { type: "checkbox", id: "s_all", onchange: () => { (this.visible || []).forEach((s) => (this.allBox.checked ? selected.add(s._id) : selected.delete(s._id))); this.update(); } });
       this.cards = h("div", { class: "cards" });
       this.empty = h("div", { class: "empty", hidden: true });
       const open = (e) => { if (e.target.closest("input, button")) return; const tr = e.target.closest("tr[data-id], tr[data-group]"); if (!tr) return; if (tr.dataset.id) openSample(tr.dataset.id); else { const k = tr.dataset.group; if (expanded.has(k)) expanded.delete(k); else expanded.add(k); this.update(); } };
       this.cards.addEventListener("click", open);
       this.cards.addEventListener("keydown", (e) => { if (e.key === "Enter") open(e); });
-      root.append(h("p", { class: "lede", text: "Samples för produkter som inte är färdiga än. När produkten har gått till produktion flyttar dess samples till \"Gått till produktion\". Pausade och kastade samples ligger i Arkiv och kan plockas upp igen. Tilltänkt säsong sätts på varje sample." }),
-        this.strip.el, this.bar = h("section", { class: "filters sticky-bar", "aria-label": "Filter" }, q, this.fLev.el, this.fSeason.el, this.fPlats.el, this.seg.el, grp, h("label", { class: "checkline" }, this.allBox, "Välj alla synliga"), this.count), this.tray, this.cards, this.empty);
+      root.append(h("p", { class: "lede", text: "Samples for products that are not finished yet. Once the product has gone to production its samples move to \"Gone to production\". Paused and dropped samples sit in the Archive and can be picked up again. The intended season is set on each sample." }),
+        this.strip.el, this.bar = h("section", { class: "filters sticky-bar", "aria-label": "Filter" }, q, this.fLev.el, this.fSeason.el, this.fPlats.el, this.seg.el, grp, h("label", { class: "checkline" }, this.allBox, "Select all visible"), this.count), this.tray, this.cards, this.empty);
       const setStick = () => { if (this.bar) document.documentElement.style.setProperty("--stick", (this.bar.offsetHeight - 2) + "px"); };
       setStick(); window.addEventListener("resize", setStick); setTimeout(setStick, 300);
     },
@@ -921,12 +948,12 @@ import * as P from "./platform.js";
       this.fSeason.fill(uniq(D.samples.map(seasonOf)));
       this.fPlats.fill(PLATSER);
       const list = this.filtered();
-      const keyOf = st.group === "kategori" ? (s) => kategoriOf(s) || "Utan kategori" : st.group === "style" ? (s) => styleName(s) + " · " + (s.leverantor || "") : st.group === "lev" ? (s) => s.leverantor || "Utan leverantör" : st.group === "sasong" ? (s) => seasonOf(s) || "Utan säsong" : () => "";
+      const keyOf = st.group === "kategori" ? (s) => kategoriOf(s) || "No category" : st.group === "style" ? (s) => styleName(s) + " · " + (s.leverantor || "") : st.group === "lev" ? (s) => s.leverantor || "No supplier" : st.group === "sasong" ? (s) => seasonOf(s) || "Utan säsong" : () => "";
       const katRank = (k) => { const i = KATEGORIER.indexOf(k); return i < 0 ? 99 : i; };
       const seasonKeyRank = (k) => (k === "Utan säsong" ? 999 : -seasonRank(k));
       list.sort((a, b) => (st.group === "kategori" ? katRank(keyOf(a)) - katRank(keyOf(b)) : st.group === "sasong" ? seasonKeyRank(keyOf(a)) - seasonKeyRank(keyOf(b)) : 0) || keyOf(a).localeCompare(keyOf(b), "sv") || styleName(a).localeCompare(styleName(b), "sv") || versionRank(a.version) - versionRank(b.version) || (expected(a) || "9999").localeCompare(expected(b) || "9999") || a._id.localeCompare(b._id));
       this.visible = list;
-      const cols = [["", "c-check"], ["ID"], ["Style"], ["Version"], ["Hängare"], ["Leverantör"], ["Färg"], ["Status"], ["Utfall"], ["Förväntad"], ["Kommentar"]];
+      const cols = [["", "c-check"], ["ID"], ["Style"], ["Version"], ["Hängare"], ["Supplier"], ["Colour"], ["Status"], ["Outcome"], ["Expected"], ["Comment"]];
       const groups = new Map();
       for (const s of list) { const k = keyOf(s); if (!groups.has(k)) groups.set(k, []); groups.get(k).push(s); }
       const cards = [];
@@ -934,7 +961,7 @@ import * as P from "./platform.js";
         const card = h("section", { class: "card" });
         if (st.group !== "none") {
           const head = h("div", { class: "card-head" }, h("h3", { text: k }), h("span", { class: "sub", text: items.length + (items.length === 1 ? " sample" : " samples") + (st.group === "kategori" ? " · " + uniq(items.map(styleName)).length + " styles" : "") }));
-          if (st.group === "style" && items[0].styleId && byId(D.styles, items[0].styleId)) { const sid = items[0].styleId; head.append(h("button", { class: "linkish", type: "button", text: "Öppna style", onclick: () => openStyle(sid) })); }
+          if (st.group === "style" && items[0].styleId && byId(D.styles, items[0].styleId)) { const sid = items[0].styleId; head.append(h("button", { class: "linkish", type: "button", text: "Open style", onclick: () => openStyle(sid) })); }
           card.append(head);
         }
         const { t, tb } = table(cols);
@@ -943,7 +970,7 @@ import * as P from "./platform.js";
         for (const s of items) { const gk = groupKeyOf(s); if (!grouped.has(gk)) grouped.set(gk, []); grouped.get(gk).push(s); }
         for (const gItems of grouped.values()) {
           const s = gItems[0];
-          if (st.group === "kategori" || st.group === "lev") { const sn = styleName(s); if (sn !== lastStyle) { lastStyle = sn; const cell = h("td", { colSpan: 11, text: sn + (s.leverantor && st.group !== "lev" ? " · " + s.leverantor : "") }); if (s.styleId && byId(D.styles, s.styleId)) { const sid = s.styleId; cell.append(h("button", { class: "linkish", type: "button", text: "Öppna style", onclick: () => openStyle(sid) })); } tb.append(h("tr", { class: "group" }, cell)); } }
+          if (st.group === "kategori" || st.group === "lev") { const sn = styleName(s); if (sn !== lastStyle) { lastStyle = sn; const cell = h("td", { colSpan: 11, text: sn + (s.leverantor && st.group !== "lev" ? " · " + s.leverantor : "") }); if (s.styleId && byId(D.styles, s.styleId)) { const sid = s.styleId; cell.append(h("button", { class: "linkish", type: "button", text: "Open style", onclick: () => openStyle(sid) })); } tb.append(h("tr", { class: "group" }, cell)); } }
           if (gItems.length > 1 && !expanded.has(groupKeyOf(s))) tb.append(sampleGroupRow(gItems));
           else for (const x of gItems) tb.append(sampleRow(x));
         }
@@ -957,62 +984,62 @@ import * as P from "./platform.js";
       this.empty.hidden = list.length > 0 || st.status === "hangare" || st.view === "ideer";
       if (!list.length) {
         this.empty.replaceChildren(...(!loaded.has("samples")
-          ? [h("strong", { text: db ? "Laddar samples …" : "Inga samples att visa" }), h("span", { text: db ? "Listan fylls i så fort databasen svarar." : "Öppna sidan via länken i Claude." })]
-          : st.status === "arkiv" && !st.q && !st.lev && !st.season && !st.plats ? [h("strong", { text: "Arkivet är tomt" }), h("span", { text: "Pausa eller kasta en sample så hamnar den här – och kan plockas upp igen när som helst." })]
-          : D.samples.length ? [h("strong", { text: "Inget matchar filtret" }), h("span", { text: "Byt status, leverantör eller rensa sökningen." })]
-          : [h("strong", { text: "Inga samples ännu" }), h("span", { text: "Lägg till den första med \"+ Ny sample\"." })]));
+          ? [h("strong", { text: db ? "Loading samples …" : "No samples to show" }), h("span", { text: db ? "The list fills in as soon as the database responds." : "Open the page through the link in Claude." })]
+          : st.status === "arkiv" && !st.q && !st.lev && !st.season && !st.plats ? [h("strong", { text: "The archive is empty" }), h("span", { text: "Pause or drop a sample and it ends up here – and can be picked up again at any time." })]
+          : D.samples.length ? [h("strong", { text: "Nothing matches the filter" }), h("span", { text: "Change status or supplier, or clear the search." })]
+          : [h("strong", { text: "No samples yet" }), h("span", { text: "Add the first one with \"+ New sample\"." })]));
       }
-      this.count.textContent = list.length + " av " + D.samples.length + " samples";
+      this.count.textContent = list.length + " of " + D.samples.length + " samples";
       this.tray.hidden = selected.size === 0;
-      this.selCount.textContent = selected.size + (selected.size === 1 ? " vald" : " valda");
+      this.selCount.textContent = selected.size + (selected.size === 1 ? " selected" : " selected");
       this.allBox.checked = list.length > 0 && list.every((s) => selected.has(s._id));
     }
   };
   function expCell(s) {
     const out = []; const e = expected(s);
     if (s.status === "Mottagen") {
-      out.push(h("div", { class: "mono", text: s.mottagen ? "mott. " + fmtDate(s.mottagen) : e ? fmtDate(e) : "mottagen" }));
-      if (toEvaluate(s)) out.push(h("span", { class: "flag eval", text: "Utvärdera" }));
+      out.push(h("div", { class: "mono", text: s.mottagen ? "rec. " + fmtDate(s.mottagen) : e ? fmtDate(e) : "received" }));
+      if (toEvaluate(s)) out.push(h("span", { class: "flag eval", text: "Evaluate" }));
     } else if (e) {
       out.push(h("div", { class: "mono", text: fmtDate(e) }));
-      if (isWaiting(s)) { const d = diffDays(e); out.push(h("div", { class: "days " + (d < 0 ? "late" : d <= 7 ? "soon" : ""), text: d < 0 ? (-d) + " d sen" : d === 0 ? "idag" : "om " + d + " d" })); }
-      const r = remindDue(s); if (r) out.push(h("span", { class: "flag", text: "Påminnelse " + r }));
+      if (isWaiting(s)) { const d = diffDays(e); out.push(h("div", { class: "days " + (d < 0 ? "late" : d <= 7 ? "soon" : ""), text: d < 0 ? (-d) + " d late" : d === 0 ? "today" : "in " + d + " d" })); }
+      const r = remindDue(s); if (r) out.push(h("span", { class: "flag", text: "Reminder " + r }));
     } else out.push(h("div", { class: "mono muted", text: "TBA" }));
     return out;
   }
   function sampleRow(s) {
     const tr = h("tr", { tabIndex: 0, dataset: { id: s._id } });
-    const box = h("input", { type: "checkbox", "aria-label": "Välj " + s._id, checked: selected.has(s._id), onchange: () => { if (box.checked) selected.add(s._id); else selected.delete(s._id); SamplesView.update(); } });
+    const box = h("input", { type: "checkbox", "aria-label": "Select " + s._id, checked: selected.has(s._id), onchange: () => { if (box.checked) selected.add(s._id); else selected.delete(s._id); SamplesView.update(); } });
     const t = tygOf(s);
     const subBits = [];
-    if (tygName(s)) subBits.push(h("span", { class: t && t.status === "Slut" ? "late-text" : null, text: tygName(s) + (t && t.status === "Slut" ? " (slut)" : "") }));
-    if (s.storlek) subBits.push(h("span", { text: (subBits.length ? " · " : "") + "stl " + s.storlek }));
+    if (tygName(s)) subBits.push(h("span", { class: t && t.status === "Slut" ? "late-text" : null, text: tygName(s) + (t && t.status === "Slut" ? " (sold out)" : "") }));
+    if (s.storlek) subBits.push(h("span", { text: (subBits.length ? " · " : "") + "size " + s.storlek }));
     const stn = styleOf(s);
-    if (s.sasong && (!stn || norm(stn.sasong) !== norm(s.sasong))) subBits.push(h("span", { class: "place", text: (subBits.length ? " · " : "") + "tilltänkt " + s.sasong }));
+    if (s.sasong && (!stn || norm(stn.sasong) !== norm(s.sasong))) subBits.push(h("span", { class: "place", text: (subBits.length ? " · " : "") + "intended " + s.sasong }));
     else if (stn && stn.sasong) subBits.push(h("span", { text: (subBits.length ? " · " : "") + stn.sasong + (stn.drop ? " " + stn.drop : "") }));
-    else if (s.sasong) subBits.push(h("span", { text: (subBits.length ? " · " : "") + "tilltänkt " + s.sasong }));
+    else if (s.sasong) subBits.push(h("span", { text: (subBits.length ? " · " : "") + "intended " + s.sasong }));
     const pl = platsText(s);
-    const placeCell = td("Hängare", null, s.platsTyp === "Hängare" ? h("span", { class: "hanger", text: "Hängare " + (s.hangare || "?") }) : pl ? h("span", { class: "place", text: pl }) : needsPlace(s) ? h("span", { class: "flag", text: "Ange plats" }) : null);
-    if (unmarked(s)) placeCell.append(h("span", { class: "flag bad", text: "Märk " + s._id }));
-    if (unmeasured(s)) placeCell.append(h("span", { class: "flag", text: "Mät" }));
-    if (s.mattGodkanda === false) placeCell.append(h("span", { class: "flag bad", text: "Mått ej OK" }));
+    const placeCell = td("Hängare", null, s.platsTyp === "Hängare" ? h("span", { class: "hanger", text: "Hanger " + (s.hangare || "?") }) : pl ? h("span", { class: "place", text: pl }) : needsPlace(s) ? h("span", { class: "flag", text: "Set location" }) : null);
+    if (unmarked(s)) placeCell.append(h("span", { class: "flag bad", text: "Label " + s._id }));
+    if (unmeasured(s)) placeCell.append(h("span", { class: "flag", text: "Measure" }));
+    if (s.mattGodkanda === false) placeCell.append(h("span", { class: "flag bad", text: "Measurements not OK" }));
     const imgs = sampleImages(s);
     const idCell = td("ID", "c-id", tag(s._id));
     if (imgs.length) idCell.append(h("img", { class: "rowthumb", src: imgUrl(imgs[0]), alt: "", loading: "lazy", onclick: (e) => { e.stopPropagation(); openLightbox(imgs, imgs[0]); } }));
-    const noteCell = td("Kommentar", "note");
+    const noteCell = td("Comment", "note");
     if (s.kommentar) noteCell.append(h("div", { text: s.kommentar }));
-    if (s.andringar) noteCell.append(h("div", { text: "Ändringar: " + s.andringar }));
+    if (s.andringar) noteCell.append(h("div", { text: "Changes: " + s.andringar }));
     tr.append(
-      td("Välj", "c-check", box),
+      td("Select", "c-check", box),
       idCell,
       td("Style", "c-main", h("div", { class: "prod", text: styleName(s) }), subBits.length ? h("div", { class: "sub" }, subBits) : null),
       td("Version", null, chip(s.version || "–")),
       placeCell,
-      td("Leverantör", null, s.leverantor || ""),
-      td("Färg", null, s.farg ? h("span", { class: "swatch" }, h("i", { class: "dot s-" + (s.status || "x") }), fargText(s.farg)) : ""),
+      td("Supplier", null, s.leverantor || ""),
+      td("Colour", null, s.farg ? h("span", { class: "swatch" }, h("i", { class: "dot s-" + (s.status || "x") }), fargText(s.farg)) : ""),
       td("Status", "c-status", problemPill([s])),
-      td("Utfall", null, h("span", { class: "chips", style: "margin-top:0" }, utfallParts(s))),
-      td("Förväntad", "c-exp", expCell(s)),
+      td("Outcome", null, h("span", { class: "chips", style: "margin-top:0" }, utfallParts(s))),
+      td("Expected", "c-exp", expCell(s)),
       noteCell
     );
     return tr;
@@ -1023,49 +1050,49 @@ import * as P from "./platform.js";
     const key = groupKeyOf(s0);
     const tr = h("tr", { tabIndex: 0, dataset: { group: key }, class: "grp" });
     const allSel = items.every((x) => selected.has(x._id));
-    const box = h("input", { type: "checkbox", "aria-label": "Välj " + items.length + " samples", checked: allSel, onchange: () => { items.forEach((x) => (box.checked ? selected.add(x._id) : selected.delete(x._id))); SamplesView.update(); } });
+    const box = h("input", { type: "checkbox", "aria-label": "Select " + items.length + " samples", checked: allSel, onchange: () => { items.forEach((x) => (box.checked ? selected.add(x._id) : selected.delete(x._id))); SamplesView.update(); } });
     const ids = items.map((x) => x._id).sort();
-    const idCell = td("ID", "c-id", tag(ids[0] + (ids.length > 1 ? "–" + ids[ids.length - 1].replace(/^S/, "") : "")), h("div", { class: "sub", text: items.length + " färger" }));
+    const idCell = td("ID", "c-id", tag(ids[0] + (ids.length > 1 ? "–" + ids[ids.length - 1].replace(/^S/, "") : "")), h("div", { class: "sub", text: items.length + " colours" }));
     const imgs = uniq(items.flatMap(sampleImages));
     if (imgs.length) idCell.append(h("img", { class: "rowthumb", src: imgUrl(imgs[0]), alt: "", loading: "lazy", onclick: (e) => { e.stopPropagation(); openLightbox(imgs, imgs[0]); } }));
     const t = tygOf(s0);
     const subBits = [];
-    if (tygName(s0)) subBits.push(tygName(s0) + (t && t.status === "Slut" ? " (slut)" : ""));
+    if (tygName(s0)) subBits.push(tygName(s0) + (t && t.status === "Slut" ? " (sold out)" : ""));
     const stn = styleOf(s0);
     const sSeasons = uniq(items.map((x) => x.sasong));
-    if (sSeasons.length && (!stn || sSeasons.some((x) => norm(x) !== norm(stn.sasong)))) subBits.push("tilltänkt " + sSeasons.join("/"));
+    if (sSeasons.length && (!stn || sSeasons.some((x) => norm(x) !== norm(stn.sasong)))) subBits.push("intended " + sSeasons.join("/"));
     else if (stn && stn.sasong) subBits.push(stn.sasong + (stn.drop ? " " + stn.drop : ""));
     const colours = h("div", { class: "swatches" }, items.slice().sort((a, b) => fargText(a.farg).localeCompare(fargText(b.farg), "sv")).map((x) => h("button", { class: "swatch btn-swatch" + (x.status === "Problem" ? " problem" : ""), type: "button", title: x._id + " · " + (x.status || "") + (platsText(x) ? " · " + platsText(x) : ""), onclick: (e) => { e.stopPropagation(); openSample(x._id); } }, h("i", { class: "dot s-" + (x.status || "x") }), fargText(x.farg) || x._id, x.platsTyp === "Hängare" ? h("span", { class: "h", text: "H" + (x.hangare || "?") }) : null)));
     const statuses = uniq(items.map((x) => x.status));
     const placeCell = td("Hängare", null);
     const hangers = uniq(items.filter((x) => x.platsTyp === "Hängare").map((x) => x.hangare || "?"));
-    if (hangers.length) placeCell.append(h("span", { class: "hanger", text: "Hängare " + hangers.join(", ") }));
+    if (hangers.length) placeCell.append(h("span", { class: "hanger", text: "Hanger " + hangers.join(", ") }));
     const others = uniq(items.filter((x) => x.platsTyp && x.platsTyp !== "Hängare").map((x) => x.platsTyp)); if (others.length) placeCell.append(h("span", { class: "place", text: others.join(", ") }));
     const nMark = items.filter(unmarked).length, nMeasure = items.filter(unmeasured).length, nPlace = items.filter(needsPlace).length;
-    if (nMark) placeCell.append(h("span", { class: "flag bad", text: "Märk " + nMark }));
-    if (nMeasure) placeCell.append(h("span", { class: "flag", text: "Mät " + nMeasure }));
-    if (nPlace && !hangers.length) placeCell.append(h("span", { class: "flag", text: "Ange plats" }));
+    if (nMark) placeCell.append(h("span", { class: "flag bad", text: "Label " + nMark }));
+    if (nMeasure) placeCell.append(h("span", { class: "flag", text: "Measure " + nMeasure }));
+    if (nPlace && !hangers.length) placeCell.append(h("span", { class: "flag", text: "Set location" }));
     const expDates = items.map(expected).filter(Boolean).sort();
-    const expCellEl = td("Förväntad", "c-exp");
+    const expCellEl = td("Expected", "c-exp");
     const received = items.filter((x) => x.status === "Mottagen").length;
-    if (received === items.length) expCellEl.append(h("div", { class: "mono", text: "alla mottagna" }));
-    else if (expDates.length) { const d = diffDays(expDates[0]); expCellEl.append(h("div", { class: "mono", text: fmtDate(expDates[0]) + (expDates.length > 1 && expDates[expDates.length - 1] !== expDates[0] ? "–" + fmtDate(expDates[expDates.length - 1]) : "") }), h("div", { class: "days " + (d < 0 ? "late" : d <= 7 ? "soon" : ""), text: d < 0 ? (-d) + " d sen" : d === 0 ? "idag" : "om " + d + " d" })); }
+    if (received === items.length) expCellEl.append(h("div", { class: "mono", text: "all received" }));
+    else if (expDates.length) { const d = diffDays(expDates[0]); expCellEl.append(h("div", { class: "mono", text: fmtDate(expDates[0]) + (expDates.length > 1 && expDates[expDates.length - 1] !== expDates[0] ? "–" + fmtDate(expDates[expDates.length - 1]) : "") }), h("div", { class: "days " + (d < 0 ? "late" : d <= 7 ? "soon" : ""), text: d < 0 ? (-d) + " d late" : d === 0 ? "today" : "in " + d + " d" })); }
     else expCellEl.append(h("div", { class: "mono muted", text: "TBA" }));
-    if (received && received < items.length) expCellEl.append(h("div", { class: "sub", text: received + " av " + items.length + " mottagna" }));
+    if (received && received < items.length) expCellEl.append(h("div", { class: "sub", text: received + " of " + items.length + " received" }));
     const utf = uniq(items.map((x) => beslutNorm(x.beslut)).filter(Boolean));
     const notes = uniq(items.map((x) => x.kommentar).filter(Boolean));
     tr.append(
-      td("Välj", "c-check", box),
+      td("Select", "c-check", box),
       idCell,
-      td("Style", "c-main", h("div", { class: "prod", text: styleName(s0) }), subBits.length ? h("div", { class: "sub", text: subBits.join(" · ") }) : null, h("button", { class: "linkish", type: "button", text: expanded.has(key) ? "Dölj färgerna" : "Visa varje färg", onclick: (e) => { e.stopPropagation(); if (expanded.has(key)) expanded.delete(key); else expanded.add(key); SamplesView.update(); } })),
+      td("Style", "c-main", h("div", { class: "prod", text: styleName(s0) }), subBits.length ? h("div", { class: "sub", text: subBits.join(" · ") }) : null, h("button", { class: "linkish", type: "button", text: expanded.has(key) ? "Hide the colours" : "Show each colour", onclick: (e) => { e.stopPropagation(); if (expanded.has(key)) expanded.delete(key); else expanded.add(key); SamplesView.update(); } })),
       td("Version", null, chip(s0.version || "–")),
       placeCell,
-      td("Leverantör", null, s0.leverantor || ""),
-      td("Färger", null, colours),
+      td("Supplier", null, s0.leverantor || ""),
+      td("Colours", null, colours),
       td("Status", "c-status", h("span", { class: "chips", style: "margin-top:0" }, statuses.map((x) => x === "Problem" ? problemPill(items) : statusPill(x)))),
-      td("Utfall", null, h("span", { class: "chips", style: "margin-top:0" }, utf.map((b) => chip(b, "b-" + slug(b))), stn && (inProduction(stn) || ["Pausad", "Kastad"].includes(styleStatusNorm(stn.status))) ? h("span", { class: "pill st-" + slug(styleStatusNorm(stn.status)), text: styleStatusNorm(stn.status) }) : null)),
+      td("Outcome", null, h("span", { class: "chips", style: "margin-top:0" }, utf.map((b) => chip(b, "b-" + slug(b))), stn && (inProduction(stn) || ["Pausad", "Kastad"].includes(styleStatusNorm(stn.status))) ? h("span", { class: "pill st-" + slug(styleStatusNorm(stn.status)), text: styleStatusNorm(stn.status) }) : null)),
       expCellEl,
-      td("Kommentar", "note", notes.length ? h("div", { text: notes.length === 1 ? notes[0] : notes.length + " kommentarer" }) : null)
+      td("Comment", "note", notes.length ? h("div", { text: notes.length === 1 ? notes[0] : notes.length + " comments" }) : null)
     );
     return tr;
   }
@@ -1076,18 +1103,18 @@ import * as P from "./platform.js";
       const st = UI.styles;
       const upd = () => { this.update(); persist(); };
       this.strip = makeStrip([
-        { key: "rod", label: "Hinner inte", cls: "t-late" },
-        { key: "gul", label: "Snävt", cls: "t-warn" },
-        { key: "po30", label: "PO inom 30 dagar" },
-        { key: "datum", label: "Saknar datum" },
-        { key: "ean", label: "Godkända utan EAN" }
+        { key: "rod", label: "Will be late", cls: "t-late" },
+        { key: "gul", label: "Tight", cls: "t-warn" },
+        { key: "po30", label: "PO within 30 days" },
+        { key: "datum", label: "No date" },
+        { key: "ean", label: "Approved without EAN" }
       ], st, () => { this.seg.sync(); upd(); });
-      const q = searchBox("q_styles", "Sök style, leverantör, säsong …", st, () => this.update());
-      this.fLev = filterSelect("f_st_lev", "Alla leverantörer", st, "lev", upd);
-      this.fSeason = filterSelect("f_st_season", "Alla säsonger", st, "season", upd);
-      this.seg = makeSeg([["aktiva", "Aktiva"], ["Sampling", "Sampling"], ["Godkänd", "Godkänd"], ["produktion", "I produktion"], ["Levererad", "Levererad"], ["Pausad", "Pausad"], ["Kastad", "Kastad"], ["alla", "Alla"]], st, "status", upd);
+      const q = searchBox("q_styles", "Search style, supplier, season …", st, () => this.update());
+      this.fLev = filterSelect("f_st_lev", "All suppliers", st, "lev", upd);
+      this.fSeason = filterSelect("f_st_season", "All seasons", st, "season", upd);
+      this.seg = makeSeg([["aktiva", "Active"], ["Sampling", "Sampling"], ["Godkänd", "Godkänd"], ["produktion", "I produktion"], ["Levererad", "Levererad"], ["Pausad", "Pausad"], ["Kastad", "Kastad"], ["alla", "All"]], st, "status", upd);
       this.count = h("span", { class: "count" });
-      const { t, tb } = table([["Style"], ["Leverantör"], ["Säsong"], ["Status"], ["Senaste sample"], ["I lager senast"], ["PO senast"], ["Läge"], ["EAN"]]);
+      const { t, tb } = table([["Style"], ["Supplier"], ["Season"], ["Status"], ["Latest sample"], ["In stock by"], ["PO by"], ["Position"], ["EAN"]]);
       this.tb = tb;
       tb.addEventListener("click", (e) => { if (e.target.closest("button")) return; const tr = e.target.closest("tr[data-style]"); if (tr) openStyle(tr.dataset.style); });
       tb.addEventListener("keydown", (e) => { if (e.key !== "Enter") return; const tr = e.target.closest("tr[data-style]"); if (tr) openStyle(tr.dataset.style); });
@@ -1133,8 +1160,8 @@ import * as P from "./platform.js";
       });
       this.tb.replaceChildren(...list.map((s) => styleRow(s, P.get(s._id))));
       this.empty.hidden = list.length > 0;
-      if (!list.length) this.empty.replaceChildren(...(!loaded.has("styles") ? [h("strong", { text: "Laddar styles …" })] : D.styles.length ? [h("strong", { text: "Inget matchar filtret" }), h("span", { text: "Byt status eller rensa sökningen." })] : [h("strong", { text: "Inga styles ännu" }), h("span", { text: "Skapa en med \"+ Ny style\"." })]));
-      this.count.textContent = list.length + " av " + D.styles.length + " styles";
+      if (!list.length) this.empty.replaceChildren(...(!loaded.has("styles") ? [h("strong", { text: "Loading styles …" })] : D.styles.length ? [h("strong", { text: "Nothing matches the filter" }), h("span", { text: "Change status or clear the search." })] : [h("strong", { text: "No styles yet" }), h("span", { text: "Create one with \"+ New style\"." })]));
+      this.count.textContent = list.length + " of " + D.styles.length + " styles";
     }
   };
   function styleRow(s, p) {
@@ -1144,14 +1171,14 @@ import * as P from "./platform.js";
     const eanTxt = (s.ean || []).length ? (s.ean || []).length + (vs.length ? "/" + vs.length : "") : "–";
     const dl = deadlineOf(s);
     return h("tr", { tabIndex: 0, dataset: { style: s._id } },
-      td("", "c-main", h("div", { class: "prod", text: s.namn || "Namnlös" }), h("div", { class: "sub" }, s.typ && s.typ !== "Nyhet" ? chip(s.typ) : null, styleKategori(s) ? chip(styleKategori(s)) : null, s._id + " · " + xs.length + (xs.length === 1 ? " sample" : " samples") + ((s.po || []).length ? " · " + s.po.join(", ") : "") + (poLinesOf(s._id).length ? " · " + poLinesOf(s._id).reduce((a, x) => a + (num(x.r.antal) || 0), 0) + " st · " + fmtTkr(poLinesOf(s._id).reduce((a, x) => a + (lineCost(x.r) || 0), 0)) : ""))),
-      td("Leverantör", null, s.leverantor || ""),
-      td("Säsong", null, [s.sasong, s.drop].filter(Boolean).join(" · ")),
+      td("", "c-main", h("div", { class: "prod", text: s.namn || "Unnamed" }), h("div", { class: "sub" }, s.typ && s.typ !== "Nyhet" ? chip(s.typ) : null, styleKategori(s) ? chip(styleKategori(s)) : null, s._id + " · " + xs.length + (xs.length === 1 ? " sample" : " samples") + ((s.po || []).length ? " · " + s.po.join(", ") : "") + (poLinesOf(s._id).length ? " · " + poLinesOf(s._id).reduce((a, x) => a + (num(x.r.antal) || 0), 0) + " pcs · " + fmtTkr(poLinesOf(s._id).reduce((a, x) => a + (lineCost(x.r) || 0), 0)) : ""))),
+      td("Supplier", null, s.leverantor || ""),
+      td("Season", null, [s.sasong, s.drop].filter(Boolean).join(" · ")),
       td("Status", null, styleStatusPill(s)),
-      td("Senaste", null, last ? h("span", { class: "chips" }, chip(last.version || "–"), statusPill(last.status), beslutNorm(last.beslut) ? chip(beslutNorm(last.beslut), "b-" + slug(beslutNorm(last.beslut))) : null) : h("span", { class: "muted", text: "Ingen sample" })),
-      td("I lager senast", "mono", dl ? fmtDate(dl.date) + (dl.from === "drop" ? " (drop)" : "") : ""),
-      td("PO senast", null, p.po ? h("div", null, h("div", { class: "mono", text: fmtDate(p.po) }), h("div", { class: "days " + (p.poDays < 0 ? "late" : p.poDays < 14 ? "soon" : ""), text: fmtDays(p.poDays) })) : null),
-      td("Läge", null, lageCell(s, p), p.note && !["klar", "skip", "paus"].includes(p.lage) ? h("div", { class: "sub", text: p.note }) : null),
+      td("Latest", null, last ? h("span", { class: "chips" }, chip(last.version || "–"), statusPill(last.status), beslutNorm(last.beslut) ? chip(beslutNorm(last.beslut), "b-" + slug(beslutNorm(last.beslut))) : null) : h("span", { class: "muted", text: "No sample" })),
+      td("In stock by", "mono", dl ? fmtDate(dl.date) + (dl.from === "drop" ? " (drop)" : "") : ""),
+      td("PO by", null, p.po ? h("div", null, h("div", { class: "mono", text: fmtDate(p.po) }), h("div", { class: "days " + (p.poDays < 0 ? "late" : p.poDays < 14 ? "soon" : ""), text: fmtDays(p.poDays) })) : null),
+      td("Position", null, lageCell(s, p), p.note && !["klar", "skip", "paus"].includes(p.lage) ? h("div", { class: "sub", text: p.note }) : null),
       td("EAN", "mono", eanTxt)
     );
   }
@@ -1160,10 +1187,10 @@ import * as P from "./platform.js";
   const DropsView = {
     mount(root) {
       const st = UI.drops;
-      this.fSeason = filterSelect("f_d_season", "Alla säsonger", st, "season", () => { this.update(); persist(); });
+      this.fSeason = filterSelect("f_d_season", "All seasons", st, "season", () => { this.update(); persist(); });
       this.count = h("span", { class: "count" });
       this.body = h("div", { style: "display:grid;gap:22px" });
-      root.append(h("p", { class: "lede", text: "Kollektionen per säsong och drop, med produkterna från Produktion-fliken och de samples som hör till varje produkt. Klicka på en produkt för att öppna stylen, eller på ett sample-ID för att se var samplen hänger." }), h("section", { class: "filters", "aria-label": "Filter" }, this.fSeason.el, this.count), this.body);
+      root.append(h("p", { class: "lede", text: "The collection by season and drop, with the products from the Production tab and the samples that belong to each product. Click a product to open the style, or a sample ID to see where the sample hangs." }), h("section", { class: "filters", "aria-label": "Filter" }, this.fSeason.el, this.count), this.body);
     },
     update() {
       const st = UI.drops;
@@ -1177,7 +1204,7 @@ import * as P from "./platform.js";
         const inSeason = D.styles.filter((s) => norm(s.sasong) === norm(season));
         const placed = new Set();
         const sec = h("section", { class: "season" });
-        sec.append(h("h2", { class: "season-h" }, season, h("span", { class: "sub", text: inSeason.length + (inSeason.length === 1 ? " produkt" : " produkter") + " · " + drops.length + (drops.length === 1 ? " drop" : " drops") })));
+        sec.append(h("h2", { class: "season-h" }, season, h("span", { class: "sub", text: inSeason.length + (inSeason.length === 1 ? " product" : " products") + " · " + drops.length + (drops.length === 1 ? " drop" : " drops") })));
         for (const d of drops) {
           const members = inSeason.filter((s) => dropKey(s.sasong, s.drop) === dropKey(d.sasong, d.namn));
           members.forEach((m) => placed.add(m._id));
@@ -1185,10 +1212,10 @@ import * as P from "./platform.js";
           nDrops++;
         }
         const rest = inSeason.filter((s) => !placed.has(s._id));
-        if (rest.length) sec.append(dropSection({ sasong: season, namn: "Utan drop", _id: null }, rest, true));
+        if (rest.length) sec.append(dropSection({ sasong: season, namn: "No drop", _id: null }, rest, true));
         this.body.append(sec);
       }
-      if (!show.length) this.body.append(h("div", { class: "empty" }, h("strong", { text: loaded.has("drops") && loaded.has("styles") ? "Inga drops ännu" : "Laddar …" }), h("span", { text: "Skapa en drop med \"+ Ny drop\" och sätt säsong och drop på era styles." })));
+      if (!show.length) this.body.append(h("div", { class: "empty" }, h("strong", { text: loaded.has("drops") && loaded.has("styles") ? "No drops yet" : "Loading …" }), h("span", { text: "Create a drop with \"+ New drop\" and set season and drop on your styles." })));
       this.count.textContent = nDrops + (nDrops === 1 ? " drop" : " drops");
     }
   };
@@ -1203,8 +1230,8 @@ import * as P from "./platform.js";
     const box = h("section", { class: "drop" + (isRest ? " nodrop" : "") });
     const head = h("div", { class: "drop-head" }, h("h3", { text: d.namn }));
     const meta = h("div", { class: "drop-meta" });
-    if (isISO(d.klartSenast)) meta.append(h("span", null, "I lager senast ", h("span", { class: "mono", text: fmtDate(d.klartSenast) }), h("span", { class: "sub", text: " (" + fmtDays(diffDays(d.klartSenast)) + ")" })));
-    if (isISO(d.lansering)) meta.append(h("span", null, "Lansering ", h("span", { class: "mono", text: fmtDate(d.lansering) })));
+    if (isISO(d.klartSenast)) meta.append(h("span", null, "In stock by ", h("span", { class: "mono", text: fmtDate(d.klartSenast) }), h("span", { class: "sub", text: " (" + fmtDays(diffDays(d.klartSenast)) + ")" })));
+    if (isISO(d.lansering)) meta.append(h("span", null, "Launch ", h("span", { class: "mono", text: fmtDate(d.lansering) })));
     const counts = { sampling: 0, godkand: 0, po: 0, prod: 0, lev: 0, paus: 0, kast: 0, rod: 0, gul: 0 };
     for (const s of members) {
       const ss = styleStatusNorm(s.status);
@@ -1212,30 +1239,30 @@ import * as P from "./platform.js";
       const p = plan(s); if (p.lage === "rod") counts.rod++; if (p.lage === "gul") counts.gul++;
     }
     const bits = [];
-    if (counts.sampling) bits.push(counts.sampling + " sampling"); if (counts.godkand) bits.push(counts.godkand + " godkända"); if (counts.po) bits.push(counts.po + " PO lagda"); if (counts.prod) bits.push(counts.prod + " i produktion"); if (counts.lev) bits.push(counts.lev + " levererade"); if (counts.paus) bits.push(counts.paus + " pausade"); if (counts.kast) bits.push(counts.kast + " kastade");
-    meta.append(h("span", { class: "sub", text: members.length + (members.length === 1 ? " produkt" : " produkter") + (bits.length ? ": " + bits.join(", ") : "") }));
-    if (counts.rod) meta.append(h("span", { class: "lage l-rod", text: counts.rod + " hinner inte" }));
-    if (counts.gul) meta.append(h("span", { class: "lage l-gul", text: counts.gul + " snävt" }));
+    if (counts.sampling) bits.push(counts.sampling + " sampling"); if (counts.godkand) bits.push(counts.godkand + " approved"); if (counts.po) bits.push(counts.po + " PO placed"); if (counts.prod) bits.push(counts.prod + " in production"); if (counts.lev) bits.push(counts.lev + " delivered"); if (counts.paus) bits.push(counts.paus + " paused"); if (counts.kast) bits.push(counts.kast + " dropped");
+    meta.append(h("span", { class: "sub", text: members.length + (members.length === 1 ? " product" : " products") + (bits.length ? ": " + bits.join(", ") : "") }));
+    if (counts.rod) meta.append(h("span", { class: "lage l-rod", text: counts.rod + " will be late" }));
+    if (counts.gul) meta.append(h("span", { class: "lage l-gul", text: counts.gul + " tight" }));
     head.append(meta);
     if (d.kommentar) head.append(h("span", { class: "sub", text: d.kommentar }));
     const right = h("div", { class: "right" });
-    if (!isRest && canWrite && db) right.append(h("button", { class: "btn small", type: "button", text: "Redigera drop", onclick: () => openDrop(d._id) }));
-    if (!isRest && canWrite && db) right.append(h("button", { class: "btn small", type: "button", text: "+ Style i droppen", onclick: () => openStyle(null, { sasong: d.sasong, drop: d.namn }) }));
+    if (!isRest && canWrite && db) right.append(h("button", { class: "btn small", type: "button", text: "Edit drop", onclick: () => openDrop(d._id) }));
+    if (!isRest && canWrite && db) right.append(h("button", { class: "btn small", type: "button", text: "+ Style in the drop", onclick: () => openStyle(null, { sasong: d.sasong, drop: d.namn }) }));
     head.append(right);
     box.append(head);
-    if (!members.length) { box.append(h("div", { class: "empty" }, h("span", { text: isRest ? "" : "Inga produkter ännu. Sätt \"" + d.sasong + "\" och \"" + d.namn + "\" på en style så hamnar den här." }))); return box; }
-    const { t, tb } = table([["Produkt"], ["Leverantör"], ["Status"], ["Läge"], ["Samples"], ["PO"]]);
+    if (!members.length) { box.append(h("div", { class: "empty" }, h("span", { text: isRest ? "" : "No products yet. Set \"" + d.sasong + "\" and \"" + d.namn + "\" on a style and it ends up here." }))); return box; }
+    const { t, tb } = table([["Product"], ["Supplier"], ["Status"], ["Position"], ["Samples"], ["PO"]]);
     const order = { Sampling: 0, "Godkänd": 1, "PO lagd": 2, "I produktion": 3, Levererad: 4, Pausad: 5, Kastad: 6 };
     members.slice().sort((a, b) => (order[styleStatusNorm(a.status)] ?? 9) - (order[styleStatusNorm(b.status)] ?? 9) || (a.namn || "").localeCompare(b.namn || "", "sv")).forEach((s) => {
       const xs = samplesOfStyle(s._id);
       const p = plan(s);
       const tr = h("tr", { tabIndex: 0, dataset: { style: s._id } });
       tr.append(
-        td("", "c-main", h("div", { class: "prod", text: s.namn }), h("div", { class: "sub", text: [s.typ && s.typ !== "Nyhet" ? s.typ : "", styleKategori(s), (s.farger || []).join(", "), (() => { const pl = poLinesOf(s._id); if (!pl.length) return ""; const u = pl.reduce((a, x) => a + (num(x.r.antal) || 0), 0); const c = pl.reduce((a, x) => a + (lineCost(x.r) || 0), 0); return u + " st · " + fmtTkr(c); })(), isRest && s.drop ? "drop: " + s.drop : ""].filter(Boolean).join(" · ") })),
-        td("Leverantör", null, s.leverantor || ""),
+        td("", "c-main", h("div", { class: "prod", text: s.namn }), h("div", { class: "sub", text: [s.typ && s.typ !== "Nyhet" ? s.typ : "", styleKategori(s), (s.farger || []).join(", "), (() => { const pl = poLinesOf(s._id); if (!pl.length) return ""; const u = pl.reduce((a, x) => a + (num(x.r.antal) || 0), 0); const c = pl.reduce((a, x) => a + (lineCost(x.r) || 0), 0); return u + " pcs · " + fmtTkr(c); })(), isRest && s.drop ? "drop: " + s.drop : ""].filter(Boolean).join(" · ") })),
+        td("Supplier", null, s.leverantor || ""),
         td("Status", null, styleStatusPill(s)),
-        td("Läge", null, lageCell(s, p), p.po && !["klar", "skip", "paus"].includes(p.lage) ? h("div", { class: "sub", text: "PO senast " + fmtDate(p.po) }) : null),
-        td("Samples", null, xs.length ? h("span", { class: "chips", style: "margin-top:0" }, xs.map(sampleChip)) : h("span", { class: "muted", text: (s.typ || "Nyhet") === "Nyhet" ? "Ingen sample" : "–" })),
+        td("Position", null, lageCell(s, p), p.po && !["klar", "skip", "paus"].includes(p.lage) ? h("div", { class: "sub", text: "PO by " + fmtDate(p.po) }) : null),
+        td("Samples", null, xs.length ? h("span", { class: "chips", style: "margin-top:0" }, xs.map(sampleChip)) : h("span", { class: "muted", text: (s.typ || "Nyhet") === "Nyhet" ? "No sample" : "–" })),
         td("PO", "pos", (s.po || []).join(", "))
       );
       tb.append(tr);
@@ -1262,9 +1289,9 @@ import * as P from "./platform.js";
     }).filter((x) => x.start);
     if (!items.length) return null;
     const marks = [];
-    if (isISO(d.klartSenast)) marks.push({ date: d.klartSenast, label: "I lager senast", cls: "key" });
-    if (isISO(d.lansering)) marks.push({ date: d.lansering, label: "Lansering", cls: "" });
-    marks.push({ date: today, label: "Idag", cls: "today" });
+    if (isISO(d.klartSenast)) marks.push({ date: d.klartSenast, label: "In stock by", cls: "key" });
+    if (isISO(d.lansering)) marks.push({ date: d.lansering, label: "Launch", cls: "" });
+    marks.push({ date: today, label: "Today", cls: "today" });
     let min = items.reduce((m, x) => (x.start < m ? x.start : m), today), max = today;
     for (const x of items) { if (x.eta && x.eta > max) max = x.eta; if (x.ex && x.ex > max) max = x.ex; }
     for (const m of marks) { if (m.date < min) min = m.date; if (m.date > max) max = m.date; }
@@ -1272,7 +1299,7 @@ import * as P from "./platform.js";
     const span = Math.max(1, daysBetween(min, max));
     const pct = (iso) => (daysBetween(min, iso) / span) * 100;
     const wrap = h("div", { class: "tl" });
-    wrap.append(h("div", { class: "tl-head" }, h("span", { class: "sec-title", style: "margin:0", text: "Tidslinje" }), h("span", { class: "sub", text: "PO lagd → ex-factory → ETA lager. Streckad = uppskattad från produktionstid och frakt." })));
+    wrap.append(h("div", { class: "tl-head" }, h("span", { class: "sec-title", style: "margin:0", text: "Timeline" }), h("span", { class: "sub", text: "PO placed → ex-factory → ETA warehouse. Dashed = estimated from production time and freight." })));
     const scale = h("div", { class: "tl-scale" });
     let cur = min.slice(0, 7) + "-01";
     while (cur <= max) { const [y, m] = cur.split("-").map(Number); scale.append(h("span", { style: "left:" + pct(cur) + "%", text: MONTHS[m - 1] + (m === 1 ? " " + String(y).slice(2) : "") })); cur = new Date(Date.UTC(y, m, 1)).toISOString().slice(0, 10); }
@@ -1292,11 +1319,12 @@ import * as P from "./platform.js";
     wrap.append(h("div", { class: "tl-legend" }, marks.map((m) => h("span", null, h("i", { class: "tl-mark " + m.cls, style: "position:static;display:inline-block;height:10px;margin-right:6px;vertical-align:middle" }), m.label + " " + fmtDate(m.date)))));
     return wrap;
   }
-  const DR_LABELS = { sasong: "Säsong", namn: "Namn", ordning: "Ordning", klartSenast: "I lager senast", lansering: "Lansering", kommentar: "Kommentar" };
+  const DR_LABELS = { sasong: "Season", namn: "Name", ordning: "Order", klartSenast: "In stock by", lansering: "Launch", kommentar: "Comment" };
   function openDrop(id, preset) {
+    if (designOnly()) return;
     const isNew = !id;
     const d = isNew ? Object.assign({ _id: null, ordning: 1 }, preset || {}) : byId(D.drops, id);
-    if (!d) { toast("Hittar inte droppen."); return; }
+    if (!d) { toast("Cannot find the drop."); return; }
     const ro = !canWrite || !db;
     // Droppen finns bara som rad i COO: lägg upp den i registret när någon som får redigera öppnar den.
     if (!isNew && d._virtual && !ro) {
@@ -1307,39 +1335,39 @@ import * as P from "./platform.js";
     const raw = d._doc || d;
     const cooEv = d._coo ? byId(D.handelser, d._coo) : null;
     const marg = lagerMarginal();
-    const fSas = inp("f_dsasong", d.sasong, { list: "dlSeason", autocomplete: "off", placeholder: "t.ex. SS27" });
-    const fNamn = inp("f_dnamn", d.namn, { list: "dlDrop", autocomplete: "off", placeholder: "t.ex. Drop 1" });
+    const fSas = inp("f_dsasong", d.sasong, { list: "dlSeason", autocomplete: "off", placeholder: "e.g. SS27" });
+    const fNamn = inp("f_dnamn", d.namn, { list: "dlDrop", autocomplete: "off", placeholder: "e.g. Drop 1" });
     const fOrd = inp("f_dordning", d.ordning, { type: "number", min: "1", step: "1" });
     const fKlart = inp("f_dklart", raw.klartSenast, { type: "date" });
     const fLans = inp("f_dlans", d.lansering, { type: "date" }); if (cooEv) fLans.disabled = true;
     const klartHint = h("span", { class: "hint" });
-    const syncKlart = () => { const l = cooEv ? d.lansering : fLans.value; const auto = isISO(l) ? addDays(l, -marg) : null; klartHint.textContent = fKlart.value ? (isISO(l) && fKlart.value > l ? "Eget datum som ligger efter lanseringen " + fmtDate(l) + ". Töm fältet för " + marg + " dagar före." : "Eget datum. Töm fältet för att följa lanseringen" + (auto ? " (" + fmtDate(auto) + ")" : "") + ".") : (auto ? "Följer lanseringen: " + fmtDate(auto) + ", " + marg + " dagar före. Fyll i bara om droppen ska ha ett eget datum." : "Tomt = " + marg + " dagar före lanseringen."); };
+    const syncKlart = () => { const l = cooEv ? d.lansering : fLans.value; const auto = isISO(l) ? addDays(l, -marg) : null; klartHint.textContent = fKlart.value ? (isISO(l) && fKlart.value > l ? "Own date that falls after the launch " + fmtDate(l) + ". Clear the field for " + marg + " days before." : "Own date. Clear the field to follow the launch" + (auto ? " (" + fmtDate(auto) + ")" : "") + ".") : (auto ? "Follows the launch: " + fmtDate(auto) + ", " + marg + " days before. Only fill in if the drop should have its own date." : "Empty = " + marg + " days before the launch."); };
     fKlart.addEventListener("input", syncKlart); fLans.addEventListener("input", syncKlart); syncKlart();
     const fKom = area("f_dkom", d.kommentar);
     if (!isNew) { fSas.disabled = true; fNamn.disabled = true; }
     const form = h("form", { class: "form", autocomplete: "off", onsubmit: (e) => e.preventDefault() },
-      field("Säsong", fSas), field("Namn", fNamn, { hint: isNew ? "Styles kopplas via säsong + namn" : "Byt inte namn; styles pekar på det" }),
-      field("Ordning", fOrd, { hint: "Sorteringsordning inom säsongen" }), h("div", { class: "field" }, h("label", { for: "f_dklart", text: "I lager senast" }), fKlart, klartHint),
-      h("div", { class: "field" }, h("label", { for: "f_dlans", text: "Lansering" }), fLans, cooEv ? h("span", { class: "hint" }, "Styrs i COO av Jakob. ", h("button", { class: "linkish", type: "button", text: "Ändra där", onclick: () => { closeSheet(); switchTab("coo"); openEvent(cooEv._id); } })) : h("span", { class: "hint", text: "Ingen drop-rad i COO än. Datumet här gäller tills droppen läggs upp där." })), h("div"),
-      field("Kommentar", fKom, { full: true }));
+      field("Season", fSas), field("Name", fNamn, { hint: isNew ? "Styles are linked by season + name" : "Do not rename; styles point to it" }),
+      field("Order", fOrd, { hint: "Sort order within the season" }), h("div", { class: "field" }, h("label", { for: "f_dklart", text: "In stock by" }), fKlart, klartHint),
+      h("div", { class: "field" }, h("label", { for: "f_dlans", text: "Launch" }), fLans, cooEv ? h("span", { class: "hint" }, "Controlled by Jakob under Launches. ", h("button", { class: "linkish", type: "button", text: "Change it there", onclick: () => { closeSheet(); switchTab("coo"); openEvent(cooEv._id); } })) : h("span", { class: "hint", text: "No drop row under Launches yet. The date here applies until the drop is set up there." })), h("div"),
+      field("Comment", fKom, { full: true }));
     if (ro) lock(form);
     const members = isNew ? [] : D.styles.filter((s) => dropKey(s.sasong, s.drop) === dropKey(d.sasong, d.namn));
     const pendingImgs = isNew ? [] : null;
-    const imgSec = bilderSection({ title: "Bilder och moodboard", ro, pending: pendingImgs, current: () => byId(D.drops, d._id) || d, empty: "Lägg in moodboard, referensbilder eller en bild på hängaren för droppen. Visas överst i Kollektion.", save: (ids) => write("drops", d._id, { bilder: ids, andrad: new Date().toISOString() }) });
+    const imgSec = bilderSection({ title: "Images and moodboard", ro, pending: pendingImgs, current: () => byId(D.drops, d._id) || d, empty: "Add a moodboard, reference images or a picture of the rail for the drop. Shown at the top of Collection.", save: (ids) => write("drops", d._id, { bilder: ids, andrad: new Date().toISOString() }) });
     async function save() {
       const o = { sasong: fSas.value.trim(), namn: fNamn.value.trim(), ordning: num(fOrd.value) ?? 1, klartSenast: fKlart.value || null, lansering: cooEv ? (raw.lansering || null) : (fLans.value || null), kommentar: fKom.value.trim(), andrad: new Date().toISOString() };
-      if (!o.sasong || !o.namn) { toast("Fyll i säsong och namn."); return; }
+      if (!o.sasong || !o.namn) { toast("Fill in season and name."); return; }
       if (isNew) {
         const nid = slug(o.sasong + "-" + o.namn);
-        if (byId(D.drops, nid) || D.drops.some((x) => dropKey(x.sasong, x.namn) === dropKey(o.sasong, o.namn))) { toast("Den droppen finns redan."); return; }
+        if (byId(D.drops, nid) || D.drops.some((x) => dropKey(x.sasong, x.namn) === dropKey(o.sasong, o.namn))) { toast("That drop already exists."); return; }
         o.bilder = pendingImgs.slice();
-        if (await create("drops", nid, o)) { toast("Drop skapad"); closeSheet(); }
+        if (await create("drops", nid, o)) { toast("Drop created"); closeSheet(); }
       } else {
         delete o.sasong; delete o.namn;
-        if (await write("drops", d._id, o)) { toast("Sparat"); closeSheet(); }
+        if (await write("drops", d._id, o)) { toast("Saved"); closeSheet(); }
       }
     }
-    openSheet({ tag: isNew ? "Ny" : d.sasong, title: isNew ? "Ny drop" : d.sasong + " · " + d.namn, sub: isNew ? "" : members.length + (members.length === 1 ? " produkt" : " produkter"), body: [form, imgSec], foot: footButtons({ onDelete: isNew ? null : async () => { if (await remove("drops", d._id)) { toast("Borttagen"); closeSheet(); } }, canDelete: !members.length, blockText: "Flytta produkterna först", onSave: save }), ctx: { refresh: () => { if (!isNew && !byId(D.drops, d._id)) { closeSheet(); return; } imgSec.render(); } }, focus: isNew ? "f_dsasong" : null });
+    openSheet({ flagRef: isNew ? null : { typ: "drop", ref: d._id, titel: d.sasong + " " + d.namn, tab: "kollektion" }, tag: isNew ? "New" : d.sasong, title: isNew ? "New drop" : d.sasong + " · " + d.namn, sub: isNew ? "" : members.length + (members.length === 1 ? " product" : " products"), body: [form, imgSec], foot: footButtons({ onDelete: isNew ? null : async () => { if (await remove("drops", d._id)) { toast("Removed"); closeSheet(); } }, canDelete: !members.length, blockText: "Move the products first", onSave: save }), ctx: { refresh: () => { if (!isNew && !byId(D.drops, d._id)) { closeSheet(); return; } imgSec.render(); } }, focus: isNew ? "f_dsasong" : null });
   }
 
   // ---------- PRODUKTION ----------
@@ -1348,15 +1376,15 @@ import * as P from "./platform.js";
       const st = UI.prod;
       const upd = () => { this.update(); persist(); };
       this.strip = makeStrip([
-        { key: "open", label: "Öppna POs" },
-        { key: "confirm", label: "Väntar på bekräftelse", cls: "t-warn" },
-        { key: "late", label: "Försenade", cls: "t-late" },
-        { key: "spent", label: "Lagt (tkr)" }
+        { key: "open", label: "Open POs" },
+        { key: "confirm", label: "Awaiting confirmation", cls: "t-warn" },
+        { key: "late", label: "Late", cls: "t-late" },
+        { key: "spent", label: "Placed (k SEK)" }
       ], st, () => { this.seg.sync(); upd(); });
-      const q = searchBox("q_prod", "Sök PO, produkt, färg, tyg …", st, () => this.update());
-      this.fSeason = filterSelect("f_p_season", "Alla säsonger", st, "season", upd);
-      this.fLev = filterSelect("f_p_lev", "Alla leverantörer", st, "lev", upd);
-      this.seg = makeSeg([["aktiva", "Aktiva"], ["Placeholder", "Placeholder"], ["Inskickad", "Inskickad"], ["PO bekräftad", "Bekräftad"], ["I produktion", "I produktion"], ["Inlevererad", "Inlevererad"], ["alla", "Alla"]], st, "status", upd);
+      const q = searchBox("q_prod", "Search PO, product, colour, fabric …", st, () => this.update());
+      this.fSeason = filterSelect("f_p_season", "All seasons", st, "season", upd);
+      this.fLev = filterSelect("f_p_lev", "All suppliers", st, "lev", upd);
+      this.seg = makeSeg([["aktiva", "Active"], ["Placeholder", "Placeholder"], ["Inskickad", "Inskickad"], ["PO bekräftad", "Confirmed"], ["I produktion", "I produktion"], ["Inlevererad", "Inlevererad"], ["alla", "All"]], st, "status", upd);
       this.count = h("span", { class: "count" });
       this.cards = h("div", { class: "cards" });
       const open = (e) => { if (e.target.closest("button")) return; const tr = e.target.closest("tr[data-po], .card-head[data-po]"); if (tr) openPo(tr.dataset.po); };
@@ -1364,10 +1392,10 @@ import * as P from "./platform.js";
       this.cards.addEventListener("keydown", (e) => { if (e.key === "Enter") open(e); });
       this.empty = h("div", { class: "empty", hidden: true });
       this.budget = h("section", { class: "budget", "aria-label": "Budget" });
-      this.pay = h("section", { class: "card", "aria-label": "Betalningar" });
+      this.pay = h("section", { class: "card", "aria-label": "Payments" });
       this.tl = h("div", { class: "cards" });
       this.budgetEdit = false;
-      root.append(h("p", { class: "lede", text: "Alla inköpsordrar per säsong: drop, ETA lager, status och kostnad. Betalningar ligger under Leverantörer. Budgeten per kategori längst ner." }),
+      root.append(h("p", { class: "lede", text: "All purchase orders by season: drop, ETA warehouse, status and cost. Payments are under Suppliers. The budget per category is at the bottom." }),
         this.strip.el, h("section", { class: "filters", "aria-label": "Filter" }, q, this.fSeason.el, this.fLev.el, this.seg.el, this.count), this.cards, this.empty, this.budget);
     },
     seasonInView() {
@@ -1414,8 +1442,8 @@ import * as P from "./platform.js";
         const card = h("section", { class: "card po-card" });
         card.append(this.groupRow(p));
         const lines = (p.rader || []);
-        const { t, tb } = table([["Produkt"], ["Färger"], ["Antal", "num"], ["Styckpris", "num"], ["Kostnad", "num"]]);
-        if (!lines.length) tb.append(h("tr", { dataset: { po: p._id } }, h("td", { colSpan: 5, class: "sub", text: "Inga rader ännu – öppna PO:n och lägg till produkter." })));
+        const { t, tb } = table([["Product"], ["Colours"], ["Quantity", "num"], ["Unit price", "num"], ["Cost", "num"]]);
+        if (!lines.length) tb.append(h("tr", { dataset: { po: p._id } }, h("td", { colSpan: 5, class: "sub", text: "No lines yet – open the PO and add products." })));
         const byProd = new Map();
         for (const r of lines) { const k = (r.styleId || "") + "|" + norm(r.produkt); if (!byProd.has(k)) byProd.set(k, []); byProd.get(k).push(r); }
         for (const rs of byProd.values()) tb.append(this.prodRow(p, rs));
@@ -1424,8 +1452,8 @@ import * as P from "./platform.js";
       }
       this.cards.replaceChildren(...cards);
       this.empty.hidden = list.length > 0;
-      if (!list.length) this.empty.replaceChildren(...(!loaded.has("po") ? [h("strong", { text: db ? "Laddar produktion …" : "Ingen produktion att visa" })] : D.po.length ? [h("strong", { text: "Inget matchar filtret" }), h("span", { text: "Byt säsong, status eller rensa sökningen." })] : [h("strong", { text: "Inga POs ännu" }), h("span", { text: "Lägg den första med \"+ Ny PO\"." })]));
-      this.count.textContent = list.length + " av " + inSeason.length + " POs" + (season ? " i " + season : "");
+      if (!list.length) this.empty.replaceChildren(...(!loaded.has("po") ? [h("strong", { text: db ? "Loading production …" : "No production to show" })] : D.po.length ? [h("strong", { text: "Nothing matches the filter" }), h("span", { text: "Change season or status, or clear the search." })] : [h("strong", { text: "No POs yet" }), h("span", { text: "Add the first one with \"+ New PO\"." })]));
+      this.count.textContent = list.length + " of " + inSeason.length + " POs" + (season ? " i " + season : "");
       this.renderBudget(season, inSeason);
     },
     renderTimelines(season) {
@@ -1437,12 +1465,12 @@ import * as P from "./platform.js";
       for (const d of drops) {
         const members = inSeason.filter((s) => dropKey(s.sasong, s.drop) === dropKey(d.sasong, d.namn));
         const tl = dropTimeline(d, members);
-        if (tl) cards.push(h("section", { class: "card" }, h("div", { class: "card-head" }, h("h3", { text: d.namn + " – " + season }), h("span", { class: "sub", text: [isISO(d.klartSenast) ? "I lager senast " + fmtDate(d.klartSenast) : "", isISO(d.lansering) ? "Lansering " + fmtDate(d.lansering) : ""].filter(Boolean).join(" · ") }), canWrite && db ? h("div", { class: "right" }, h("button", { class: "btn small", type: "button", text: "Redigera drop", onclick: () => openDrop(d._id) })) : null), tl));
+        if (tl) cards.push(h("section", { class: "card" }, h("div", { class: "card-head" }, h("h3", { text: d.namn + " – " + season }), h("span", { class: "sub", text: [isISO(d.klartSenast) ? "In stock by " + fmtDate(d.klartSenast) : "", isISO(d.lansering) ? "Launch " + fmtDate(d.lansering) : ""].filter(Boolean).join(" · ") }), canWrite && db ? h("div", { class: "right" }, h("button", { class: "btn small", type: "button", text: "Edit drop", onclick: () => openDrop(d._id) })) : null), tl));
       }
       const placed = new Set(drops.flatMap((d) => inSeason.filter((s) => dropKey(s.sasong, s.drop) === dropKey(d.sasong, d.namn)).map((s) => s._id)));
       const rest = inSeason.filter((s) => !placed.has(s._id));
-      const tlr = rest.length ? dropTimeline({ sasong: season, namn: "Utan drop" }, rest) : null;
-      if (tlr) cards.push(h("section", { class: "card" }, h("div", { class: "card-head" }, h("h3", { text: "Utan drop – " + season })), tlr));
+      const tlr = rest.length ? dropTimeline({ sasong: season, namn: "No drop" }, rest) : null;
+      if (tlr) cards.push(h("section", { class: "card" }, h("div", { class: "card-head" }, h("h3", { text: "No drop – " + season })), tlr));
       box.replaceChildren(...cards);
     },
     duePayments(days) {
@@ -1459,16 +1487,16 @@ import * as P from "./platform.js";
       all.sort((a, b) => (a.datum || "9999").localeCompare(b.datum || "9999"));
       const due90 = all.filter((x) => !x.datum || x.datum <= addDays(todayISO(), 90));
       const sum = (xs) => xs.reduce((a, x) => a + x.belopp, 0);
-      box.append(h("div", { class: "card-head" }, h("h3", { text: "Betalningar" }), h("span", { class: "sub", text: all.length ? "Obetalt totalt " + fmtTkr(sum(all)) + " · inom 90 dagar " + fmtTkr(sum(due90)) + " · alla säsonger" : "Inga obetalda betalningar. Betalningarna räknas från leverantörens villkor under Leverantörer, eller från förskott/slutbetalning på PO:n." })));
+      box.append(h("div", { class: "card-head" }, h("h3", { text: "Payments" }), h("span", { class: "sub", text: all.length ? "Unpaid in total " + fmtTkr(sum(all)) + " · within 90 days " + fmtTkr(sum(due90)) + " · all seasons" : "No unpaid payments. Payments are calculated from the supplier's terms under Suppliers, or from the deposit/final payment on the PO." })));
       if (!all.length) return;
-      const { t, tb } = table([["Förfaller"], ["PO"], ["Leverantör"], ["Typ"], ["Belopp", "num"], ["Status"]]);
+      const { t, tb } = table([["Due"], ["PO"], ["Supplier"], ["Type"], ["Amount", "num"], ["Status"]]);
       const byLev = {};
       for (const x of all.slice(0, 40)) {
         const d = x.datum ? diffDays(x.datum) : null;
         tb.append(h("tr", { tabIndex: 0, dataset: { po: x.po._id } },
-          td("Förfaller", "mono", x.datum ? fmtDate(x.datum) : h("span", { class: "muted", text: "datum saknas" }), d != null ? h("div", { class: "days " + (d < 0 ? "late" : d <= 14 ? "soon" : ""), text: fmtDays(d) }) : null),
+          td("Due", "mono", x.datum ? fmtDate(x.datum) : h("span", { class: "muted", text: "date missing" }), d != null ? h("div", { class: "days " + (d < 0 ? "late" : d <= 14 ? "soon" : ""), text: fmtDays(d) }) : null),
           td("PO", "c-main", h("div", { class: "prod", text: x.po.nr || x.po._id }), h("div", { class: "sub", text: [x.po.sasong, x.po.drop].filter(Boolean).join(" ") })),
-          td("Leverantör", null, x.po.leverantor || ""), td("Typ", null, x.typ, x.kalla === "antagande" ? h("div", { class: "sub", text: "villkor saknas – antaget" }) : null), td("Belopp", "num", fmtSEK(x.belopp), x.valuta !== "SEK" ? h("div", { class: "sub", text: fmtCur(x.beloppValuta, x.valuta) }) : null), td("Status", null, poStatusPill(x.po))));
+          td("Supplier", null, x.po.leverantor || ""), td("Type", null, x.typ, x.kalla === "antagande" ? h("div", { class: "sub", text: "terms missing – assumed" }) : null), td("Amount", "num", fmtSEK(x.belopp), x.valuta !== "SEK" ? h("div", { class: "sub", text: fmtCur(x.beloppValuta, x.valuta) }) : null), td("Status", null, poStatusPill(x.po))));
         byLev[x.po.leverantor || "–"] = (byLev[x.po.leverantor || "–"] || 0) + x.belopp;
       }
       box.append(h("div", { class: "ledger-wrap" }, t));
@@ -1480,16 +1508,16 @@ import * as P from "./platform.js";
       const d = eta ? diffDays(eta) : null;
       const bits = [h("span", { class: "nr", text: p.nr || p._id }), h("span", { class: "m", text: p.leverantor || "" }), poStatusPill(p)];
       bits.push(h("span", { class: "m" }, "Drop ", h("b", { text: [p.sasong, p.drop].filter(Boolean).join(" ") || "–" })));
-      bits.push(h("span", { class: "m" }, "ETA lager ", h("b", { text: eta ? fmtDate(eta) : "–" })));
+      bits.push(h("span", { class: "m" }, "ETA warehouse ", h("b", { text: eta ? fmtDate(eta) : "–" })));
       if (d != null && PO_OPEN.includes(ps)) bits.push(h("span", { class: "days " + (d < 0 ? "late" : d <= 14 ? "soon" : ""), text: fmtDays(d) }));
       if (isISO(p.bekraftadEx) || isISO(p.planeradEx)) bits.push(h("span", { class: "m" }, "Ex-factory ", h("b", { text: fmtDate(p.bekraftadEx || p.planeradEx) })));
       if (p.prioritet && p.prioritet !== "Normal") bits.push(h("span", { class: "m", text: p.prioritet }));
-      if (p.tygstatus) bits.push(h("span", { class: "m" }, "Tyg: ", h("b", { text: p.tygstatus })));
+      if (p.tygstatus) bits.push(h("span", { class: "m" }, "Fabric: ", h("b", { text: p.tygstatus })));
       const tot = poTotal(p);
-      bits.push(h("span", { class: "m" }, "Totalt ", h("b", { text: fmtSEK(tot) })));
+      bits.push(h("span", { class: "m" }, "Total ", h("b", { text: fmtSEK(tot) })));
       if (p.kommentar) bits.push(h("span", { class: "m", text: p.kommentar }));
       const head = h("div", { class: "card-head", dataset: { po: p._id }, tabIndex: 0, style: "cursor:pointer" }, h("h3", { text: p.nr || p._id }), h("div", { class: "po-head" }, bits.slice(1)));
-      if (canWrite && db) head.append(h("div", { class: "right" }, h("button", { class: "btn small", type: "button", text: "Öppna PO", onclick: () => openPo(p._id) })));
+      if (canWrite && db) head.append(h("div", { class: "right" }, h("button", { class: "btn small", type: "button", text: "Open PO", onclick: () => openPo(p._id) })));
       return head;
     },
     prodRow(p, rs) {
@@ -1502,11 +1530,11 @@ import * as P from "./platform.js";
       const colours = h("div", { class: "swatches" }, rs.slice().sort((a, b) => fargText(a.farg || "").localeCompare(fargText(b.farg || ""), "sv")).map((r) => h("span", { class: "swatch btn-swatch", style: "cursor:default" }, colourDot(fargText(r.farg)), (fargText(r.farg) || "TBA") + (num(r.antal) != null ? " " + r.antal : ""))));
       const pimg = st ? styleImage(st) : null;
       return h("tr", { tabIndex: 0, dataset: { po: p._id } },
-        td("", "c-main", h("div", { style: "display:flex;gap:10px;align-items:flex-start" }, pimg ? h("img", { class: "rowthumb", style: "margin-top:0", src: imgUrl(pimg), alt: "", loading: "lazy", onclick: (e) => { e.stopPropagation(); openLightbox(styleAllImages(st), pimg); } }) : null, h("div", null, h("div", { class: "prod", text: r0.produkt || (st ? st.namn : "–") }), h("div", { class: "sub" }, r0.typ && r0.typ !== "Nyhet" ? chip(r0.typ) : null, st ? h("button", { class: "linkish", type: "button", text: st._id + (styleKategori(st) ? " · " + styleKategori(st) : ""), onclick: (e) => { e.stopPropagation(); openStyle(st._id); } }) : h("span", { class: "muted", text: "Ingen style kopplad" }))))),
-        td("Färger", null, colours),
-        td("Antal", "num", unknown && !units ? "?" : String(units) + (unknown ? "+" : "")),
-        td("Styckpris", "num", u0 ? h("div", null, h("div", { text: fmtSEK(u0.pris) }), u0.kalla === "style" ? h("div", { class: "sub", text: "från stylen" + (st && st.inkopsValuta ? " · " + num(st.inkopspris) + " " + st.inkopsValuta : "") }) : null) : h("span", { class: "muted", text: "–" })),
-        td("Kostnad", "num", cost ? fmtSEK(cost) : "–")
+        td("", "c-main", h("div", { style: "display:flex;gap:10px;align-items:flex-start" }, pimg ? h("img", { class: "rowthumb", style: "margin-top:0", src: imgUrl(pimg), alt: "", loading: "lazy", onclick: (e) => { e.stopPropagation(); openLightbox(styleAllImages(st), pimg); } }) : null, h("div", null, h("div", { class: "prod", text: r0.produkt || (st ? st.namn : "–") }), h("div", { class: "sub" }, r0.typ && r0.typ !== "Nyhet" ? chip(r0.typ) : null, st ? h("button", { class: "linkish", type: "button", text: st._id + (styleKategori(st) ? " · " + styleKategori(st) : ""), onclick: (e) => { e.stopPropagation(); openStyle(st._id); } }) : h("span", { class: "muted", text: "No style linked" }))))),
+        td("Colours", null, colours),
+        td("Quantity", "num", unknown && !units ? "?" : String(units) + (unknown ? "+" : "")),
+        td("Unit price", "num", u0 ? h("div", null, h("div", { text: fmtSEK(u0.pris) }), u0.kalla === "style" ? h("div", { class: "sub", text: "from the style" + (st && st.inkopsValuta ? " · " + num(st.inkopspris) + " " + st.inkopsValuta : "") }) : null) : h("span", { class: "muted", text: "–" })),
+        td("Cost", "num", cost ? fmtSEK(cost) : "–")
       );
     },
     lineRow(p, r) {
@@ -1517,13 +1545,13 @@ import * as P from "./platform.js";
       const cost = lineCost(r);
       const perSize = sizeQty(r);
       const tr = h("tr", { tabIndex: 0, dataset: { po: p._id } },
-        td("", "c-main", h("div", { class: "prod", text: r.produkt || (st ? st.namn : "–") }), h("div", { class: "sub" }, r.typ && r.typ !== "Nyhet" ? chip(r.typ) : null, st ? h("button", { class: "linkish", type: "button", text: st._id + (styleKategori(st) ? " · " + styleKategori(st) : ""), onclick: (e) => { e.stopPropagation(); openStyle(st._id); } }) : h("span", { class: "muted", text: "Ingen style kopplad" }))),
-        td("Färg", null, r.farg || h("span", { class: "muted", text: "TBA" })),
+        td("", "c-main", h("div", { class: "prod", text: r.produkt || (st ? st.namn : "–") }), h("div", { class: "sub" }, r.typ && r.typ !== "Nyhet" ? chip(r.typ) : null, st ? h("button", { class: "linkish", type: "button", text: st._id + (styleKategori(st) ? " · " + styleKategori(st) : ""), onclick: (e) => { e.stopPropagation(); openStyle(st._id); } }) : h("span", { class: "muted", text: "No style linked" }))),
+        td("Colour", null, r.farg || h("span", { class: "muted", text: "TBA" })),
         td("Tyg", "note", r.tyg || ""),
-        td("Antal", "num", r.antal == null || r.antal === "" ? "?" : String(r.antal), perSize ? h("div", { class: "sub", style: "text-align:right;font-family:var(--f-mono)", text: sizes.map((sz) => sz + ":" + (perSize[sz] ?? 0)).join(" ") }) : null),
-        td("Tyg/enhet", "num", num(r.tygkostnad) != null ? fmtSEK(r.tygkostnad) : "–"),
-        td("Styckpris", "num", num(r.styckpris) != null ? fmtSEK(r.styckpris) : "–"),
-        td("Kostnad", "num", cost != null ? fmtSEK(cost) : "–"),
+        td("Quantity", "num", r.antal == null || r.antal === "" ? "?" : String(r.antal), perSize ? h("div", { class: "sub", style: "text-align:right;font-family:var(--f-mono)", text: sizes.map((sz) => sz + ":" + (perSize[sz] ?? 0)).join(" ") }) : null),
+        td("Fabric/unit", "num", num(r.tygkostnad) != null ? fmtSEK(r.tygkostnad) : "–"),
+        td("Unit price", "num", num(r.styckpris) != null ? fmtSEK(r.styckpris) : "–"),
+        td("Cost", "num", cost != null ? fmtSEK(cost) : "–"),
         td("EAN", "mono", !st || !r.farg ? "–" : sizes.length ? got + "/" + sizes.length : "–"),
         td("Fotosample", null, r.fotosample || p.fotosample || "", (r.fotosampleLeverans || p.fotosampleLeverans) ? h("div", { class: "sub mono", text: fmtDate(r.fotosampleLeverans || p.fotosampleLeverans) }) : null)
       );
@@ -1532,7 +1560,7 @@ import * as P from "./platform.js";
     renderBudget(season, inSeason) {
       const box = this.budget; box.replaceChildren();
       if (ME.leverantor) { box.hidden = true; return; } box.hidden = false;
-      if (!season) { box.append(h("p", { class: "hint", text: "Välj en säsong för att se budgeten." })); return; }
+      if (!season) { box.append(h("p", { class: "hint", text: "Choose a season to see the budget." })); return; }
       const b = budgetOf(season);
       const kats = KATEGORIER.slice();
       const per = {};
@@ -1549,16 +1577,16 @@ import * as P from "./platform.js";
       const sumLagt = Object.values(per).reduce((a, x) => a + x.lagt, 0);
       const sumPlan = Object.values(per).reduce((a, x) => a + x.plan, 0);
       const edit = this.budgetEdit;
-      const head = h("div", { class: "budget-head" }, h("h3", { text: "Budget " + season }), h("span", { class: "sub", text: b ? "Inköpsvärde exkl. frakt och tull" : "Ingen budget satt för " + season + " ännu." }));
-      if (canAdmin && canWrite && db && !edit && this.allowEdit !== false) head.append(h("span", { class: "spacer" }), h("button", { class: "btn small", type: "button", text: b ? "Ändra budget" : "Sätt budget", onclick: () => { this.budgetEdit = true; this.update(); } }));
+      const head = h("div", { class: "budget-head" }, h("h3", { text: "Budget " + season }), h("span", { class: "sub", text: b ? "Purchase value excl. freight and duty" : "No budget set for " + season + " yet." }));
+      if (canAdmin && canWrite && db && !edit && this.allowEdit !== false) head.append(h("span", { class: "spacer" }), h("button", { class: "btn small", type: "button", text: b ? "Change budget" : "Set budget", onclick: () => { this.budgetEdit = true; this.update(); } }));
       box.append(head);
       const inputs = {};
       const over = total != null && sumLagt + sumPlan > total;
       const tile = (k, v, cls) => h("div", { class: "kv" }, h("span", { class: "k", text: k }), h("span", { class: "v big " + (cls || ""), text: v }));
       const totRow = h("div", { class: "budget-tot" });
-      if (edit) { const i = inp("bud_total", total == null ? "" : Math.round(total / 1000), { type: "number", min: "0", step: "1" }); inputs._total = i; totRow.append(h("div", { class: "kv" }, h("span", { class: "k", text: "Ram (tkr)" }), i)); }
-      else totRow.append(tile("Ram", total != null ? fmtTkr(total) : "–"));
-      totRow.append(tile("Lagt", fmtTkr(sumLagt)), tile("Planerat", fmtTkr(sumPlan)), tile("Kvar", total != null ? fmtTkr(total - sumLagt - sumPlan) : "–", over ? "over" : ""), tile("Använt", total ? Math.round(((sumLagt + sumPlan) / total) * 100) + " %" : "–"));
+      if (edit) { const i = inp("bud_total", total == null ? "" : Math.round(total / 1000), { type: "number", min: "0", step: "1" }); inputs._total = i; totRow.append(h("div", { class: "kv" }, h("span", { class: "k", text: "Frame (k SEK)" }), i)); }
+      else totRow.append(tile("Frame", total != null ? fmtTkr(total) : "–"));
+      totRow.append(tile("Placed", fmtTkr(sumLagt)), tile("Planned", fmtTkr(sumPlan)), tile("Left", total != null ? fmtTkr(total - sumLagt - sumPlan) : "–", over ? "over" : ""), tile("Used", total ? Math.round(((sumLagt + sumPlan) / total) * 100) + " %" : "–"));
       box.append(totRow);
       const grid = h("div", { class: "budget-grid" });
       const allKats = kats.concat(Object.keys(per).filter((k) => !kats.includes(k) && (per[k].lagt || per[k].plan)));
@@ -1566,33 +1594,33 @@ import * as P from "./platform.js";
         const x = per[k]; const bud = x.budget; const used = x.lagt + x.plan;
         const pct = bud ? Math.min(100, (x.lagt / bud) * 100) : 0, pct2 = bud ? Math.min(100, (used / bud) * 100) : 0;
         const card = h("div", { class: "bcat" }, h("span", { class: "k", text: k }));
-        if (edit && kats.includes(k)) { const i = inp("bud_" + slug(k), bud == null ? "" : Math.round(bud / 1000), { type: "number", min: "0", step: "1", placeholder: "tkr" }); inputs[k] = i; card.append(i); }
+        if (edit && kats.includes(k)) { const i = inp("bud_" + slug(k), bud == null ? "" : Math.round(bud / 1000), { type: "number", min: "0", step: "1", placeholder: "k SEK" }); inputs[k] = i; card.append(i); }
         else card.append(h("span", { class: "big" }, bud != null ? fmtTkr(bud) : "–", bud ? h("small", { text: Math.round((used / bud) * 100) + " %" }) : null));
         card.append(h("div", { class: "bar" }, h("i", { class: "plan" + (bud && used > bud ? " over" : ""), style: "width:" + pct2 + "%" }), h("i", { style: "width:" + pct + "%" })));
-        card.append(h("div", { class: "rows" }, h("div", null, "Lagt", h("b", { text: fmtTkr(x.lagt) })), h("div", null, "Planerat", h("b", { text: fmtTkr(x.plan) })), h("div", { class: bud != null && bud - used < 0 ? "over" : "" }, "Kvar", h("b", { text: bud != null ? fmtTkr(bud - used) : "–" }))));
+        card.append(h("div", { class: "rows" }, h("div", null, "Placed", h("b", { text: fmtTkr(x.lagt) })), h("div", null, "Planned", h("b", { text: fmtTkr(x.plan) })), h("div", { class: bud != null && bud - used < 0 ? "over" : "" }, "Left", h("b", { text: bud != null ? fmtTkr(bud - used) : "–" }))));
         grid.append(card);
       }
       box.append(grid);
       const foot = h("div", { class: "budget-foot" });
-      foot.append(h("span", { text: "Svart = lagt (bekräftade POs), grått = planerat (placeholders och inskickade)." }));
-      if (total != null && sumBudget && Math.round(sumBudget) !== Math.round(total)) foot.append(h("span", { text: "Kategorierna summerar till " + fmtTkr(sumBudget) + " – " + fmtTkr(total - sumBudget) + " av ramen är ofördelat." }));
-      if (per["Okategoriserat"].lagt || per["Okategoriserat"].plan) foot.append(h("span", { class: "late-text", text: "Rader utan kategori räknas inte mot någon kategori – sätt kategori på stylen." }));
-      if (edit) foot.append(h("span", { class: "spacer" }), h("button", { class: "btn small", type: "button", text: "Avbryt", onclick: () => { this.budgetEdit = false; this.update(); } }),
-        h("button", { class: "btn small primary", type: "button", text: "Spara budget", onclick: async () => {
+      foot.append(h("span", { text: "Black = placed (confirmed POs), grey = planned (placeholders and submitted)." }));
+      if (total != null && sumBudget && Math.round(sumBudget) !== Math.round(total)) foot.append(h("span", { text: "The categories add up to " + fmtTkr(sumBudget) + " – " + fmtTkr(total - sumBudget) + " of the frame is unallocated." }));
+      if (per["Okategoriserat"].lagt || per["Okategoriserat"].plan) foot.append(h("span", { class: "late-text", text: "Lines without a category are not counted against any category – set a category on the style." }));
+      if (edit) foot.append(h("span", { class: "spacer" }), h("button", { class: "btn small", type: "button", text: "Cancel", onclick: () => { this.budgetEdit = false; this.update(); } }),
+        h("button", { class: "btn small primary", type: "button", text: "Save budget", onclick: async () => {
           const kategorier = {}; for (const k of kats) { const v = num(inputs[k].value); kategorier[k] = v == null ? null : v * 1000; }
           const tv = num(inputs._total.value);
-          try { await db.collection("budget").doc(slug(season)).set({ sasong: season, total: tv == null ? null : tv * 1000, kategorier, andrad: new Date().toISOString(), av: myId }); toast("Budget sparad"); this.budgetEdit = false; } catch (e) { writeError(e); }
+          try { await db.collection("budget").doc(slug(season)).set({ sasong: season, total: tv == null ? null : tv * 1000, kategorier, andrad: new Date().toISOString(), av: myId }); toast("Budget saved"); this.budgetEdit = false; } catch (e) { writeError(e); }
         } }));
       box.append(foot);
     }
   };
 
   // ---------- PO sheet ----------
-  const PO_LABELS = { nr: "PO-nr", leverantor: "Leverantör", sasong: "Säsong", drop: "Drop", status: "Status", prioritet: "Prioritet", produktionstid: "Produktionstid", fotosample: "Fotosample", fotosampleLeverans: "Fotosample väntas", tygstatus: "Tygstatus", orderBekraftad: "Order bekräftad", planeradEx: "Planerad ex-factory", bekraftadEx: "Bekräftad ex-factory", etaLager: "ETA lager", valuta: "Valuta", kommentar: "Kommentar", orderDatum: "Order date", leveransOnskad: "Requested delivery", labelInstructions: "Label instructions", forskottBelopp: "Förskott belopp", forskottDatum: "Förskott förfaller", forskottBetald: "Förskott betalt", slutBelopp: "Slutbetalning belopp", slutDatum: "Slutbetalning förfaller", slutBetald: "Slutbetalning betald" };
+  const PO_LABELS = { nr: "PO no.", leverantor: "Supplier", sasong: "Season", drop: "Drop", status: "Status", prioritet: "Priority", produktionstid: "Production time", fotosample: "Fotosample", fotosampleLeverans: "Photo sample expected", tygstatus: "Fabric status", orderBekraftad: "Order confirmed", planeradEx: "Planned ex-factory", bekraftadEx: "Confirmed ex-factory", etaLager: "ETA warehouse", valuta: "Currency", kommentar: "Comment", orderDatum: "Order date", leveransOnskad: "Requested delivery", labelInstructions: "Label instructions", forskottBelopp: "Deposit amount", forskottDatum: "Deposit due", forskottBetald: "Deposit paid", slutBelopp: "Final payment amount", slutDatum: "Final payment due", slutBetald: "Final payment paid" };
   const manualPayments = (po) => { const out = []; if (num(po.forskottBelopp)) out.push({ po, typ: "Förskott", belopp: num(po.forskottBelopp), datum: po.forskottDatum, betald: !!po.forskottBetald, kalla: "manuell", idx: "f" }); if (num(po.slutBelopp)) out.push({ po, typ: "Slutbetalning", belopp: num(po.slutBelopp), datum: po.slutDatum, betald: !!po.slutBetald, kalla: "manuell", idx: "s" }); return out; };
   const LEV_TYP = ["Producent", "Tyg", "Trim", "Övrigt"];
-  const VILLKOR_VID = [["order", "vid order"], ["produktion", "vid produktionsstart"], ["exfactory", "vid ex-factory"], ["leverans", "vid leverans"], ["faktura", "netto från faktura (ex-factory)"]];
-  const VID_LABEL = { order: "vid order", produktion: "vid produktion", exfactory: "vid ex-factory", leverans: "vid leverans", faktura: "netto" };
+  const VILLKOR_VID = [["order", "on order"], ["produktion", "at production start"], ["exfactory", "at ex-factory"], ["leverans", "on delivery"], ["faktura", "net from invoice (ex-factory)"]];
+  const VID_LABEL = { order: "on order", produktion: "at production", exfactory: "at ex-factory", leverans: "on delivery", faktura: "netto" };
   const VILLKOR_STATUS = ["Bekräftade", "Att förhandla", "Okända"];
   const FX_DEFAULT = { EUR: 11.32, GBP: 13.08, JPY: 0.0657, USD: 10.6, SEK: 1 };
   const CURS = ["EUR", "GBP", "JPY", "USD"];
@@ -1618,9 +1646,9 @@ import * as P from "./platform.js";
     const stress = valuta === "SEK" ? 0 : stressPct() / 100;
     const out = { pris, netto, valuta, kurs, stress: stressPct(), kostnad: null, kostnadValuta: null, gm: null, gmStress: null, tal: null, po: [], kalla: "" };
     let kostnad = null;
-    if (ink && !ink.valuta && !(lev && lev.valuta)) { out.kalla = "inköpspris " + num(ink.pris) + " – valuta saknas"; }
-    else if (ink && fx(valuta)) { kostnad = num(ink.pris) * kurs; out.kalla = "inköpspris " + fmtCur(num(ink.pris), valuta) + (ink.kalla ? " (" + ink.kalla + (ink.datum ? " " + fmtDate(ink.datum) : "") + ")" : ""); }
-    else { const uc = unitCostOf(s._id); if (uc) { kostnad = uc.kostnad; out.po = uc.po; out.kalla = "PO-snitt " + uc.po.join(", "); } }
+    if (ink && !ink.valuta && !(lev && lev.valuta)) { out.kalla = "purchase price " + num(ink.pris) + " – currency missing"; }
+    else if (ink && fx(valuta)) { kostnad = num(ink.pris) * kurs; out.kalla = "purchase price " + fmtCur(num(ink.pris), valuta) + (ink.kalla ? " (" + ink.kalla + (ink.datum ? " " + fmtDate(ink.datum) : "") + ")" : ""); }
+    else { const uc = unitCostOf(s._id); if (uc) { kostnad = uc.kostnad; out.po = uc.po; out.kalla = "PO average " + uc.po.join(", "); } }
     if (kostnad != null) { out.kostnad = kostnad; out.kostnadValuta = kostnad / kurs; out.gm = (netto - kostnad) / netto * 100; out.gmStress = (netto - kostnad * (1 + stress)) / netto * 100; out.tal = valuta === "SEK" ? null : (0.3 * netto / kostnad - 1) * 100; }
     return out;
   }
@@ -1628,14 +1656,14 @@ import * as P from "./platform.js";
   const fmtPct = (n, d = 0) => (n == null || isNaN(n) ? "–" : (Math.round(n * Math.pow(10, d)) / Math.pow(10, d)).toLocaleString("sv-SE") + " %");
   function gmCell(info) {
     if (!info) return h("span", { class: "muted", text: "–" });
-    if (info.kostnad == null) return h("span", { class: "sub", text: "GM1: kostnad saknas på PO" });
+    if (info.kostnad == null) return h("span", { class: "sub", text: "GM1: cost missing on PO" });
     return h("div", { class: "gm" }, h("div", { class: "gm-row" }, h("span", { class: "pill " + gmClass(info.gm), text: "GM1 " + fmtPct(info.gm) }),
-      info.valuta !== "SEK" ? h("span", { class: "pill " + gmClass(info.gmStress), title: "GM1 om SEK försvagas " + info.stress + " % mot " + info.valuta, text: info.valuta + " +" + info.stress + " %: " + fmtPct(info.gmStress) }) : null),
-      h("div", { class: "sub", text: "kostnad " + fmtSEK(info.kostnad) + (info.valuta !== "SEK" ? " (" + fmtCur(info.kostnadValuta, info.valuta) + ")" : "") + (info.kalla ? " · " + info.kalla : "") + " · netto " + fmtSEK(info.netto) + (info.tal != null ? (info.tal >= 0 ? " · tål +" + Math.round(info.tal) + " % " + info.valuta + " innan GM1 < 70 %" : " · under 70 % redan idag") : "") }));
+      info.valuta !== "SEK" ? h("span", { class: "pill " + gmClass(info.gmStress), title: "GM1 if SEK weakens " + info.stress + " % vs " + info.valuta, text: info.valuta + " +" + info.stress + " %: " + fmtPct(info.gmStress) }) : null),
+      h("div", { class: "sub", text: "cost " + fmtSEK(info.kostnad) + (info.valuta !== "SEK" ? " (" + fmtCur(info.kostnadValuta, info.valuta) + ")" : "") + (info.kalla ? " · " + info.kalla : "") + " · net " + fmtSEK(info.netto) + (info.tal != null ? (info.tal >= 0 ? " · tolerates +" + Math.round(info.tal) + " % " + info.valuta + " before GM1 < 70 %" : " · already below 70 % today") : "") }));
   }
-  const termsText = (l) => { if (!l) return ""; const v = Array.isArray(l.villkor) ? l.villkor : []; if (!v.length) return l.villkorText || ""; return v.map((t) => (num(t.andel) ?? 0) + " % " + (t.vid === "faktura" ? (num(t.dagar) || 0) + " dagar netto" : VID_LABEL[t.vid] + (num(t.dagar) ? " +" + t.dagar + " d" : ""))).join(", ") + (num(l.rabatt) ? " · " + l.rabatt + " % rabatt" : ""); };
+  const termsText = (l) => { if (!l) return ""; const v = Array.isArray(l.villkor) ? l.villkor : []; if (!v.length) return l.villkorText || ""; return v.map((t) => (num(t.andel) ?? 0) + " % " + (t.vid === "faktura" ? (num(t.dagar) || 0) + " days net" : VID_LABEL[t.vid] + (num(t.dagar) ? " +" + t.dagar + " d" : ""))).join(", ") + (num(l.rabatt) ? " · " + l.rabatt + " % discount" : ""); };
   function poMilestones(po) {
-    const prodDays = num(po.produktionstid) ?? levNum(po.leverantor, "produktionstid");
+    const prodDays = num(po.produktionstid) ?? levNum(po.leverantor, "production time");
     const ord = isISO(po.orderDatum) ? po.orderDatum : null;
     const frakt = fraktFor(po.leverantor);
     const ex = isISO(po.bekraftadEx) ? po.bekraftadEx : isISO(po.planeradEx) ? po.planeradEx : ord && prodDays != null ? addDays(ord, prodDays) : isISO(po.leveransOnskad) ? addDays(po.leveransOnskad, -frakt) : null;
@@ -1663,7 +1691,7 @@ import * as P from "./platform.js";
       const rec = paid[i] || null;
       // Antagande: förfallna betalningar på inlevererade POs, och förskott på POs som är i produktion/skickade, är betalda tills någon bockar ur
       const antagenBetald = !rec && !!datum && datum < todayISO() && (st === "Inlevererad" || (["I produktion", "Skickad"].includes(st) && ["order", "produktion"].includes(t.vid)));
-      const typ = (num(t.andel) ?? 0) + " % " + (t.vid === "faktura" ? (num(t.dagar) || 0) + " d netto" : VID_LABEL[t.vid] || t.vid);
+      const typ = (num(t.andel) ?? 0) + " % " + (t.vid === "faktura" ? (num(t.dagar) || 0) + " d net" : VID_LABEL[t.vid] || t.vid);
       return { po, typ, belopp, valuta: cur, beloppValuta: belopp / rate, datum, betald: rec ? !!rec.betald : antagenBetald, antagenBetald, antagna: !vill, idx: i, kalla: vill ? "villkor" : "antagande", datumKalla: base ? (t.vid === "leverans" && !isISO(po.etaLager) ? "beräknad" : t.vid !== "leverans" && !isISO(po.bekraftadEx) && !isISO(po.orderDatum) ? "beräknad" : "") : "" };
     });
   }
@@ -1680,19 +1708,20 @@ import * as P from "./platform.js";
     return pre + (n + 1);
   }
   function openPo(id, preset) {
+    if (designOnly()) return;
     const isNew = !id;
     const po = isNew ? Object.assign({ _id: null, status: "Placeholder", prioritet: "Normal", valuta: "SEK", rader: [], logg: [], orderDatum: todayISO(), labelInstructions: PO_DEFAULTS.label }, preset || {}) : byId(D.po, id);
-    if (!po) { toast("Hittar inte PO:n."); return; }
+    if (!po) { toast("Cannot find the PO."); return; }
     const ro = !canWrite || !db;
     const current = () => (isNew ? po : byId(D.po, po._id) || po);
-    const fNr = inp("f_pnr", po.nr, { placeholder: "t.ex. EMI-SS27-5" });
+    const fNr = inp("f_pnr", po.nr, { placeholder: "e.g. EMI-SS27-5" });
     const fLev = inp("f_plev", po.leverantor, { list: "dlLev", autocomplete: "off" });
-    const fSas = seasonSelect("f_psas", po.sasong, "– Välj säsong –");
+    const fSas = seasonSelect("f_psas", po.sasong, "– Choose season –");
     const poDropFranStyles = !isNew && !!po._dropFranStyles;
     const fDrop = poDropFranStyles ? inp("f_pdrop", po.drop, { disabled: true }) : dropSelect("f_pdrop", po._dropRaw != null ? po._dropRaw : po.drop, fSas);
     const fStatus = selectEl("f_pstatus", PO_STATUS, poStatusNorm(po.status));
     const fPrio = selectEl("f_pprio", PRIORITET, po.prioritet || "Normal");
-    const fProd = inp("f_pprod", po.produktionstid, { type: "number", min: "0", step: "1", placeholder: "dagar" });
+    const fProd = inp("f_pprod", po.produktionstid, { type: "number", min: "0", step: "1", placeholder: "days" });
     const fFoto = selectEl("f_pfoto", FOTOSAMPLE_PO, fotoPoNorm(po.fotosample));
     const fFotoD = inp("f_pfotod", po.fotosampleLeverans, { type: "date" });
     const fTygS = selectEl("f_ptygs", TYGSTATUS_PO.map((x) => [x, x || "–"]), po.tygstatus || "");
@@ -1702,30 +1731,30 @@ import * as P from "./platform.js";
     const fEta = inp("f_peta", po.etaLager, { type: "date" });
     const fOrdD = inp("f_pordd", po.orderDatum, { type: "date" });
     const fLevO = inp("f_plevo", po.leveransOnskad, { type: "date" });
-    const fLabel = area("f_plabel", po.labelInstructions == null ? PO_DEFAULTS.label : po.labelInstructions, "Label instructions till PO-filen");
-    const fFskB = inp("f_pfskb", po.forskottBelopp, { type: "number", min: "0", step: "1", placeholder: "belopp" });
+    const fLabel = area("f_plabel", po.labelInstructions == null ? PO_DEFAULTS.label : po.labelInstructions, "Label instructions for the PO file");
+    const fFskB = inp("f_pfskb", po.forskottBelopp, { type: "number", min: "0", step: "1", placeholder: "amount" });
     const fFskD = inp("f_pfskd", po.forskottDatum, { type: "date" });
     const fFskP = selectEl("f_pfskp", [["", "Ej betalt"], ["1", "Betalt"]], po.forskottBetald ? "1" : "");
-    const fSlutB = inp("f_pslutb", po.slutBelopp, { type: "number", min: "0", step: "1", placeholder: "belopp" });
+    const fSlutB = inp("f_pslutb", po.slutBelopp, { type: "number", min: "0", step: "1", placeholder: "amount" });
     const fSlutD = inp("f_pslutd", po.slutDatum, { type: "date" });
     const fSlutP = selectEl("f_pslutp", [["", "Ej betalt"], ["1", "Betalt"]], po.slutBetald ? "1" : "");
-    const legacyPay = [po.forskottBetalt ? "Förskott (gammalt fält): " + po.forskottBetalt : "", po.slutbetalning ? "Slutbetalning (gammalt fält): " + po.slutbetalning : ""].filter(Boolean).join(" · ");
+    const legacyPay = [po.forskottBetalt ? "Deposit (old field): " + po.forskottBetalt : "", po.slutbetalning ? "Final payment (old field): " + po.slutbetalning : ""].filter(Boolean).join(" · ");
     const fVal = inp("f_pval", po.valuta || "SEK");
     const fKom = area("f_pkom", po.kommentar);
-    const nrHint = h("span", { class: "hint", text: isNew ? "Tomt = nästa löpnummer för leverantören och säsongen" : "" });
-    const syncProd = () => { if (!fProd.value && fLev.value) { const v = levNum(fLev.value, "produktionstid"); if (v != null) fProd.placeholder = v + " d (leverantörens)"; } };
+    const nrHint = h("span", { class: "hint", text: isNew ? "Empty = next serial number for the supplier and season" : "" });
+    const syncProd = () => { if (!fProd.value && fLev.value) { const v = levNum(fLev.value, "production time"); if (v != null) fProd.placeholder = v + " d (the supplier's)"; } };
     fLev.addEventListener("change", syncProd); syncProd();
     const form = h("form", { class: "form three", id: "poForm", autocomplete: "off", onsubmit: (e) => e.preventDefault() },
       h("h3", { class: "sec-title full", text: "Order" }),
-      h("div", { class: "field" }, h("label", { for: "f_pnr", text: "PO-nr" }), fNr, nrHint), field("Leverantör", fLev), field("Status", fStatus),
-      field("Säsong", fSas), field("Drop", fDrop, { hint: poDropFranStyles ? "Följer stylarnas drop – ändras på stylen" : "Följer stylarna så fort de har en drop" }), field("Prioritet", fPrio),
-      h("h3", { class: "sec-title full", text: "Tidplan" }),
-      field("Orderdatum", fOrdD), field("Produktionstid (dagar)", fProd), field("Önskad leverans", fLevO, { hint: "Tomt = droppens \"I lager senast\"" }),
-      field("Planerad ex-factory", fPlan), field("Bekräftad ex-factory", fBekEx), field("ETA lager", fEta),
-      h("h3", { class: "sec-title full", text: "Tyg och fotosample" }),
-      field("Tygstatus", fTygS), field("Fotosample", fFoto, { hint: "Tomt = beställs automatiskt för nyheter" }), field("Fotosample väntas", fFotoD),
+      h("div", { class: "field" }, h("label", { for: "f_pnr", text: "PO no." }), fNr, nrHint), field("Supplier", fLev), field("Status", fStatus),
+      field("Season", fSas), field("Drop", fDrop, { hint: poDropFranStyles ? "Follows the styles' drop – changed on the style" : "Follows the styles as soon as they have a drop" }), field("Priority", fPrio),
+      h("h3", { class: "sec-title full", text: "Schedule" }),
+      field("Order date", fOrdD), field("Production time (days)", fProd), field("Requested delivery", fLevO, { hint: "Empty = the drop's \"In stock by\"" }),
+      field("Planned ex-factory", fPlan), field("Confirmed ex-factory", fBekEx), field("ETA warehouse", fEta),
+      h("h3", { class: "sec-title full", text: "Fabric and photo sample" }),
+      field("Fabric status", fTygS), field("Fotosample", fFoto, { hint: "Empty = ordered automatically for new styles" }), field("Photo sample expected", fFotoD),
       h("h3", { class: "sec-title full", text: "Övrigt" }),
-      field("Valuta", fVal), field("Kommentar", fKom, { full: false }), h("div"),
+      field("Currency", fVal), field("Comment", fKom, { full: false }), h("div"),
       field("Label instructions", fLabel, { full: true }));
     if (ro) lock(form);
 
@@ -1736,16 +1765,16 @@ import * as P from "./platform.js";
     function styleByName(name) { const n = norm(name); return D.styles.find((s) => norm(s.namn) === n) || null; }
     function lineEditor(r, idx) {
       const st = r.styleId ? byId(D.styles, r.styleId) : null;
-      const fProdN = inp("l_prod_" + idx, r.produkt || (st ? st.namn : ""), { list: "dlStyle", autocomplete: "off", placeholder: "Produkt (style)" });
-      const fFarg = inp("l_farg_" + idx, r.farg, { placeholder: "Färg" });
+      const fProdN = inp("l_prod_" + idx, r.produkt || (st ? st.namn : ""), { list: "dlStyle", autocomplete: "off", placeholder: "Product (style)" });
+      const fFarg = inp("l_farg_" + idx, r.farg, { placeholder: "Colour" });
       const fTyp = selectEl("l_typ_" + idx, STYLE_TYP, r.typ || (st ? st.typ : "Nyhet") || "Nyhet");
       const fTyg = inp("l_tyg_" + idx, r.tyg, { list: "dlTyg", autocomplete: "off", placeholder: "Tyg" });
-      const fStorl = inp("l_storl_" + idx, (r.storlekar && r.storlekar.length ? r.storlekar : sizesOf(st)).join(", "), { placeholder: "Storlekar, t.ex. 46, 48, 50" });
-      const fPer = inp("l_per_" + idx, r.perStorlek ? (r.storlekar && r.storlekar.length ? r.storlekar : sizesOf(st)).map((sz) => r.perStorlek[sz] ?? 0).join(", ") : "", { placeholder: "Antal per storlek, t.ex. 4, 5, 11" });
-      const fBesk = inp("l_besk_" + idx, r.beskrivning, { placeholder: "Beskrivning till PO-filen, t.ex. tyg, knappar, label" });
-      const fAntal = inp("l_antal_" + idx, r.antal, { type: "number", min: "0", step: "1", placeholder: "Antal" });
-      const fTygK = inp("l_tygk_" + idx, r.tygkostnad, { type: "number", min: "0", step: "0.01", placeholder: "Tyg/enhet" });
-      const fPris = inp("l_pris_" + idx, r.styckpris, { type: "number", min: "0", step: "0.01", placeholder: "Styckpris (CMT)" });
+      const fStorl = inp("l_storl_" + idx, (r.storlekar && r.storlekar.length ? r.storlekar : sizesOf(st)).join(", "), { placeholder: "Sizes, e.g. 46, 48, 50" });
+      const fPer = inp("l_per_" + idx, r.perStorlek ? (r.storlekar && r.storlekar.length ? r.storlekar : sizesOf(st)).map((sz) => r.perStorlek[sz] ?? 0).join(", ") : "", { placeholder: "Quantity per size, e.g. 4, 5, 11" });
+      const fBesk = inp("l_besk_" + idx, r.beskrivning, { placeholder: "Description for the PO file, e.g. fabric, buttons, label" });
+      const fAntal = inp("l_antal_" + idx, r.antal, { type: "number", min: "0", step: "1", placeholder: "Quantity" });
+      const fTygK = inp("l_tygk_" + idx, r.tygkostnad, { type: "number", min: "0", step: "0.01", placeholder: "Fabric/unit" });
+      const fPris = inp("l_pris_" + idx, r.styckpris, { type: "number", min: "0", step: "0.01", placeholder: "Unit price (CMT)" });
       const fFotoL = inp("l_foto_" + idx, r.fotosample, { placeholder: "Fotosample" });
       const kost = h("span", { class: "mono" });
       const hint = h("span", { class: "sub" });
@@ -1760,7 +1789,7 @@ import * as P from "./platform.js";
         r.antal = num(fAntal.value); r.tygkostnad = num(fTygK.value); r.styckpris = num(fPris.value);
         const c = lineCost(r); r.kostnad = c;
         kost.textContent = c != null ? fmtSEK(c) : "–";
-        hint.textContent = s2 ? s2._id + (styleKategori(s2) ? " · " + styleKategori(s2) : " · saknar kategori") + (s2.storlekar && s2.storlekar.length && !fStorl.value ? " · storlekar från stylen" : "") : (r.produkt ? "Ny style skapas vid sparning" : "");
+        hint.textContent = s2 ? s2._id + (styleKategori(s2) ? " · " + styleKategori(s2) : " · no category") + (s2.storlekar && s2.storlekar.length && !fStorl.value ? " · sizes from the style" : "") : (r.produkt ? "A new style is created on save" : "");
         renderTotals();
       };
       [fProdN, fFarg, fTyp, fTyg, fStorl, fPer, fAntal, fTygK, fPris, fFotoL].forEach((x) => { x.addEventListener("input", sync); x.addEventListener("change", sync); });
@@ -1769,11 +1798,11 @@ import * as P from "./platform.js";
       fBesk.addEventListener("input", () => { r.beskrivning = fBesk.value.trim(); });
       fTyp.addEventListener("change", () => (fTyp.dataset.touched = "1"));
       const box = h("div", { class: "line" },
-        h("div", { class: "row two" }, field("Produkt", fProdN), field("Färg", fFarg), field("Nyhet / restock", fTyp)),
-        h("div", { class: "row two" }, field("Tyg", fTyg), field("Storlekar", fStorl), field("Antal per storlek", fPer)),
-        h("div", { class: "row", style: "grid-template-columns:1fr" }, field("Beskrivning (PO-filen)", fBesk)),
-        h("div", { class: "row" }, field("Antal", fAntal), field("Tyg/enhet", fTygK), field("Styckpris", fPris), field("Fotosample", fFotoL), h("div", { class: "field" }, h("label", { text: "Kostnad" }), h("div", { style: "padding:7px 0" }, kost)), h("div")),
-        h("div", { class: "foot" }, hint, ro ? null : h("button", { class: "btn small danger", type: "button", text: "Ta bort rad", onclick: () => { lines.splice(idx, 1); renderLines(); } })));
+        h("div", { class: "row two" }, field("Product", fProdN), field("Colour", fFarg), field("New / restock", fTyp)),
+        h("div", { class: "row two" }, field("Tyg", fTyg), field("Sizes", fStorl), field("Quantity per size", fPer)),
+        h("div", { class: "row", style: "grid-template-columns:1fr" }, field("Description (PO file)", fBesk)),
+        h("div", { class: "row" }, field("Quantity", fAntal), field("Fabric/unit", fTygK), field("Unit price", fPris), field("Fotosample", fFotoL), h("div", { class: "field" }, h("label", { text: "Cost" }), h("div", { style: "padding:7px 0" }, kost)), h("div")),
+        h("div", { class: "foot" }, hint, ro ? null : h("button", { class: "btn small danger", type: "button", text: "Remove line", onclick: () => { lines.splice(idx, 1); renderLines(); } })));
       if (ro) lock(box);
       sync();
       return box;
@@ -1783,31 +1812,31 @@ import * as P from "./platform.js";
       const units = lines.reduce((a, r) => a + (num(r.antal) || 0), 0);
       const cost = lines.reduce((a, r) => a + (lineCost(r) || 0), 0);
       const perColor = {}; for (const r of lines) { const k = r.farg || "TBA"; perColor[k] = (perColor[k] || 0) + (num(r.antal) || 0); }
-      totalsEl.replaceChildren(h("span", null, "Rader: ", h("b", { text: String(lines.length) })), h("span", null, "Antal: ", h("b", { text: String(units) })), h("span", null, "Per färg: ", h("b", { text: Object.entries(perColor).map(([k, v]) => k + " " + v).join(", ") || "–" })), h("span", null, "Snitt/enhet: ", h("b", { text: units ? fmtSEK(cost / units) : "–" })), h("span", null, "Totalt: ", h("b", { text: fmtSEK(cost) })));
+      totalsEl.replaceChildren(h("span", null, "Lines: ", h("b", { text: String(lines.length) })), h("span", null, "Quantity: ", h("b", { text: String(units) })), h("span", null, "Per colour: ", h("b", { text: Object.entries(perColor).map(([k, v]) => k + " " + v).join(", ") || "–" })), h("span", null, "Average/unit: ", h("b", { text: units ? fmtSEK(cost / units) : "–" })), h("span", null, "Total: ", h("b", { text: fmtSEK(cost) })));
     }
     renderLines();
-    const linesSec = h("section", null, h("h3", { class: "sec-title", text: "Produkter på PO:n" }), linesEl, ro ? null : h("div", { style: "margin-top:10px" }, h("button", { class: "btn small", type: "button", text: "+ Lägg till rad", onclick: () => { lines.push({ produkt: "", farg: "", typ: "Nyhet", tyg: "", storlekar: [], antal: null, tygkostnad: null, styckpris: null }); renderLines(); setTimeout(() => { const el = $("l_prod_" + (lines.length - 1)); if (el) el.focus(); }, 20); } })), totalsEl);
+    const linesSec = h("section", null, h("h3", { class: "sec-title", text: "Products on the PO" }), linesEl, ro ? null : h("div", { style: "margin-top:10px" }, h("button", { class: "btn small", type: "button", text: "+ Add line", onclick: () => { lines.push({ produkt: "", farg: "", typ: "Nyhet", tyg: "", storlekar: [], antal: null, tygkostnad: null, styckpris: null }); renderLines(); setTimeout(() => { const el = $("l_prod_" + (lines.length - 1)); if (el) el.focus(); }, 20); } })), totalsEl);
 
     // ---- EAN for the SKUs on this PO ----
     const attSec = h("section");
     function renderAtt() {
-      attSec.replaceChildren(h("h3", { class: "sec-title", text: "Bilagor (PDF)" }));
-      if (isNew) { attSec.append(h("p", { class: "hint", text: "Spara PO:n först, sedan kan du lägga till PDF:er – orderbekräftelse, proforma, faktura." })); return; }
+      attSec.replaceChildren(h("h3", { class: "sec-title", text: "Attachments (PDF)" }));
+      if (isNew) { attSec.append(h("p", { class: "hint", text: "Save the PO first, then you can add PDFs – order confirmation, pro forma, invoice." })); return; }
       const cur = current() || po;
       const list = Array.isArray(cur.bilagor) ? cur.bilagor : [];
-      if (list.length) attSec.append(h("ul", { class: "mini" }, list.map((b) => h("li", null, h("div", { class: "mini-row", style: "cursor:default" }, h("span", { class: "tag", text: "PDF" }), h("span", { class: "mini-main" }, h("a", { href: imgUrl(b.id), target: "_blank", rel: "noopener", text: b.namn || "bilaga.pdf" }), h("span", { class: "sub", text: b.t ? fmtDate(String(b.t).slice(0, 10)) : "" })), h("span", { class: "mini-side" }, ro || !assets ? null : h("button", { class: "btn small danger", type: "button", text: "Ta bort", onclick: async () => { if (!confirm("Ta bort bilagan för alla?")) return; const left = list.filter((x) => x.id !== b.id); if (await write("po", cur._id, { bilagor: left, andrad: new Date().toISOString() })) { try { await assets.delete(b.id); } catch (e) {} } } })))))));
-      else attSec.append(h("p", { class: "hint", text: "Inga bilagor ännu." }));
+      if (list.length) attSec.append(h("ul", { class: "mini" }, list.map((b) => h("li", null, h("div", { class: "mini-row", style: "cursor:default" }, h("span", { class: "tag", text: "PDF" }), h("span", { class: "mini-main" }, h("a", { href: imgUrl(b.id), target: "_blank", rel: "noopener", text: b.namn || "bilaga.pdf" }), h("span", { class: "sub", text: b.t ? fmtDate(String(b.t).slice(0, 10)) : "" })), h("span", { class: "mini-side" }, ro || !assets ? null : h("button", { class: "btn small danger", type: "button", text: "Remove", onclick: async () => { if (!confirm("Remove the attachment for everyone?")) return; const left = list.filter((x) => x.id !== b.id); if (await write("po", cur._id, { bilagor: left, andrad: new Date().toISOString() })) { try { await assets.delete(b.id); } catch (e) {} } } })))))));
+      else attSec.append(h("p", { class: "hint", text: "No attachments yet." }));
       if (!ro && assets) {
         const input = h("input", { type: "file", accept: "application/pdf,image/*", multiple: true, hidden: true, onchange: async () => {
           const files = [...input.files]; input.value = ""; if (!files.length) return;
           const added = [];
-          for (const f of files) { try { const blob = f.type === "application/pdf" ? f : await shrinkImage(f, 2000); const r = await assets.upload(blob, blob.type ? undefined : { type: "application/pdf" }); added.push({ id: r.id, namn: f.name, t: new Date().toISOString(), av: myId }); } catch (e) { toast(e && e.code === "too_large" ? f.name + " är för stor (max 20 MB)." : "Kunde inte ladda upp " + f.name + "."); } }
+          for (const f of files) { try { const blob = f.type === "application/pdf" ? f : await shrinkImage(f, 2000); const r = await assets.upload(blob, blob.type ? undefined : { type: "application/pdf" }); added.push({ id: r.id, namn: f.name, t: new Date().toISOString(), av: myId }); } catch (e) { toast(e && e.code === "too_large" ? f.name + " is too large (max 20 MB)." : "Could not upload " + f.name + "."); } }
           const c2 = current() || cur;
-          if (added.length) await write("po", c2._id, { bilagor: (Array.isArray(c2.bilagor) ? c2.bilagor : []).concat(added), andrad: new Date().toISOString(), logg: (c2.logg || []).concat(logEntry(added.length + (added.length === 1 ? " bilaga tillagd: " : " bilagor tillagda: ") + added.map((a) => a.namn).join(", "))) });
+          if (added.length) await write("po", c2._id, { bilagor: (Array.isArray(c2.bilagor) ? c2.bilagor : []).concat(added), andrad: new Date().toISOString(), logg: (c2.logg || []).concat(logEntry(added.length + (added.length === 1 ? " attachment added: " : " attachments added: ") + added.map((a) => a.namn).join(", "))) });
           renderAtt();
         } });
-        attSec.append(h("div", { class: "dropzone" }, h("button", { class: "btn small", type: "button", text: "+ Lägg till PDF", onclick: () => input.click() }), h("span", { class: "hint", text: "Orderbekräftelse, proforma, faktura, specar" }), input));
-      } else if (!ro && !assets) attSec.append(h("p", { class: "hint", text: "Bilagor kan bara laddas upp med Editor-behörighet." }));
+        attSec.append(h("div", { class: "dropzone" }, h("button", { class: "btn small", type: "button", text: "+ Add PDF", onclick: () => input.click() }), h("span", { class: "hint", text: "Order confirmation, pro forma, invoice, specs" }), input));
+      } else if (!ro && !assets) attSec.append(h("p", { class: "hint", text: "Attachments can only be uploaded with Editor access." }));
     }
     const eanSec = h("section");
     function skuPlan(cur) {
@@ -1823,27 +1852,27 @@ import * as P from "./platform.js";
     }
     function renderEan() {
       eanSec.replaceChildren(h("h3", { class: "sec-title", text: "EAN per SKU" }));
-      if (isNew) { eanSec.append(h("p", { class: "hint", text: "När PO:n sparas får varje SKU (produkt × färg × storlek) ett EAN ur er GS1-serie. Placeholders får EAN först när statusen ändras." })); return; }
+      if (isNew) { eanSec.append(h("p", { class: "hint", text: "When the PO is saved every SKU (product × colour × size) gets an EAN from your GS1 range. Placeholders get EAN only when the status changes." })); return; }
       const cur = current(); const plan = skuPlan(cur);
       const missing = plan.reduce((a, x) => a + x.miss.length, 0);
       const noSizes = plan.filter((x) => !x.sizes.length);
       const rows = [];
       for (const x of plan) for (const sz of x.sizes) { const e = (x.st.ean || []).find((y) => vkey(y) === vkey({ farg: x.r.farg, storlek: sz })); rows.push(h("tr", null, h("td", { text: x.st.namn }), h("td", { text: x.r.farg }), h("td", { text: sz }), h("td", { class: "mono" }, e ? e.ean : h("span", { class: "muted", text: "–" })))); }
-      if (rows.length) eanSec.append(h("div", { class: "vscroll", style: "margin-top:0" }, h("table", { class: "vtable" }, h("thead", null, h("tr", null, ["Produkt", "Färg", "Storlek", "EAN"].map((t) => h("th", { text: t })))), h("tbody", null, rows))));
-      else eanSec.append(h("p", { class: "hint", text: "Inga SKU:er ännu. Rader behöver en kopplad style, färg och storlekar." }));
-      if (noSizes.length) eanSec.append(h("p", { class: "warnline", text: noSizes.map((x) => x.st.namn + (x.r.farg ? " " + x.r.farg : "")).join(", ") + " saknar storlekar – fyll i på raden eller på stylen." }));
+      if (rows.length) eanSec.append(h("div", { class: "vscroll", style: "margin-top:0" }, h("table", { class: "vtable" }, h("thead", null, h("tr", null, ["Product", "Colour", "Size", "EAN"].map((t) => h("th", { text: t })))), h("tbody", null, rows))));
+      else eanSec.append(h("p", { class: "hint", text: "No SKUs yet. Lines need a linked style, colour and sizes." }));
+      if (noSizes.length) eanSec.append(h("p", { class: "warnline", text: noSizes.map((x) => x.st.namn + (x.r.farg ? " " + x.r.farg : "")).join(", ") + " has no sizes – fill in on the line or on the style." }));
       const acts = h("div", { class: "ean-actions" });
-      if (!ro && missing) acts.append(h("button", { class: "btn small primary", type: "button", text: "Tilldela EAN till " + missing + (missing === 1 ? " SKU" : " SKU:er"), onclick: () => assignEans(cur, true) }));
-      if (rows.length && downloads) acts.append(h("button", { class: "btn small", type: "button", text: "Exportera CSV", onclick: () => exportPoEan(cur) }));
+      if (!ro && missing) acts.append(h("button", { class: "btn small primary", type: "button", text: "Assign EAN to " + missing + (missing === 1 ? " SKU" : " SKUs"), onclick: () => assignEans(cur, true) }));
+      if (rows.length && downloads) acts.append(h("button", { class: "btn small", type: "button", text: "Export CSV", onclick: () => exportPoEan(cur) }));
       if (acts.childElementCount) eanSec.append(acts);
     }
     async function assignEans(cur, manual) {
       const plan = skuPlan(cur).filter((x) => x.miss.length);
-      if (!plan.length) { if (manual) toast("Alla SKU:er har redan EAN."); return 0; }
+      if (!plan.length) { if (manual) toast("All SKUs already have an EAN."); return 0; }
       const total = plan.reduce((a, x) => a + x.miss.length, 0);
       let codes;
       try { codes = await allocateEan(total); }
-      catch (e) { const c = e && e.code; toast(c === "busy" ? "Någon annan tilldelar EAN just nu. Försök igen om några sekunder." : c === "empty" ? "EAN-serien räcker inte till." : c === "nopool" ? "EAN-serien är inte inställd." : "Kunde inte reservera EAN."); return 0; }
+      catch (e) { const c = e && e.code; toast(c === "busy" ? "Someone else is assigning EAN right now. Try again in a few seconds." : c === "empty" ? "The EAN range is not large enough." : c === "nopool" ? "The EAN range is not set up." : "Could not reserve EAN."); return 0; }
       const t = new Date().toISOString();
       let i = 0, saved = 0;
       const byStyle = new Map();
@@ -1853,11 +1882,11 @@ import * as P from "./platform.js";
         const farger = uniq((st.farger || []).concat(added.map((a) => a.farg)));
         const storlekar = sizesOf(st).length ? sizesOf(st) : uniq(added.map((a) => a.storlek));
         const range = added[0].ean + (added.length > 1 ? "–" + added[added.length - 1].ean : "");
-        const ok = await write("styles", sid, { farger, storlekar, ean: (st.ean || []).concat(added), logg: (st.logg || []).concat(logEntry(added.length + " EAN tilldelade via PO " + (cur.nr || cur._id) + " (" + range + ")")), andrad: t });
+        const ok = await write("styles", sid, { farger, storlekar, ean: (st.ean || []).concat(added), logg: (st.logg || []).concat(logEntry(added.length + " EAN assigned via PO " + (cur.nr || cur._id) + " (" + range + ")")), andrad: t });
         if (ok) saved += added.length;
         try { await db.collection("eanLogg").doc("L" + Date.now() + Math.random().toString(36).slice(2, 6)).set({ t, av: myId, styleId: sid, styleNamn: st.namn, antal: added.length, forsta: added[0].ean, sista: added[added.length - 1].ean, po: cur.nr || cur._id, sparad: ok }); } catch (e) {}
       }
-      toast(saved + " EAN tilldelade" + (saved < total ? " (" + (total - saved) + " kunde inte sparas – se EAN-loggen)" : ""));
+      toast(saved + " EAN assigned" + (saved < total ? " (" + (total - saved) + " could not be saved – see the EAN log)" : ""));
       return saved;
     }
 
@@ -1866,8 +1895,8 @@ import * as P from "./platform.js";
       const o = { nr: fNr.value.trim(), leverantor: fLev.value.trim(), sasong: fSas.value.trim(), drop: poDropFranStyles ? (po._dropRaw || "") : fDrop.value.trim(), status: fStatus.value, prioritet: fPrio.value, produktionstid: num(fProd.value), fotosample: fFoto.value, fotosampleLeverans: fFotoD.value || null, tygstatus: fTygS.value, orderBekraftad: fBek.value === "1", planeradEx: fPlan.value || null, bekraftadEx: fBekEx.value || null, etaLager: fEta.value || null, valuta: fVal.value.trim() || "SEK", kommentar: fKom.value.trim(),
         orderDatum: fOrdD.value || null, leveransOnskad: fLevO.value || null, labelInstructions: fLabel.value.trim(),
         forskottBelopp: num(fFskB.value), forskottDatum: fFskD.value || null, forskottBetald: fFskP.value === "1", slutBelopp: num(fSlutB.value), slutDatum: fSlutD.value || null, slutBetald: fSlutP.value === "1" };
-      if (!o.leverantor) { toast("Ange leverantör."); fLev.focus(); return; }
-      if (!o.sasong) { toast("Ange säsong."); fSas.focus(); return; }
+      if (!o.leverantor) { toast("Enter supplier."); fLev.focus(); return; }
+      if (!o.sasong) { toast("Enter season."); fSas.focus(); return; }
       if (!o.nr) o.nr = nextPoNr(o.leverantor, o.sasong);
       const btn = $("btnSave"); if (btn) btn.disabled = true;
       try {
@@ -1884,18 +1913,18 @@ import * as P from "./platform.js";
         let pid = po._id;
         if (isNew) {
           pid = slug(o.nr) || await freshId("po", D.po, "PO-", 3);
-          if (byId(D.po, pid)) { toast("PO-numret finns redan."); return; }
-          const body = Object.assign({ id: pid, logg: [logEntry("PO skapad")], andrad: now }, o);
+          if (byId(D.po, pid)) { toast("The PO number already exists."); return; }
+          const body = Object.assign({ id: pid, logg: [logEntry("PO created")], andrad: now }, o);
           if (!(await create("po", pid, body))) return;
           if (!byId(D.po, pid)) D.po.push(Object.assign({}, body, { _id: pid }));
-          toast(o.nr + " sparad");
+          toast(o.nr + " saved");
         } else {
           const cur = current();
           const changes = describeChanges(Object.assign({}, cur, { drop: cur._dropRaw != null ? cur._dropRaw : cur.drop }), o, PO_LABELS);
-          if (JSON.stringify(cur.rader || []) !== JSON.stringify(rader)) changes.push("Rader ändrade (" + rader.length + ")");
+          if (JSON.stringify(cur.rader || []) !== JSON.stringify(rader)) changes.push("Lines changed (" + rader.length + ")");
           if (!(await write("po", cur._id, Object.assign({}, o, { andrad: now, logg: (cur.logg || []).concat(changes.map(logEntry)) })))) return;
           Object.assign(cur, o);
-          toast("Sparat");
+          toast("Saved");
         }
         // reflect on styles: PO number, colours, sizes, status
         const active = !PO_DRAFT.includes(o.status);
@@ -1911,7 +1940,7 @@ import * as P from "./platform.js";
           if (active && (ss === "Sampling" || ss === "Godkänd")) patch.status = o.status === "Inlevererad" ? "Levererad" : ["I produktion", "Skickad"].includes(o.status) ? "I produktion" : "PO lagd";
           else if (active && ss === "PO lagd" && ["I produktion", "Skickad"].includes(o.status)) patch.status = "I produktion";
           else if (o.status === "Inlevererad" && ["PO lagd", "I produktion"].includes(ss)) patch.status = "Levererad";
-          if (Object.keys(patch).length) { patch.andrad = now; patch.logg = (st.logg || []).concat(logEntry("Uppdaterad från PO " + o.nr + (patch.status ? ": status " + patch.status : ""))); await write("styles", st._id, patch); Object.assign(st, patch); }
+          if (Object.keys(patch).length) { patch.andrad = now; patch.logg = (st.logg || []).concat(logEntry("Updated from PO " + o.nr + (patch.status ? ": status " + patch.status : ""))); await write("styles", st._id, patch); Object.assign(st, patch); }
         }
         if (active) { const cur = byId(D.po, pid) || Object.assign({ _id: pid }, o); await assignEans(cur, false); }
         // Fotosample: beställs automatiskt för nyheter när PO:n är lagd och inget annat är angivet
@@ -1925,22 +1954,23 @@ import * as P from "./platform.js";
             const fs = fotoState(st); if (fs.key !== "saknas" && fs.key !== "godkand") continue;
             made.push(...(await orderFotosamples(st, curPo, "PO " + o.nr)));
           }
-          if (made.length) { const c2 = byId(D.po, pid) || curPo; await write("po", pid, { fotosample: "Beställd", andrad: now, logg: (c2.logg || []).concat(logEntry("Fotosample beställda automatiskt: " + made.join(", "))) }); toast(made.length + (made.length === 1 ? " fotosample beställd" : " fotosamples beställda") + " – syns under Samples och Foto"); }
+          if (made.length) { const c2 = byId(D.po, pid) || curPo; await write("po", pid, { fotosample: "Beställd", andrad: now, logg: (c2.logg || []).concat(logEntry("Photo samples ordered automatically: " + made.join(", "))) }); toast(made.length + (made.length === 1 ? " photo sample ordered" : " photo samples ordered") + " – shown under Samples and Photo"); }
         }
         if (isNew) openPo(pid); else closeSheet();
       } finally { if (btn) btn.disabled = false; }
     }
     const kvs = [];
-    if (!isNew) { const tot = poTotal(po); kvs.push(h("div", { class: "kvs" }, h("div", { class: "kv" }, h("span", { class: "k", text: "Totalt" }), h("span", { class: "v big", text: fmtSEK(tot) })), h("div", { class: "kv" }, h("span", { class: "k", text: "Antal" }), h("span", { class: "v big", text: String(poUnits(po)) })), h("div", { class: "kv" }, h("span", { class: "k", text: "Dagar kvar" }), h("span", { class: "v big", text: poEta(po) ? fmtDays(diffDays(poEta(po))) : "–" })))); }
+    if (!isNew) { const tot = poTotal(po); kvs.push(h("div", { class: "kvs" }, h("div", { class: "kv" }, h("span", { class: "k", text: "Total" }), h("span", { class: "v big", text: fmtSEK(tot) })), h("div", { class: "kv" }, h("span", { class: "k", text: "Quantity" }), h("span", { class: "v big", text: String(poUnits(po)) })), h("div", { class: "kv" }, h("span", { class: "k", text: "Days left" }), h("span", { class: "v big", text: poEta(po) ? fmtDays(diffDays(poEta(po))) : "–" })))); }
     const body = [...kvs, form, linesSec, attSec];
-    if (!isNew && downloads) body.push(h("section", null, h("h3", { class: "sec-title", text: "PO-fil" }), h("p", { class: "hint", text: "Excel enligt Rubatos PO-mall: ett blad \"PO\" med orderuppgifter, en kolumn per storlek och TOTAL-rad. Fyll i antal per storlek på raderna för en komplett PO." }), h("div", { class: "quick" }, h("button", { class: "btn small primary", type: "button", text: "Skapa PO-fil (Excel)", onclick: () => exportPoXlsx(current()) }))));
-    if (!isNew) body.push(h("section", null, h("h3", { class: "sec-title", text: "Historik" }), logUl));
+    if (!isNew && downloads) body.push(h("section", null, h("h3", { class: "sec-title", text: "PO file" }), h("p", { class: "hint", text: "Excel in Rubato's PO template: a \"PO\" sheet with the order details, one column per size and a TOTAL row. Fill in quantity per size on the lines for a complete PO." }), h("div", { class: "quick" }, h("button", { class: "btn small primary", type: "button", text: "Create PO file (Excel)", onclick: () => exportPoXlsx(current()) }))));
+    if (!isNew) body.push(h("section", null, h("h3", { class: "sec-title", text: "History" }), logUl));
     openSheet({
-      tag: isNew ? "Ny" : poStatusNorm(po.status),
-      title: isNew ? "Ny PO" : (po.nr || po._id),
+      flagRef: isNew ? null : { typ: "po", ref: po._id, titel: (po.nr || po._id) + (po.leverantor ? " · " + po.leverantor : ""), tab: "produktion" },
+      tag: isNew ? "New" : poStatusNorm(po.status),
+      title: isNew ? "New PO" : (po.nr || po._id),
       sub: isNew ? "" : [po.leverantor, po.sasong, po.drop].filter(Boolean).join(" · "),
       body,
-      foot: footButtons({ onDelete: isNew ? null : async () => { if (await remove("po", po._id)) { toast("Borttagen"); closeSheet(); } }, canDelete: true, onSave: save, saveLabel: isNew ? "Spara PO" : "Spara" }),
+      foot: footButtons({ onDelete: isNew ? null : async () => { if (await remove("po", po._id)) { toast("Removed"); closeSheet(); } }, canDelete: true, onSave: save, saveLabel: isNew ? "Save PO" : "Save" }),
       ctx: { refresh: () => { if (!isNew && !byId(D.po, po._id)) { closeSheet(); return; } renderEan(); renderAtt(); if (!isNew) renderLogInto(logUl, current().logg); } },
       focus: isNew ? "f_plev" : null
     });
@@ -1950,10 +1980,10 @@ import * as P from "./platform.js";
   function exportPoEan(po) {
     const rows = [];
     for (const r of po.rader || []) { const st = byId(D.styles, r.styleId); if (!st) continue; const sizes = (r.storlekar && r.storlekar.length ? r.storlekar : sizesOf(st)) || []; for (const sz of sizes) { const e = (st.ean || []).find((y) => vkey(y) === vkey({ farg: r.farg, storlek: sz })); rows.push([po.nr, st.namn, r.farg, sz, e ? e.ean : "", r.perStorlek ? (r.perStorlek[sz] ?? "") : ""]); } }
-    saveFile("EAN_" + safeName(po.nr) + ".csv", csv(["PO", "Produkt", "Färg", "Storlek", "EAN", "Antal"], rows));
+    saveFile("EAN_" + safeName(po.nr) + ".csv", csv(["PO", "Product", "Colour", "Size", "EAN", "Quantity"], rows));
   }
   async function exportPoXlsx(po) {
-    try { if (!window.ExcelJS) await loadScript(LIB_XLSX); } catch (e) { toast("Kunde inte ladda Excel-verktyget. Kontrollera nätet och försök igen."); return; }
+    try { if (!window.ExcelJS) await loadScript(LIB_XLSX); } catch (e) { toast("Could not load the Excel tool. Check the network and try again."); return; }
     const wb = new window.ExcelJS.Workbook();
     const ws = wb.addWorksheet("PO");
     const F = { name: "Arial", size: 10 }, FB = { name: "Arial", size: 10, bold: true };
@@ -2002,12 +2032,12 @@ import * as P from "./platform.js";
     ws.getColumn(5).width = Math.max(ws.getColumn(5).width || 0, 6);
     const buf = await wb.xlsx.writeBuffer();
     const ok = await saveFile((po.nr || po._id).replace(/[^A-Za-z0-9-]+/g, "") + ".xlsx", new Blob([buf], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }));
-    if (ok) toast("PO-filen är klar");
+    if (ok) toast("The PO file is ready");
   }
   function exportPo() {
     const rows = [];
     for (const p of D.po) for (const r of p.rader || []) { const st = byId(D.styles, r.styleId); rows.push([p.nr, p.leverantor, p.sasong, p.drop, poStatusNorm(p.status), p.prioritet, r.produkt, r.styleId, st ? styleKategori(st) : "", r.farg, r.typ, r.tyg, r.antal, r.tygkostnad, r.styckpris, lineCost(r), p.valuta, p.tygstatus, p.orderBekraftad ? "Ja" : "Nej", p.planeradEx, p.bekraftadEx, p.etaLager, p.fotosample, p.forskottBetalt, p.slutbetalning, p.kommentar]); }
-    saveFile("Rubato_Produktion_" + todayISO() + ".csv", csv(["PO-nr", "Leverantör", "Säsong", "Drop", "Status", "Prioritet", "Produkt", "Style-ID", "Kategori", "Färg", "Nyhet/Restock", "Tyg", "Antal", "Tygkostnad/enhet", "Styckpris", "Kostnad", "Valuta", "Tygstatus", "Order bekräftad", "Planerad ex-factory", "Bekräftad ex-factory", "ETA lager", "Fotosample", "Förskott betalt", "Slutbetalning", "Kommentar"], rows));
+    saveFile("Rubato_Produktion_" + todayISO() + ".csv", csv(["PO no.", "Supplier", "Season", "Drop", "Status", "Priority", "Product", "Style ID", "Category", "Colour", "New/Restock", "Tyg", "Quantity", "Fabric cost/unit", "Unit price", "Cost", "Currency", "Fabric status", "Order confirmed", "Planned ex-factory", "Confirmed ex-factory", "ETA warehouse", "Fotosample", "Deposit paid", "Final payment", "Comment"], rows));
   }
 
   // ---------- KOLLEKTION (Carl) ----------
@@ -2015,14 +2045,14 @@ import * as P from "./platform.js";
     mount(root) {
       const st = UI.koll;
       const upd = () => { this.update(); persist(); };
-      this.fSeason = filterSelect("f_k_season", "Alla säsonger", st, "season", upd);
-      this.seg = makeSeg([["drop", "Per drop"], ["kategori", "Per kategori"], ["helhet", "Helhet"]], st, "mode", upd);
-      this.fKat = filterSelect("f_k_kat", "Alla kategorier", st, "kat", upd);
-      this.segTyp = makeSeg([["alla", "Allt"], ["Nyhet", "New"], ["Restock", "Re-stock"], ["NOOS", "NOOS"]], st, "typ", upd);
+      this.fSeason = filterSelect("f_k_season", "All seasons", st, "season", upd);
+      this.seg = makeSeg([["drop", "By drop"], ["kategori", "By category"], ["helhet", "Overall"]], st, "mode", upd);
+      this.fKat = filterSelect("f_k_kat", "All categories", st, "kat", upd);
+      this.segTyp = makeSeg([["alla", "All"], ["Nyhet", "New"], ["Restock", "Re-stock"], ["NOOS", "NOOS"]], st, "typ", upd);
       this.count = h("span", { class: "count" });
       this.stats = h("div", { class: "koll-stats" });
       this.body = h("div", { style: "display:grid;gap:26px" });
-      root.append(h("p", { class: "lede", text: "Kommande kollektion i bild: varje produkt med senaste sample och status. Växla mellan drop, kategori och helhet, och filtrera på New, Re-stock eller NOOS. Klicka på en produkt för detaljer och alla bilder." }),
+      root.append(h("p", { class: "lede", text: "The coming collection in pictures: every product with its latest sample and status. Switch between drop, category and overall, and filter on New, Re-stock or NOOS. Click a product for details and all images." }),
         h("section", { class: "filters", "aria-label": "Filter" }, this.fSeason.el, this.seg.el, this.segTyp.el, this.fKat.el, this.count), this.stats, this.body);
     },
     seasonInView() {
@@ -2043,7 +2073,7 @@ import * as P from "./platform.js";
       let items = D.styles.filter((s) => norm(s.sasong) === norm(season) && styleStatusNorm(s.status) !== "Kastad");
       if (st.kat) items = items.filter((s) => styleKategori(s) === st.kat);
       if (st.typ && st.typ !== "alla") items = items.filter((s) => (s.typ || "Nyhet") === st.typ);
-      const order = { "Produktidé": -2, "Idé under utveckling": -1, Sampling: 0, "Godkänd": 1, "PO lagd": 2, "I produktion": 3, Levererad: 4, Pausad: 5 };
+      const order = { [ST_IDE]: -3, [ST_DESIGN]: -2, [ST_KANBEST]: -1, Sampling: 0, "Godkänd": 1, "PO lagd": 2, "I produktion": 3, Levererad: 4, Pausad: 5 };
       items.sort((a, b) => (order[styleStatusNorm(a.status)] ?? 9) - (order[styleStatusNorm(b.status)] ?? 9) || (a.namn || "").localeCompare(b.namn || "", "sv"));
       const units = (s) => poLinesOf(s._id).reduce((a, x) => a + (num(x.r.antal) || 0), 0);
       const cost = (s) => poLinesOf(s._id).reduce((a, x) => a + (lineCost(x.r) || 0), 0);
@@ -2052,29 +2082,29 @@ import * as P from "./platform.js";
       const withImg = items.filter((s) => styleImage(s)).length;
       const inProd = items.filter((s) => inProduction(s)).length;
       const nIdeas = items.filter(isIdea).length;
-      this.stats.replaceChildren(kv("Produkter " + season, String(items.length), nNew + " new · " + nRe + " re-stock · " + nNoos + " NOOS"), kv("I produktion", String(inProd), items.filter((s) => styleStatusNorm(s.status) === "Sampling").length + " under sampling" + (nIdeas ? " · " + nIdeas + " idéer" : "")), kv("Plagg beställda", String(items.reduce((a, s) => a + units(s), 0))), kv("Med bild", withImg + " av " + items.length));
+      this.stats.replaceChildren(kv("Products " + season, String(items.length), nNew + " new · " + nRe + " re-stock · " + nNoos + " NOOS"), kv("I produktion", String(inProd), items.filter((s) => styleStatusNorm(s.status) === "Sampling").length + " in sampling" + (nIdeas ? " · " + nIdeas + " ideas" : "")), kv("Units ordered", String(items.reduce((a, s) => a + units(s), 0))), kv("With image", withImg + " of " + items.length));
       this.body.replaceChildren();
       const groups = [];
       if (st.mode === "drop") {
         const placed = new Set();
-        for (const d of dropsOfSeason(season)) { const m = items.filter((s) => dropKey(s.sasong, s.drop) === dropKey(d.sasong, d.namn)); m.forEach((x) => placed.add(x._id)); groups.push({ title: d.namn + " – " + season, drop: d, sub: [isISO(d.lansering) ? "Lansering " + fmtDate(d.lansering) : "", isISO(d.klartSenast) ? "I lager senast " + fmtDate(d.klartSenast) : ""].filter(Boolean).join(" · "), items: m }); }
-        const rest = items.filter((s) => !placed.has(s._id)); if (rest.length) groups.push({ title: "Utan drop – " + season, sub: "", items: rest });
+        for (const d of dropsOfSeason(season)) { const m = items.filter((s) => dropKey(s.sasong, s.drop) === dropKey(d.sasong, d.namn)); m.forEach((x) => placed.add(x._id)); groups.push({ title: d.namn + " – " + season, drop: d, sub: [isISO(d.lansering) ? "Launch " + fmtDate(d.lansering) : "", isISO(d.klartSenast) ? "In stock by " + fmtDate(d.klartSenast) : ""].filter(Boolean).join(" · "), items: m }); }
+        const rest = items.filter((s) => !placed.has(s._id)); if (rest.length) groups.push({ title: "No drop – " + season, sub: "", items: rest });
       } else if (st.mode === "kategori") {
         for (const k of KATEGORIER.concat(["Okategoriserat"])) { const m = items.filter((s) => (styleKategori(s) || "Okategoriserat") === k); if (m.length) groups.push({ title: k, sub: "", items: m }); }
-      } else groups.push({ title: season + " – hela kollektionen", sub: "", items });
+      } else groups.push({ title: season + " – the whole collection", sub: "", items });
       for (const g of groups) {
         const sec = h("section", { class: "koll-sec" });
         const gu = g.items.reduce((a, s) => a + units(s), 0);
-        const head = h("div", { class: "koll-h" }, h("h3", { text: g.title }), h("span", { class: "sub", text: g.items.length + (g.items.length === 1 ? " produkt" : " produkter") + (gu ? " · " + gu + " plagg" : "") + (g.sub ? " · " + g.sub : "") }));
-        if (g.drop && canWrite && db) head.append(h("button", { class: "linkish", type: "button", text: "Redigera drop", onclick: () => openDrop(g.drop._id) }));
+        const head = h("div", { class: "koll-h" }, h("h3", { text: g.title }), h("span", { class: "sub", text: g.items.length + (g.items.length === 1 ? " product" : " products") + (gu ? " · " + gu + " units" : "") + (g.sub ? " · " + g.sub : "") }));
+        if (g.drop && canWrite && db) head.append(h("button", { class: "linkish", type: "button", text: "Edit drop", onclick: () => openDrop(g.drop._id) }));
         sec.append(head);
         const dImgs = g.drop ? docImages(g.drop) : [];
         if (dImgs.length) sec.append(h("div", { class: "gallery", style: "grid-template-columns:repeat(auto-fill,minmax(90px,1fr))" }, dImgs.map((id) => h("figure", { class: "thumb" }, h("img", { src: imgUrl(id), alt: "", loading: "lazy", onclick: () => openLightbox(dImgs, id) })))));
-        if (!g.items.length) sec.append(h("p", { class: "hint", text: "Inga produkter här ännu." }));
+        if (!g.items.length) sec.append(h("p", { class: "hint", text: "No products here yet." }));
         else sec.append(h("div", { class: "pgrid" }, g.items.map((s) => this.card(s))));
         this.body.append(sec);
       }
-      this.count.textContent = items.length + " produkter i " + season;
+      this.count.textContent = items.length + " products in " + season;
     },
     card(s) {
       const img = styleImage(s);
@@ -2086,10 +2116,10 @@ import * as P from "./platform.js";
       const allImgs = styleAllImages(s);
       const g = grundOf(s);
       const b = h("button", { class: "pcard", type: "button", onclick: () => openStyle(s._id) },
-        h("div", { class: "pimg" }, img ? h("img", { src: imgUrl(img), alt: s.namn, loading: "lazy", onerror: (e) => { const el = e.target; if (/^https?:/.test(el.src)) el.replaceWith(h("span", { class: "noimg", text: "Bilden från Shopify kunde inte visas – tryck \"Hämta Shopify-bilder\"" })); } }) : emptyTile(s, xs), styleStatusPill(s), h("span", { class: "typtag t-" + slug(s.typ || "Nyhet"), text: typLabel(s) }), allImgs.length > 1 ? h("span", { class: "n", text: allImgs.length + " bilder" }) : null, g ? h("span", { class: "grundtag", text: "Variant av " + g.namn }) : imageSource(s) ? h("span", { class: "grundtag", text: imageSource(s) === "Shopify" ? (s.shopifyBild && s.shopifyBild.likhet === "liknande" ? "Liknande · Shopify" : "Shopify") : imageSource(s) }) : null),
+        h("div", { class: "pimg" }, img ? h("img", { src: imgUrl(img), alt: s.namn, loading: "lazy", onerror: (e) => { const el = e.target; if (/^https?:/.test(el.src)) el.replaceWith(h("span", { class: "noimg", text: "The image from Shopify could not be shown – press \"Fetch Shopify images\"" })); } }) : emptyTile(s, xs), styleStatusPill(s), h("span", { class: "typtag t-" + slug(s.typ || "Nyhet"), text: typLabel(s) }), allImgs.length > 1 ? h("span", { class: "n", text: allImgs.length + " images" }) : null, g ? h("span", { class: "grundtag", text: "Variant of " + g.namn }) : imageSource(s) ? h("span", { class: "grundtag", text: imageSource(s) === "Shopify" ? (s.shopifyBild && s.shopifyBild.likhet === "liknande" ? "Similar · Shopify" : "Shopify") : imageSource(s) }) : null),
         h("div", { class: "pbody" }, h("span", { class: "pname", text: s.namn }), h("span", { class: "psub", text: [s.leverantor, styleKategori(s), styleTyg(s)].filter(Boolean).join(" · ") }),
           (s.farger || []).length ? h("span", { class: "psub", text: s.farger.join(", ") }) : null,
-          h("span", { class: "psub", text: units ? units + " plagg" : last ? (last.version || "") + " · " + (last.status || "") : "" }),
+          h("span", { class: "psub", text: units ? units + " units" : last ? (last.version || "") + " · " + (last.status || "") : "" }),
           h("div", { class: "pflags" }, last && beslutNorm(last.beslut) ? chip(beslutNorm(last.beslut), "b-" + slug(beslutNorm(last.beslut))) : null, last && last.platsTyp === "Hängare" ? h("span", { class: "hanger", text: "H" + (last.hangare || "?") }) : null, fs.key === "finns" ? chip("Fotosample", "fs-finns") : null)));
       return b;
     }
@@ -2101,19 +2131,19 @@ import * as P from "./platform.js";
       const st = UI.foto;
       const upd = () => { this.update(); persist(); };
       this.strip = makeStrip([
-        { key: "saknas", label: "Fotosample ej beställd", cls: "t-late" },
-        { key: "vantas", label: "Beställd – väntas" },
-        { key: "finns", label: "Inne fysiskt" },
-        { key: "hang", label: "Inne men ej på fotohänget", cls: "t-warn" },
-        { key: "ecom", label: "E-com-bilder saknas", cls: "t-warn" },
+        { key: "saknas", label: "Photo sample not ordered", cls: "t-late" },
+        { key: "vantas", label: "Ordered – expected" },
+        { key: "finns", label: "Physically in" },
+        { key: "hang", label: "In, but not on the photo rail", cls: "t-warn" },
+        { key: "ecom", label: "E-com images missing", cls: "t-warn" },
         { key: "klara", label: "Publicerade" }
       ], st, () => upd());
-      const q = searchBox("q_foto", "Sök produkt, PO …", st, () => this.update());
-      this.fSeason = filterSelect("f_f_season", "Alla säsonger", st, "season", () => { st.touched = true; upd(); });
-      this.segTyp = makeSeg([["Nyhet", "Nyheter"], ["alla", "Alla typer"]], st, "typ", upd);
+      const q = searchBox("q_foto", "Search product, PO …", st, () => this.update());
+      this.fSeason = filterSelect("f_f_season", "All seasons", st, "season", () => { st.touched = true; upd(); });
+      this.segTyp = makeSeg([["Nyhet", "New styles"], ["alla", "All types"]], st, "typ", upd);
       this.count = h("span", { class: "count" });
       this.cards = h("div", { class: "cards" });
-      root.append(h("p", { class: "lede", text: "Alla nyheter med lagd PO: är fotosample beställd eller inne fysiskt, var hänger den, när är kampanjfotot, när plåtas e-com och är bilderna klara? Fotosample beställs automatiskt när en PO läggs – eller med knappen här. Längst ner: fotohänget och kollektionshängaren." }),
+      root.append(h("p", { class: "lede", text: "All new styles with a placed PO: is the photo sample ordered or physically in, where does it hang, when is the campaign shoot, when is e-com shot and are the images done? The photo sample is ordered automatically when a PO is placed – or with the button here. At the bottom: the photo rail and the collection rail." }),
         this.strip.el, h("section", { class: "filters", "aria-label": "Filter" }, q, this.fSeason.el, this.segTyp.el, this.count), this.cards);
     },
     update() {
@@ -2143,53 +2173,53 @@ import * as P from "./platform.js";
       const eo = { "": 0, Planerade: 1, Bokad: 2, Fotade: 3, Retuscherade: 4, Publicerade: 5 }, fo = { saknas: 0, godkand: 1, vantas: 2, finns: 3 };
       list.sort((a, b) => (eo[ecom(a)] ?? 0) - (eo[ecom(b)] ?? 0) || fo[F.get(a._id).key] - fo[F.get(b._id).key] || (a.drop || "").localeCompare(b.drop || "") || (a.namn || "").localeCompare(b.namn || "", "sv"));
       const groups = new Map();
-      for (const s of list) { const k = (s.sasong || "Utan säsong") + " · " + (s.drop || "Utan drop"); if (!groups.has(k)) groups.set(k, { season: s.sasong || "", drop: s.drop || "", items: [] }); groups.get(k).items.push(s); }
+      for (const s of list) { const k = (s.sasong || "Utan säsong") + " · " + (s.drop || "No drop"); if (!groups.has(k)) groups.set(k, { season: s.sasong || "", drop: s.drop || "", items: [] }); groups.get(k).items.push(s); }
       const dRank = (g) => { const ds = dropsOfSeason(g.season).map((d) => d.namn); const i = ds.indexOf(g.drop); return i < 0 ? 99 : i; };
       const keys = [...groups.keys()].sort((a, b) => { const ga = groups.get(a), gb = groups.get(b); return seasonRank(gb.season) - seasonRank(ga.season) || dRank(ga) - dRank(gb) || a.localeCompare(b, "sv"); });
       const ro = !canWrite || !db;
       const cards = [];
       for (const k of keys) { const items = groups.get(k).items;
-        const card = h("section", { class: "card" }, h("div", { class: "card-head" }, h("h3", { text: k }), h("span", { class: "sub", text: items.length + " produkter · " + items.filter((s) => F.get(s._id).key === "finns").length + " med fotosample inne · " + items.filter((s) => ecom(s) === "Publicerade").length + " publicerade" })));
-        const { t, tb } = table([["Produkt"], ["PO / leverans"], ["Fotosample"], ["Kampanjfoto"], ["E-com-plåtning"], ["E-com-bilder"], ["Notering"]]);
+        const card = h("section", { class: "card" }, h("div", { class: "card-head" }, h("h3", { text: k }), h("span", { class: "sub", text: items.length + " products · " + items.filter((s) => F.get(s._id).key === "finns").length + " with photo sample in · " + items.filter((s) => ecom(s) === "Publicerade").length + " published" })));
+        const { t, tb } = table([["Product"], ["PO / delivery"], ["Fotosample"], ["Campaign shoot"], ["E-com shoot"], ["E-com images"], ["Note"]]);
         for (const s of items) {
           const f = F.get(s._id);
           const img = styleImage(s);
           const mk = (el) => { if (ro) el.disabled = true; return el; };
           const save = (patch, logText) => write("styles", s._id, Object.assign({ andrad: new Date().toISOString() }, patch, logText ? { logg: (s.logg || []).concat(logEntry(logText)) } : {}));
-          const sel = mk(selectEl("ecom_" + s._id, ECOM_STATUS.map((x) => [x, x || "– inte planerade"]), ecom(s)));
-          const dt = mk(inp("ecomd_" + s._id, s.ecomPlatDatum, { type: "date", "aria-label": "Datum för e-com-plåtning" }));
-          const ksel = mk(selectEl("kamp_" + s._id, KAMP_STATUS.map((x) => [x, x || "– ingen kampanj"]), s.kampanjStatus || ""));
-          const kdt = mk(inp("kampd_" + s._id, s.kampanjDatum, { type: "date", "aria-label": "Datum för kampanjfoto" }));
-          const note = mk(inp("ecomn_" + s._id, s.fotoNotering, { placeholder: "t.ex. fotas 3 nov med Lot 1", "aria-label": "Fotonotering" }));
-          sel.addEventListener("change", () => save({ ecomBilder: sel.value }, "E-com-bilder: " + (sel.value || "inte planerade")));
+          const sel = mk(selectEl("ecom_" + s._id, ECOM_STATUS.map((x) => [x, x || "– not planned"]), ecom(s)));
+          const dt = mk(inp("ecomd_" + s._id, s.ecomPlatDatum, { type: "date", "aria-label": "Date of e-com shoot" }));
+          const ksel = mk(selectEl("kamp_" + s._id, KAMP_STATUS.map((x) => [x, x || "– no campaign"]), s.kampanjStatus || ""));
+          const kdt = mk(inp("kampd_" + s._id, s.kampanjDatum, { type: "date", "aria-label": "Date of campaign shoot" }));
+          const note = mk(inp("ecomn_" + s._id, s.fotoNotering, { placeholder: "e.g. shot 3 Nov with Lot 1", "aria-label": "Photo note" }));
+          sel.addEventListener("change", () => save({ ecomBilder: sel.value }, "E-com images: " + (sel.value || "not planned")));
           dt.addEventListener("change", () => save({ ecomPlatDatum: dt.value || null }));
-          ksel.addEventListener("change", () => save({ kampanjStatus: ksel.value }, "Kampanjfoto: " + (ksel.value || "ingen")));
+          ksel.addEventListener("change", () => save({ kampanjStatus: ksel.value }, "Campaign shoot: " + (ksel.value || "ingen")));
           kdt.addEventListener("change", () => save({ kampanjDatum: kdt.value || null }));
           note.addEventListener("change", () => save({ fotoNotering: note.value.trim() }));
           const pls = poLinesOf(s._id).filter((x) => PO_PLACED.includes(poStatusNorm(x.po.status)));
           const pos = uniq(pls.map((x) => x.po._id)).map((id) => byId(D.po, id)).filter(Boolean);
           const es = pos.map(poEta).filter(Boolean).sort();
-          const poCell = td("PO / leverans", null);
+          const poCell = td("PO / delivery", null);
           for (const p of pos) poCell.append(h("div", { style: "display:flex;gap:6px;align-items:center;flex-wrap:wrap" }, h("button", { class: "linkish", type: "button", text: p.nr || p._id, onclick: (e) => { e.stopPropagation(); openPo(p._id); } }), poStatusPill(p)));
-          poCell.append(es[0] ? h("div", null, h("span", { class: "mono", text: "Leverans " + fmtDate(es[0]) }), h("span", { class: "days " + (diffDays(es[0]) < 0 ? "late" : diffDays(es[0]) <= 14 ? "soon" : ""), text: " · " + fmtDays(diffDays(es[0])) })) : h("div", { class: "muted", text: "ETA saknas" }));
+          poCell.append(es[0] ? h("div", null, h("span", { class: "mono", text: "Delivery " + fmtDate(es[0]) }), h("span", { class: "days " + (diffDays(es[0]) < 0 ? "late" : diffDays(es[0]) <= 14 ? "soon" : ""), text: " · " + fmtDays(diffDays(es[0])) })) : h("div", { class: "muted", text: "ETA missing" }));
           const fotoCell = td("Fotosample", null, h("div", null, h("span", { class: "pill fs-" + (f.key === "godkand" ? "saknas" : f.key), text: f.label })));
           if (f.all && f.all.length) fotoCell.append(h("div", { class: "sub" }, f.all.map((x, i) => h("button", { class: "linkish", type: "button", text: (i ? " · " : "") + x._id + (fargText(x.farg) ? " " + fargText(x.farg) : "") + (x.status === "Mottagen" && platsText(x) ? " (" + platsText(x) + ")" : ""), onclick: (e) => { e.stopPropagation(); openSample(x._id); } }))));
           else if (f.sample) fotoCell.append(h("div", { class: "sub" }, h("button", { class: "linkish", type: "button", text: f.sample._id + (platsText(f.sample) ? " · " + platsText(f.sample) : ""), onclick: (e) => { e.stopPropagation(); openSample(f.sample._id); } })));
           if (!ro) {
             const acts = h("div", { class: "quick", style: "margin-top:6px" });
-            if (f.key === "saknas" || f.key === "godkand") acts.append(h("button", { class: "btn small primary", type: "button", text: "Beställ fotosample", onclick: async (e) => { e.stopPropagation(); const b = e.currentTarget; b.disabled = true; const made = await orderFotosamples(s, pos[0] || null, "Foto-fliken"); toast(made.length ? made.length + (made.length === 1 ? " fotosample beställd: " : " fotosamples beställda: ") + made.join(", ") : "Kunde inte beställa"); } }));
-            if (f.key === "vantas" && f.all && f.all.length) acts.append(h("button", { class: "btn small", type: "button", text: "Mottagen idag", onclick: async (e) => { e.stopPropagation(); for (const x of f.all) await write("samples", x._id, { status: "Mottagen", mottagen: todayISO(), andrad: new Date().toISOString(), logg: (x.logg || []).concat(logEntry("Markerad mottagen från Foto-fliken")) }); toast("Fotosample inne – häng den på fotohänget"); } }));
-            if (f.key === "finns" && f.all && f.all.length && !f.onRack) acts.append(h("button", { class: "btn small", type: "button", text: "Till fotohänget", onclick: async (e) => { e.stopPropagation(); for (const x of f.all) if (x.platsTyp !== "Fotohäng") await write("samples", x._id, { platsTyp: "Fotohäng", andrad: new Date().toISOString(), logg: (x.logg || []).concat(logEntry("Hängd på fotohänget")) }); toast("Hänger nu på fotohänget – ange krok nr på samplen om ni numrerar"); } }));
+            if (f.key === "saknas" || f.key === "godkand") acts.append(h("button", { class: "btn small primary", type: "button", text: "Order photo sample", onclick: async (e) => { e.stopPropagation(); const b = e.currentTarget; b.disabled = true; const made = await orderFotosamples(s, pos[0] || null, "The Photo tab"); toast(made.length ? made.length + (made.length === 1 ? " photo sample ordered: " : " photo samples ordered: ") + made.join(", ") : "Could not order"); } }));
+            if (f.key === "vantas" && f.all && f.all.length) acts.append(h("button", { class: "btn small", type: "button", text: "Received today", onclick: async (e) => { e.stopPropagation(); for (const x of f.all) await write("samples", x._id, { status: "Mottagen", mottagen: todayISO(), andrad: new Date().toISOString(), logg: (x.logg || []).concat(logEntry("Marked received from the Photo tab")) }); toast("Photo sample in – hang it on the photo rail"); } }));
+            if (f.key === "finns" && f.all && f.all.length && !f.onRack) acts.append(h("button", { class: "btn small", type: "button", text: "To the photo rail", onclick: async (e) => { e.stopPropagation(); for (const x of f.all) if (x.platsTyp !== "Fotohäng") await write("samples", x._id, { platsTyp: "Fotohäng", andrad: new Date().toISOString(), logg: (x.logg || []).concat(logEntry("Hung on the photo rail")) }); toast("Now on the photo rail – enter the hook no. on the sample if you number them"); } }));
             if (acts.childElementCount) fotoCell.append(acts);
           }
           tb.append(h("tr", { tabIndex: 0, dataset: { style: s._id } },
             td("", "c-main", h("div", { style: "display:flex;gap:10px;align-items:flex-start" }, img ? h("img", { class: "rowthumb", style: "margin-top:0", src: imgUrl(img), alt: "", loading: "lazy", onclick: (e) => { e.stopPropagation(); openLightbox(styleAllImages(s), img); } }) : null, h("div", null, h("div", { class: "prod", text: s.namn }), h("div", { class: "sub", text: [s.leverantor, typLabel(s), styleKategori(s), (s.farger || []).join(", ")].filter(Boolean).join(" · ") }), h("div", null, styleStatusPill(s))))),
             poCell,
             fotoCell,
-            td("Kampanjfoto", "foto-inline", h("div", { style: "display:grid;gap:4px" }, ksel, kdt)),
-            td("E-com-plåtning", "foto-inline", dt),
-            td("E-com-bilder", "foto-inline", sel),
-            td("Notering", "foto-inline", note)));
+            td("Campaign shoot", "foto-inline", h("div", { style: "display:grid;gap:4px" }, ksel, kdt)),
+            td("E-com shoot", "foto-inline", dt),
+            td("E-com images", "foto-inline", sel),
+            td("Note", "foto-inline", note)));
         }
         tb.addEventListener("click", (e) => { if (e.target.closest("input, select, button, img")) return; const tr = e.target.closest("tr[data-style]"); if (tr) openStyle(tr.dataset.style); });
         card.append(h("div", { class: "ledger-wrap" }, t));
@@ -2198,27 +2228,27 @@ import * as P from "./platform.js";
       cards.push(fotohangCard(season));
       cards.push(hangerCard(season));
       this.cards.replaceChildren(...cards);
-      if (!list.length) this.cards.prepend(h("div", { class: "empty" }, h("strong", { text: "Inga " + (st.typ === "alla" ? "produkter" : "nyheter") + " med lagd PO" + (season ? " i " + season : "") }), h("span", { text: "Produkter dyker upp här när PO:n är lagd (Inskickad eller senare). Välj \"Alla säsonger\" eller \"Alla typer\" för att se mer." })));
-      this.count.textContent = list.length + (st.typ === "alla" ? " produkter" : " nyheter") + " med lagd PO" + (season ? " i " + season : " (alla säsonger)");
+      if (!list.length) this.cards.prepend(h("div", { class: "empty" }, h("strong", { text: "No " + (st.typ === "alla" ? "products" : "new styles") + " with a placed PO" + (season ? " i " + season : "") }), h("span", { text: "Products appear here once the PO is placed (Submitted or later). Choose \"All seasons\" or \"All types\" to see more." })));
+      this.count.textContent = list.length + (st.typ === "alla" ? " products" : " new styles") + " with a placed PO" + (season ? " i " + season : " (all seasons)");
     }
   };
   function fotohangCard(season) {
     const items = D.samples.filter((s) => s.platsTyp === "Fotohäng" && !isArchived(s)).sort((a, b) => (num(a.hangare) ?? 999) - (num(b.hangare) ?? 999) || styleName(a).localeCompare(styleName(b), "sv"));
     const inSeason = season ? items.filter((s) => norm(seasonOf(s)) === norm(season)) : items;
     const card = h("section", { class: "card hanger-card" });
-    card.append(h("div", { class: "card-head" }, h("h3", { text: "Fotohänget" + (season ? " – " + season : "") }), h("span", { class: "sub", text: inSeason.length ? inSeason.length + " samples hänger på fotohänget" + (items.length > inSeason.length ? " (" + (items.length - inSeason.length) + " från andra säsonger)" : "") : "Tomt – markera fotosamples med plats \"Fotohäng\" så listas de här" })));
+    card.append(h("div", { class: "card-head" }, h("h3", { text: "The photo rail" + (season ? " – " + season : "") }), h("span", { class: "sub", text: inSeason.length ? inSeason.length + " samples hang on the photo rail" + (items.length > inSeason.length ? " (" + (items.length - inSeason.length) + " from other seasons)" : "") : "Empty – set the location of photo samples to \"Photo rail\" and they are listed here" })));
     if (!inSeason.length) return card;
-    const { t, tb } = table([["Krok"], ["Produkt"], ["Färg"], ["Sample"], ["E-com-bilder"], ["Bild"]]);
+    const { t, tb } = table([["Hook"], ["Product"], ["Colour"], ["Sample"], ["E-com images"], ["Image"]]);
     for (const s of inSeason) {
       const st = styleOf(s);
       const imgs = sampleImages(s);
       tb.append(h("tr", { tabIndex: 0, dataset: { id: s._id } },
-        td("Krok", null, h("span", { class: "hanger", text: "Fotohäng" + (s.hangare ? " " + s.hangare : "") })),
+        td("Hook", null, h("span", { class: "hanger", text: "Fotohäng" + (s.hangare ? " " + s.hangare : "") })),
         td("", "c-main", h("div", { class: "prod", text: styleName(s) }), h("div", { class: "sub", text: [st ? st.sasong : seasonOf(s), st ? st.drop : "", s.version].filter(Boolean).join(" · ") })),
-        td("Färg", null, fargText(s.farg) || "–"),
+        td("Colour", null, fargText(s.farg) || "–"),
         td("Sample", null, tag(s._id), h("span", { class: "sub", text: " " + (s.status || "") })),
-        td("E-com-bilder", null, st ? h("span", { class: "pill es-" + slug(st.ecomBilder || "x"), text: st.ecomBilder || "inte planerade" }) : ""),
-        td("Bild", null, imgs.length ? h("img", { class: "rowthumb", style: "margin-top:0", src: imgUrl(imgs[0]), alt: "", loading: "lazy", onclick: (e) => { e.stopPropagation(); openLightbox(imgs, imgs[0]); } }) : h("span", { class: "muted", text: "–" }))));
+        td("E-com images", null, st ? h("span", { class: "pill es-" + slug(st.ecomBilder || "x"), text: st.ecomBilder || "not planned" }) : ""),
+        td("Image", null, imgs.length ? h("img", { class: "rowthumb", style: "margin-top:0", src: imgUrl(imgs[0]), alt: "", loading: "lazy", onclick: (e) => { e.stopPropagation(); openLightbox(imgs, imgs[0]); } }) : h("span", { class: "muted", text: "–" }))));
     }
     tb.addEventListener("click", (e) => { if (e.target.closest("button, img")) return; const tr = e.target.closest("tr[data-id]"); if (tr) openSample(tr.dataset.id); });
     card.append(h("div", { class: "ledger-wrap" }, t));
@@ -2231,15 +2261,15 @@ import * as P from "./platform.js";
     mount(root) {
       const st = UI.ref;
       const upd = () => { this.update(); persist(); };
-      this.seg = makeSeg([["ute", "Ute"], ["Tillbaka hos Rubato", "Tillbaka"], ["alla", "Alla"]], st, "status", upd);
-      const q = searchBox("q_ref", "Sök plagg, leverantör, tracking …", st, () => this.update());
+      this.seg = makeSeg([["ute", "Out"], ["Tillbaka hos Rubato", "Back"], ["alla", "All"]], st, "status", upd);
+      const q = searchBox("q_ref", "Search garment, supplier, tracking …", st, () => this.update());
       this.count = h("span", { class: "count" });
-      const { t, tb } = table([["Plagg"], ["Skickat till"], ["Skickat"], ["Fraktbolag / tracking"], ["Status"], ["Tillbaka senast"], ["Kommentar"]]);
+      const { t, tb } = table([["Garment"], ["Sent to"], ["Skickat"], ["Carrier / tracking"], ["Status"], ["Back by"], ["Comment"]]);
       this.tb = tb;
       tb.addEventListener("click", (e) => { if (e.target.closest("a, button, img")) return; const tr = e.target.closest("tr[data-id]"); if (tr) openRef(tr.dataset.id); });
       tb.addEventListener("keydown", (e) => { if (e.key !== "Enter") return; const tr = e.target.closest("tr[data-id]"); if (tr) openRef(tr.dataset.id); });
       this.empty = h("div", { class: "empty", hidden: true });
-      root.append(h("p", { class: "lede", text: "Referensplagg som skickats till leverantörer (egna plagg, vintage, konkurrentplagg). Här finns tracking så att inget försvinner, och en påminnelse när plagget borde vara tillbaka." }),
+      root.append(h("p", { class: "lede", text: "Reference garments sent to suppliers (own garments, vintage, competitor garments). Tracking is kept here so nothing goes missing, with a reminder when the garment should be back." }),
         h("section", { class: "filters", "aria-label": "Filter" }, q, this.seg.el, this.count), h("section", { class: "ledger-wrap" }, t, this.empty));
     },
     update() {
@@ -2255,68 +2285,69 @@ import * as P from "./platform.js";
         const d = isISO(r.aterSenast) && r.status !== "Tillbaka hos Rubato" ? diffDays(r.aterSenast) : null;
         const imgs = docImages(r);
         return h("tr", { tabIndex: 0, dataset: { id: r._id } },
-          td("", "c-main", h("div", { style: "display:flex;gap:10px;align-items:flex-start" }, imgs.length ? h("img", { class: "rowthumb", style: "margin-top:0", src: imgUrl(imgs[0]), alt: "", loading: "lazy", onclick: (e) => { e.stopPropagation(); openLightbox(imgs, imgs[0]); } }) : null, h("div", null, h("div", { class: "prod", text: r.plagg || "–" }), h("div", { class: "sub", text: [r._id, r.styleNamn ? "för " + r.styleNamn : "", r.agare ? "ägare: " + r.agare : ""].filter(Boolean).join(" · ") })))),
-          td("Skickat till", null, r.skickadTill || ""),
+          td("", "c-main", h("div", { style: "display:flex;gap:10px;align-items:flex-start" }, imgs.length ? h("img", { class: "rowthumb", style: "margin-top:0", src: imgUrl(imgs[0]), alt: "", loading: "lazy", onclick: (e) => { e.stopPropagation(); openLightbox(imgs, imgs[0]); } }) : null, h("div", null, h("div", { class: "prod", text: r.plagg || "–" }), h("div", { class: "sub", text: [r._id, r.styleNamn ? "for " + r.styleNamn : "", r.agare ? "owner: " + r.agare : ""].filter(Boolean).join(" · ") })))),
+          td("Sent to", null, r.skickadTill || ""),
           td("Skickat", "mono", fmtDate(r.skickad)),
-          td("Tracking", null, r.fraktbolag ? h("div", { text: r.fraktbolag }) : null, r.tracking ? h("div", { class: "mono" }, r.trackingUrl ? h("a", { href: r.trackingUrl, target: "_blank", rel: "noopener", text: r.tracking }) : r.tracking) : h("span", { class: "flag", text: "Saknar tracking" })),
+          td("Tracking", null, r.fraktbolag ? h("div", { text: r.fraktbolag }) : null, r.tracking ? h("div", { class: "mono" }, r.trackingUrl ? h("a", { href: r.trackingUrl, target: "_blank", rel: "noopener", text: r.tracking }) : r.tracking) : h("span", { class: "flag", text: "No tracking" })),
           td("Status", null, h("span", { class: "pill rs-" + slug(r.status || ""), text: r.status || "–" })),
-          td("Tillbaka senast", null, isISO(r.aterSenast) ? h("div", null, h("div", { class: "mono", text: fmtDate(r.aterSenast) }), d != null ? h("div", { class: "days " + (d < 0 ? "late" : d <= 7 ? "soon" : ""), text: fmtDays(d) }) : null) : r.status === "Tillbaka hos Rubato" ? h("span", { class: "muted", text: "tillbaka " + fmtDate(r.tillbaka) }) : h("span", { class: "muted", text: "–" })),
-          td("Kommentar", "note", r.kommentar || ""));
+          td("Back by", null, isISO(r.aterSenast) ? h("div", null, h("div", { class: "mono", text: fmtDate(r.aterSenast) }), d != null ? h("div", { class: "days " + (d < 0 ? "late" : d <= 7 ? "soon" : ""), text: fmtDays(d) }) : null) : r.status === "Tillbaka hos Rubato" ? h("span", { class: "muted", text: "back " + fmtDate(r.tillbaka) }) : h("span", { class: "muted", text: "–" })),
+          td("Comment", "note", r.kommentar || ""));
       }));
       this.empty.hidden = list.length > 0;
-      if (!list.length) this.empty.replaceChildren(h("strong", { text: loaded.has("ref") ? (D.ref.length ? "Inget matchar" : "Inga referensplagg registrerade") : "Laddar …" }), h("span", { text: "Lägg till när något skickas iväg, med tracking." }));
-      this.count.textContent = list.length + " av " + D.ref.length + " plagg";
+      if (!list.length) this.empty.replaceChildren(h("strong", { text: loaded.has("ref") ? (D.ref.length ? "Nothing matches" : "No reference garments registered") : "Loading …" }), h("span", { text: "Add one when something is sent off, with tracking." }));
+      this.count.textContent = list.length + " of " + D.ref.length + " units";
     }
   };
-  const REF_LABELS = { plagg: "Plagg", styleNamn: "För style", agare: "Ägare", skickadTill: "Skickat till", skickad: "Skickat", fraktbolag: "Fraktbolag", tracking: "Tracking", trackingUrl: "Spårningslänk", status: "Status", aterSenast: "Tillbaka senast", tillbaka: "Tillbaka", varde: "Värde", kommentar: "Kommentar" };
+  const REF_LABELS = { plagg: "Garment", styleNamn: "For style", agare: "Owner", skickadTill: "Sent to", skickad: "Skickat", fraktbolag: "Carrier", tracking: "Tracking", trackingUrl: "Tracking link", status: "Status", aterSenast: "Back by", tillbaka: "Back", varde: "Value", kommentar: "Comment" };
   function openRef(id, preset) {
+    if (designOnly()) return;
     const isNew = !id;
     const r = isNew ? Object.assign({ _id: null, status: "Skickat", skickad: todayISO(), logg: [] }, preset || {}) : byId(D.ref, id);
-    if (!r) { toast("Hittar inte plagget."); return; }
+    if (!r) { toast("Cannot find the garment."); return; }
     const ro = !canWrite || !db;
-    const fPlagg = inp("f_rplagg", r.plagg, { placeholder: "t.ex. Vintage Levi's 501, strl 32" });
-    const fStyle = inp("f_rstyle", r.styleNamn, { list: "dlStyle", autocomplete: "off", placeholder: "Vilken style är det referens för?" });
-    const fAgare = inp("f_ragare", r.agare, { placeholder: "t.ex. Carl, Rubato, lånat av …" });
+    const fPlagg = inp("f_rplagg", r.plagg, { placeholder: "e.g. Vintage Levi's 501, size 32" });
+    const fStyle = inp("f_rstyle", r.styleNamn, { list: "dlStyle", autocomplete: "off", placeholder: "Which style is it a reference for?" });
+    const fAgare = inp("f_ragare", r.agare, { placeholder: "e.g. Carl, Rubato, borrowed from …" });
     const fTill = inp("f_rtill", r.skickadTill, { list: "dlLev", autocomplete: "off" });
     const fSkickad = inp("f_rskickad", r.skickad, { type: "date" });
     const fBolag = inp("f_rbolag", r.fraktbolag, { placeholder: "DHL, UPS, PostNord …" });
-    const fTrack = inp("f_rtrack", r.tracking, { placeholder: "Spårningsnummer" });
+    const fTrack = inp("f_rtrack", r.tracking, { placeholder: "Tracking number" });
     const fUrl = inp("f_rurl", r.trackingUrl, { placeholder: "https://…" });
     const fStatus = selectEl("f_rstatus", REF_STATUS, r.status || "Skickat");
     const fAter = inp("f_rater", r.aterSenast, { type: "date" });
     const fTillb = inp("f_rtillb", r.tillbaka, { type: "date" });
-    const fVarde = inp("f_rvarde", r.varde, { type: "number", min: "0", step: "1", placeholder: "kr" });
+    const fVarde = inp("f_rvarde", r.varde, { type: "number", min: "0", step: "1", placeholder: "SEK" });
     const fKom = area("f_rkom", r.kommentar);
     fStatus.addEventListener("change", () => { if (fStatus.value === "Tillbaka hos Rubato" && !fTillb.value) fTillb.value = todayISO(); });
     const form = h("form", { class: "form", autocomplete: "off", onsubmit: (e) => e.preventDefault() },
-      field("Plagg", fPlagg, { full: true }), field("Referens för style", fStyle), field("Ägare", fAgare),
-      field("Skickat till", fTill), field("Skickat", fSkickad),
-      field("Fraktbolag", fBolag), field("Tracking", fTrack), field("Spårningslänk", fUrl, { full: true }),
-      field("Status", fStatus), field("Ska vara tillbaka senast", fAter, { hint: "Ger en påminnelse i listan" }),
-      field("Tillbaka hos Rubato", fTillb), field("Värde (kr)", fVarde, { hint: "Om det försvinner" }),
-      field("Kommentar", fKom, { full: true }));
+      field("Garment", fPlagg, { full: true }), field("Reference for style", fStyle), field("Owner", fAgare),
+      field("Sent to", fTill), field("Skickat", fSkickad),
+      field("Carrier", fBolag), field("Tracking", fTrack), field("Tracking link", fUrl, { full: true }),
+      field("Status", fStatus), field("Should be back by", fAter, { hint: "Gives a reminder in the list" }),
+      field("Tillbaka hos Rubato", fTillb), field("Value (SEK)", fVarde, { hint: "In case it goes missing" }),
+      field("Comment", fKom, { full: true }));
     if (ro) lock(form);
     const logUl = h("ul", { class: "log" });
     const pendingImgs = isNew ? [] : null;
-    const imgSec = bilderSection({ title: "Bilder", ro, pending: pendingImgs, current: () => byId(D.ref, r._id) || r, empty: "Ta en bild på plagget innan det skickas – då vet alla vad som är ute.", save: (ids, logText) => { const cur = byId(D.ref, r._id) || r; return write("refplagg", cur._id, { bilder: ids, andrad: new Date().toISOString(), logg: (cur.logg || []).concat(logEntry(logText)) }); } });
+    const imgSec = bilderSection({ title: "Images", ro, pending: pendingImgs, current: () => byId(D.ref, r._id) || r, empty: "Take a picture of the garment before it is sent – then everyone knows what is out.", save: (ids, logText) => { const cur = byId(D.ref, r._id) || r; return write("refplagg", cur._id, { bilder: ids, andrad: new Date().toISOString(), logg: (cur.logg || []).concat(logEntry(logText)) }); } });
     async function save() {
       const o = { plagg: fPlagg.value.trim(), styleNamn: fStyle.value.trim(), agare: fAgare.value.trim(), skickadTill: fTill.value.trim(), skickad: fSkickad.value || null, fraktbolag: fBolag.value.trim(), tracking: fTrack.value.trim(), trackingUrl: fUrl.value.trim(), status: fStatus.value, aterSenast: fAter.value || null, tillbaka: fTillb.value || null, varde: num(fVarde.value), kommentar: fKom.value.trim() };
-      if (!o.plagg) { toast("Beskriv plagget."); fPlagg.focus(); return; }
-      if (!o.skickadTill) { toast("Vart skickades det?"); fTill.focus(); return; }
+      if (!o.plagg) { toast("Describe the garment."); fPlagg.focus(); return; }
+      if (!o.skickadTill) { toast("Where was it sent?"); fTill.focus(); return; }
       const now = new Date().toISOString();
       if (isNew) {
         const nid = await freshId("refplagg", D.ref, "R", 3);
-        const body = Object.assign({ id: nid, bilder: pendingImgs.slice(), logg: [logEntry("Registrerat")], andrad: now }, o);
-        if (await create("refplagg", nid, body)) { if (!byId(D.ref, nid)) D.ref.push(Object.assign({}, body, { _id: nid })); toast(nid + " sparad" + (!o.tracking ? " – lägg in tracking så fort du har det" : "")); closeSheet(); }
+        const body = Object.assign({ id: nid, bilder: pendingImgs.slice(), logg: [logEntry("Registered")], andrad: now }, o);
+        if (await create("refplagg", nid, body)) { if (!byId(D.ref, nid)) D.ref.push(Object.assign({}, body, { _id: nid })); toast(nid + " saved" + (!o.tracking ? " – add tracking as soon as you have it" : "")); closeSheet(); }
       } else {
         const changes = describeChanges(r, o, REF_LABELS);
         if (!changes.length) { closeSheet(); return; }
-        if (await write("refplagg", r._id, Object.assign({}, o, { andrad: now, logg: (r.logg || []).concat(changes.map(logEntry)) }))) { toast("Sparat"); closeSheet(); }
+        if (await write("refplagg", r._id, Object.assign({}, o, { andrad: now, logg: (r.logg || []).concat(changes.map(logEntry)) }))) { toast("Saved"); closeSheet(); }
       }
     }
     const body = [form, imgSec];
-    if (!isNew) body.push(h("section", null, h("h3", { class: "sec-title", text: "Historik" }), logUl));
-    openSheet({ tag: isNew ? "Ny" : r._id, title: isNew ? "Nytt referensplagg" : r.plagg, sub: isNew ? "" : [r.skickadTill, r.status].filter(Boolean).join(" · "), body, foot: footButtons({ onDelete: isNew ? null : async () => { if (await remove("refplagg", r._id)) { toast("Borttaget"); closeSheet(); } }, canDelete: true, onSave: save }), ctx: { refresh: () => { if (!isNew && !byId(D.ref, r._id)) { closeSheet(); return; } if (!isNew) { imgSec.render(); renderLogInto(logUl, (byId(D.ref, r._id) || r).logg); } } }, focus: isNew ? "f_rplagg" : null });
+    if (!isNew) body.push(h("section", null, h("h3", { class: "sec-title", text: "History" }), logUl));
+    openSheet({ tag: isNew ? "New" : r._id, title: isNew ? "New reference garment" : r.plagg, sub: isNew ? "" : [r.skickadTill, r.status].filter(Boolean).join(" · "), body, foot: footButtons({ onDelete: isNew ? null : async () => { if (await remove("refplagg", r._id)) { toast("Removed"); closeSheet(); } }, canDelete: true, onSave: save }), ctx: { refresh: () => { if (!isNew && !byId(D.ref, r._id)) { closeSheet(); return; } if (!isNew) { imgSec.render(); renderLogInto(logUl, (byId(D.ref, r._id) || r).logg); } } }, focus: isNew ? "f_rplagg" : null });
     if (!isNew) renderLogInto(logUl, r.logg);
   }
 
@@ -2329,19 +2360,19 @@ import * as P from "./platform.js";
   function hangerCard(season, opts) {
     const items = hangerItems(season);
     const card = h("section", { class: "card hanger-card" });
-    card.append(h("div", { class: "card-head" }, h("h3", { text: "Kollektionshängare" + (season ? " – " + season : "") }), h("span", { class: "sub", text: items.length ? items.length + " godkända samples som har eller ska få PO · " + items.filter((s) => s.platsTyp === "Hängare").length + " på hängare" : "Inga godkända samples ännu" })));
+    card.append(h("div", { class: "card-head" }, h("h3", { text: "Collection rail" + (season ? " – " + season : "") }), h("span", { class: "sub", text: items.length ? items.length + " approved samples that have or will get a PO · " + items.filter((s) => s.platsTyp === "Hängare").length + " on hangers" : "No approved samples yet" })));
     if (!items.length) return card;
-    const { t, tb } = table([["Hängare"], ["Produkt"], ["Färg"], ["Sample"], ["Style-status"], ["Bild"]]);
+    const { t, tb } = table([["Hängare"], ["Product"], ["Colour"], ["Sample"], ["Style status"], ["Image"]]);
     for (const s of items) {
       const st = styleOf(s);
       const imgs = sampleImages(s);
       tb.append(h("tr", { tabIndex: 0, dataset: { id: s._id } },
-        td("Hängare", null, s.platsTyp === "Hängare" ? h("span", { class: "hanger", text: "Hängare " + (s.hangare || "?") }) : s.platsTyp ? h("span", { class: "place", text: s.platsTyp }) : h("span", { class: "flag", text: "Saknar plats" })),
+        td("Hängare", null, s.platsTyp === "Hängare" ? h("span", { class: "hanger", text: "Hanger " + (s.hangare || "?") }) : s.platsTyp ? h("span", { class: "place", text: s.platsTyp }) : h("span", { class: "flag", text: "No location" })),
         td("", "c-main", h("div", { class: "prod", text: styleName(s) }), h("div", { class: "sub", text: [st.sasong, st.drop, typLabel(st), styleKategori(st)].filter(Boolean).join(" · ") })),
-        td("Färg", null, fargText(s.farg) || "–"),
+        td("Colour", null, fargText(s.farg) || "–"),
         td("Sample", null, tag(s._id), h("span", { class: "sub", text: " " + (s.version || "") })),
-        td("Style-status", null, styleStatusPill(st)),
-        td("Bild", null, imgs.length ? h("img", { class: "rowthumb", style: "margin-top:0", src: imgUrl(imgs[0]), alt: "", loading: "lazy", onclick: (e) => { e.stopPropagation(); openLightbox(imgs, imgs[0]); } }) : h("span", { class: "muted", text: "–" }))));
+        td("Style status", null, styleStatusPill(st)),
+        td("Image", null, imgs.length ? h("img", { class: "rowthumb", style: "margin-top:0", src: imgUrl(imgs[0]), alt: "", loading: "lazy", onclick: (e) => { e.stopPropagation(); openLightbox(imgs, imgs[0]); } }) : h("span", { class: "muted", text: "–" }))));
     }
     tb.addEventListener("click", (e) => { if (e.target.closest("button")) return; const tr = e.target.closest("tr[data-id]"); if (tr) openSample(tr.dataset.id); });
     card.append(h("div", { class: "ledger-wrap" }, t));
@@ -2349,25 +2380,25 @@ import * as P from "./platform.js";
   }
 
   // ---------- E-COM (Jakob) ----------
-  const ECOM_CHECKS = [["ecomShopify", "I Shopify"], ["ecomBeskrivning", "Beskrivning"], ["ecomPrisSatt", "Pris satt"], ["ecomStorleksguide", "Storleksguide"], ["ecomNewsletter", "Newsletter"], ["ecomSeo", "Taggar/Collections"]];
+  const ECOM_CHECKS = [["ecomShopify", "In Shopify"], ["ecomBeskrivning", "Description"], ["ecomPrisSatt", "Price set"], ["ecomStorleksguide", "Size guide"], ["ecomNewsletter", "Newsletter"], ["ecomSeo", "Tags/Collections"]];
   const EcomView = {
     mount(root) {
       const st = UI.ecom;
       const upd = () => { this.update(); persist(); };
       const money = canSeeMoney();
       this.strip = makeStrip([
-        { key: "lev30", label: "Levereras inom 30 d (PO)" },
-        { key: "shopify", label: "Ej i Shopify", cls: "t-warn" },
-        { key: "pris", label: "Saknar pris", cls: "t-warn" },
-        { key: "bild", label: "Saknar e-com-bilder", cls: "t-late" },
-        { key: "klara", label: "Klara för lansering" }
-      ].concat(money ? [{ key: "marginal", label: "GM1 under 70 % (idag eller vid valutastress)", cls: "t-late" }] : []), st, () => upd());
-      const q = searchBox("q_ecom", "Sök produkt …", st, () => this.update());
-      this.fSeason = filterSelect("f_e_season", "Alla säsonger", st, "season", () => { st.touched = true; upd(); });
+        { key: "lev30", label: "Delivered within 30 d (PO)" },
+        { key: "shopify", label: "Not in Shopify", cls: "t-warn" },
+        { key: "pris", label: "No price", cls: "t-warn" },
+        { key: "bild", label: "No e-com images", cls: "t-late" },
+        { key: "klara", label: "Ready for launch" }
+      ].concat(money ? [{ key: "marginal", label: "GM1 below 70 % (today or under currency stress)", cls: "t-late" }] : []), st, () => upd());
+      const q = searchBox("q_ecom", "Search product …", st, () => this.update());
+      this.fSeason = filterSelect("f_e_season", "All seasons", st, "season", () => { st.touched = true; upd(); });
       this.count = h("span", { class: "count" });
       this.cards = h("div", { class: "cards" });
       this.marg = h("section", { class: "card", hidden: !money });
-      root.append(h("p", { class: "lede", text: "Allt som ska vara klart i Shopify inför lansering: när plaggen kommer, när kampanj och e-com fotas (från Foto-fliken), och checklistan per produkt – Shopify-produkt, beskrivning, pris (hämtat från Shopify, med GM1 mot PO-kostnaden: grönt ≥ 75 %, gult 70–75 %, rött under 70 %), storleksguide, newsletter och taggar/collections. EAN hämtas från appen." }),
+      root.append(h("p", { class: "lede", text: "Everything that must be ready in Shopify before launch: when the garments arrive, when campaign and e-com are shot (from the Photo tab), and the checklist per product – Shopify product, description, price (fetched from Shopify, with GM1 against the PO cost: green ≥ 75 %, yellow 70–75 %, red below 70 %), size guide, newsletter and tags/collections. EAN comes from the app." }),
         this.strip.el, this.marg, h("section", { class: "filters", "aria-label": "Filter" }, q, this.fSeason.el, this.count), this.cards);
     },
     // Prismarginaler för alla aktiva Shopify-produkter (kollektionen shopifypriser), med valutarisk. Bara för roller som ser kostnader.
@@ -2380,27 +2411,27 @@ import * as P from "./platform.js";
       const under = withCost.filter((r) => r.info.gm < 70), underStress = withCost.filter((r) => r.info.gm >= 70 && r.info.gmStress < 70), missing = rows.filter((r) => !r.info || r.info.kostnad == null);
       const datum = D.shopify.map((p) => p.hamtad).filter(Boolean).sort().pop();
       const tile = (n, l, cls) => h("div", { class: "tile" + (cls ? " " + cls : ""), style: "cursor:default" }, h("span", { class: "n mono", text: n }), h("span", { class: "l", text: l }));
-      el.append(h("div", { class: "card-head" }, h("h3", { text: "Prismarginaler (GM1) mot Shopify-pris – med valutarisk" }), h("span", { class: "sub", text: (D.shopify.length ? D.shopify.length + " aktiva produkter i Shopify" + (datum ? ", priser hämtade " + fmtDate(datum) : "") : "Inga Shopify-priser inlästa än") + " · kostnad = inköpspris i leverantörens valuta till dagens kurs (annars PO-snitt i SEK) · stress = SEK försvagas " + stressPct() + " % mot leverantörens valuta (ändras under Leverantörer)" })));
+      el.append(h("div", { class: "card-head" }, h("h3", { text: "Price margins (GM1) against the Shopify price – with currency risk" }), h("span", { class: "sub", text: (D.shopify.length ? D.shopify.length + " active products in Shopify" + (datum ? ", prices fetched " + fmtDate(datum) : "") : "No Shopify prices loaded yet") + " · cost = purchase price in the supplier's currency at today's rate (otherwise PO average in SEK) · stress = SEK weakens " + stressPct() + " % against the supplier's currency (changed under Suppliers)" })));
       if (!D.shopify.length) return;
-      el.append(h("div", { class: "strip", style: "--cols:4;margin:0 0 12px" }, tile(fmtPct(median(withCost.map((r) => r.info.gm)), 1), "Median-GM1 (" + withCost.length + " produkter med kostnad)"), tile(String(under.length), "Under 70 % idag", under.length ? "t-late" : ""), tile(String(underStress.length), "Hamnar under 70 % vid +" + stressPct() + " % valuta", underStress.length ? "t-warn" : ""), tile(String(missing.length), "Saknar inköpspris", missing.length ? "t-warn" : "")));
+      el.append(h("div", { class: "strip", style: "--cols:4;margin:0 0 12px" }, tile(fmtPct(median(withCost.map((r) => r.info.gm)), 1), "Median GM1 (" + withCost.length + " products with cost)"), tile(String(under.length), "Below 70 % today", under.length ? "t-late" : ""), tile(String(underStress.length), "Falls below 70 % at +" + stressPct() + " % currency", underStress.length ? "t-warn" : ""), tile(String(missing.length), "No purchase price", missing.length ? "t-warn" : "")));
       const sorted = rows.slice().sort((a, b) => { const ga = a.info && a.info.kostnad != null ? a.info.gm : 999, gb = b.info && b.info.kostnad != null ? b.info.gm : 999; return ga - gb || (a.p.titel || "").localeCompare(b.p.titel || "", "sv"); });
-      const { t, tb } = table([["Produkt (Shopify)"], ["Style"], ["Leverantör"], ["Pris inkl. moms", "num"], ["Kostnad", "num"], ["GM1", "num"], ["Vid +" + stressPct() + " %", "num"], ["Tål valuta"], ["Notering"]]);
+      const { t, tb } = table([["Product (Shopify)"], ["Style"], ["Supplier"], ["Price incl. VAT", "num"], ["Cost", "num"], ["GM1", "num"], ["At +" + stressPct() + " %", "num"], ["Currency headroom"], ["Note"]]);
       for (const r of sorted) {
         const i = r.info; const lev = r.s ? r.s.leverantor : (r.p.leverantor || ""); const cur = i ? i.valuta : (r.p.valuta || "");
         tb.append(h("tr", { tabIndex: 0, dataset: r.s ? { style: r.s._id } : {}, style: r.s ? "cursor:pointer" : "" },
           td("", "c-main", h("div", { class: "prod", text: r.p.titel }), h("div", { class: "sub", text: r.p.typ || "" })),
-          td("Style", null, r.s ? h("span", { class: "mono", text: r.s._id + " · " + r.s.namn }) : h("span", { class: "muted", text: "ingen style i appen" })),
-          td("Leverantör", null, (lev || "–") + (cur && cur !== "SEK" ? " · " + cur : "")),
-          td("Pris inkl. moms", "num", fmtSEK(r.p.pris)),
-          td("Kostnad", "num", i && i.kostnad != null ? h("div", null, h("div", { text: fmtSEK(i.kostnad) }), i.valuta !== "SEK" ? h("div", { class: "sub", text: fmtCur(i.kostnadValuta, i.valuta) }) : null) : h("span", { class: "muted", text: "–" })),
+          td("Style", null, r.s ? h("span", { class: "mono", text: r.s._id + " · " + r.s.namn }) : h("span", { class: "muted", text: "no style in the app" })),
+          td("Supplier", null, (lev || "–") + (cur && cur !== "SEK" ? " · " + cur : "")),
+          td("Price incl. VAT", "num", fmtSEK(r.p.pris)),
+          td("Cost", "num", i && i.kostnad != null ? h("div", null, h("div", { text: fmtSEK(i.kostnad) }), i.valuta !== "SEK" ? h("div", { class: "sub", text: fmtCur(i.kostnadValuta, i.valuta) }) : null) : h("span", { class: "muted", text: "–" })),
           td("GM1", "num", i && i.kostnad != null ? h("span", { class: "pill " + gmClass(i.gm), text: fmtPct(i.gm, 1) }) : h("span", { class: "muted", text: "–" })),
-          td("Vid stress", "num", i && i.kostnad != null && i.valuta !== "SEK" ? h("span", { class: "pill " + gmClass(i.gmStress), text: fmtPct(i.gmStress, 1) }) : h("span", { class: "muted", text: "–" })),
-          td("Tål", "mono", i && i.tal != null ? h("span", { style: "white-space:nowrap", title: i.tal >= 0 ? "Så mycket kan SEK försvagas mot " + i.valuta + " innan GM1 går under 70 %" : "GM1 är redan under 70 % till dagens kurs", text: i.tal >= 0 ? "+" + Math.round(i.tal) + " %" : "–" }) : ""),
-          td("Notering", null, h("span", { class: "sub", text: [i && i.kalla ? i.kalla : "", r.p.notering || ""].filter(Boolean).join(" · ") }))));
+          td("Under stress", "num", i && i.kostnad != null && i.valuta !== "SEK" ? h("span", { class: "pill " + gmClass(i.gmStress), text: fmtPct(i.gmStress, 1) }) : h("span", { class: "muted", text: "–" })),
+          td("Headroom", "mono", i && i.tal != null ? h("span", { style: "white-space:nowrap", title: i.tal >= 0 ? "This is how much SEK can weaken against " + i.valuta + " before GM1 falls below 70 %" : "GM1 is already below 70 % at today's rate", text: i.tal >= 0 ? "+" + Math.round(i.tal) + " %" : "–" }) : ""),
+          td("Note", null, h("span", { class: "sub", text: [i && i.kalla ? i.kalla : "", r.p.notering || ""].filter(Boolean).join(" · ") }))));
       }
       tb.addEventListener("click", (e) => { const tr = e.target.closest("tr[data-style]"); if (tr) openStyle(tr.dataset.style); });
       const wrap = h("div", { class: "ledger-wrap", hidden: !UI.ecom.margOpen }, t);
-      const tog = h("button", { class: "btn small", type: "button", text: (UI.ecom.margOpen ? "Dölj" : "Visa") + " alla " + rows.length + " produkter (sorterade på GM1, lägst först)", onclick: () => { UI.ecom.margOpen = !UI.ecom.margOpen; wrap.hidden = !UI.ecom.margOpen; tog.textContent = (UI.ecom.margOpen ? "Dölj" : "Visa") + " alla " + rows.length + " produkter (sorterade på GM1, lägst först)"; persist(); } });
+      const tog = h("button", { class: "btn small", type: "button", text: (UI.ecom.margOpen ? "Hide" : "Show") + " all " + rows.length + " products (sorted by GM1, lowest first)", onclick: () => { UI.ecom.margOpen = !UI.ecom.margOpen; wrap.hidden = !UI.ecom.margOpen; tog.textContent = (UI.ecom.margOpen ? "Hide" : "Show") + " all " + rows.length + " products (sorted by GM1, lowest first)"; persist(); } });
       el.append(h("div", { class: "quick", style: "margin:0 0 8px" }, tog), wrap);
     },
     update() {
@@ -2433,47 +2464,47 @@ import * as P from "./platform.js";
       const dOrderOf = (sea) => dropsOfSeason(sea).map((d) => d.namn);
       list.sort((a, b) => { const dA = dOrderOf(a.sasong), dB = dOrderOf(b.sasong); const ia = dA.indexOf(a.drop || ""), ib = dB.indexOf(b.drop || ""); return seasonRank(b.sasong) - seasonRank(a.sasong) || (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib) || (eta(a) || "9999").localeCompare(eta(b) || "9999") || (a.namn || "").localeCompare(b.namn || "", "sv"); });
       const byDrop = new Map();
-      for (const s of list) { const k = (s.drop || "Utan drop") + " – " + (s.sasong || "utan säsong"); if (!byDrop.has(k)) byDrop.set(k, { sasong: s.sasong || "", drop: s.drop || "", items: [] }); byDrop.get(k).items.push(s); }
+      for (const s of list) { const k = (s.drop || "No drop") + " – " + (s.sasong || "no season"); if (!byDrop.has(k)) byDrop.set(k, { sasong: s.sasong || "", drop: s.drop || "", items: [] }); byDrop.get(k).items.push(s); }
       const cards = [];
       const ro = !canWrite || !db;
       for (const [k, grp] of byDrop) {
         const items = grp.items;
         const d = dropsOfSeason(grp.sasong).find((x) => x.namn === grp.drop);
-        const card = h("section", { class: "card" }, h("div", { class: "card-head" }, h("h3", { text: k }), h("span", { class: "sub", text: items.length + " produkter · " + items.filter(done).length + " klara" + (d && isISO(d.lansering) ? " · lansering " + fmtDate(d.lansering) : "") })));
-        const { t, tb } = table([["Produkt"], ["Leverans"], ["Kampanjfoto"], ["E-com-foto"], ["Checklista"], ["Pris"], ["Lansering"], ["Notering"]]);
+        const card = h("section", { class: "card" }, h("div", { class: "card-head" }, h("h3", { text: k }), h("span", { class: "sub", text: items.length + " products · " + items.filter(done).length + " ready" + (d && isISO(d.lansering) ? " · launch " + fmtDate(d.lansering) : "") })));
+        const { t, tb } = table([["Product"], ["Delivery"], ["Campaign shoot"], ["E-com photo"], ["Checklist"], ["Price"], ["Launch"], ["Note"]]);
         for (const s of items) {
           const img = styleImage(s);
           const save = (patch, logText) => write("styles", s._id, Object.assign({ andrad: new Date().toISOString() }, patch, logText ? { logg: (s.logg || []).concat(logEntry(logText)) } : {}));
-          const checks = h("div", { class: "checks" }, ECOM_CHECKS.map(([key, label]) => { const cb = h("input", { type: "checkbox", checked: !!s[key], disabled: ro, onchange: () => save({ [key]: cb.checked }, label + (cb.checked ? " klar" : " ej klar")) }); return h("label", { class: "checkline" }, cb, label); }),
-            h("span", { class: "pill " + (eanOk(s) ? "ts-ok" : "ts-slut"), text: eanOk(s) ? "EAN klara" : "EAN saknas" }));
-          const pris = inp("pris_" + s._id, s.ecomPris, { type: "number", min: "0", step: "1", placeholder: "SEK inkl. moms", "aria-label": "Pris" }); pris.disabled = ro;
+          const checks = h("div", { class: "checks" }, ECOM_CHECKS.map(([key, label]) => { const cb = h("input", { type: "checkbox", checked: !!s[key], disabled: ro, onchange: () => save({ [key]: cb.checked }, label + (cb.checked ? " ready" : " not ready")) }); return h("label", { class: "checkline" }, cb, label); }),
+            h("span", { class: "pill " + (eanOk(s) ? "ts-ok" : "ts-slut"), text: eanOk(s) ? "EAN ready" : "EAN missing" }));
+          const pris = inp("pris_" + s._id, s.ecomPris, { type: "number", min: "0", step: "1", placeholder: "SEK incl. VAT", "aria-label": "Price" }); pris.disabled = ro;
           const gmEl = h("div");
-          const renderGm = () => { gmEl.replaceChildren(); const pr = num(pris.value); if (!pr) return; const src = s.ecomPrisKalla ? h("div", { class: "sub", text: "Pris från " + s.ecomPrisKalla + (s.ecomPrisDatum ? " " + fmtDate(s.ecomPrisDatum) : "") + (pr !== num(s.ecomPris) ? " (ändrat här)" : "") }) : null; if (money) gmEl.append(gmCell(gm1Info(s, pr))); if (src) gmEl.append(src); };
+          const renderGm = () => { gmEl.replaceChildren(); const pr = num(pris.value); if (!pr) return; const src = s.ecomPrisKalla ? h("div", { class: "sub", text: "Price from " + s.ecomPrisKalla + (s.ecomPrisDatum ? " " + fmtDate(s.ecomPrisDatum) : "") + (pr !== num(s.ecomPris) ? " (changed here)" : "") }) : null; if (money) gmEl.append(gmCell(gm1Info(s, pr))); if (src) gmEl.append(src); };
           pris.addEventListener("input", renderGm); renderGm();
-          pris.addEventListener("change", () => { const pv = num(pris.value); const same = pv != null && pv === num(s.ecomPris); save({ ecomPris: pv, ecomPrisSatt: pv != null, ecomPrisKalla: pv == null ? null : same ? (s.ecomPrisKalla || "manuellt") : "manuellt", ecomPrisDatum: pv == null ? null : same ? (s.ecomPrisDatum || todayISO()) : todayISO() }, "Pris " + (pris.value || "borttaget")); });
-          const lans = inp("lans_" + s._id, s.ecomLansering, { type: "date", "aria-label": "Lanseringsdatum" }); lans.disabled = ro;
+          pris.addEventListener("change", () => { const pv = num(pris.value); const same = pv != null && pv === num(s.ecomPris); save({ ecomPris: pv, ecomPrisSatt: pv != null, ecomPrisKalla: pv == null ? null : same ? (s.ecomPrisKalla || "manual") : "manual", ecomPrisDatum: pv == null ? null : same ? (s.ecomPrisDatum || todayISO()) : todayISO() }, "Price " + (pris.value || "removed")); });
+          const lans = inp("lans_" + s._id, s.ecomLansering, { type: "date", "aria-label": "Launch date" }); lans.disabled = ro;
           lans.addEventListener("change", () => save({ ecomLansering: lans.value || null }));
-          const note = inp("enote_" + s._id, s.ecomNotering, { placeholder: "Notering", "aria-label": "Notering" }); note.disabled = ro;
+          const note = inp("enote_" + s._id, s.ecomNotering, { placeholder: "Note", "aria-label": "Note" }); note.disabled = ro;
           note.addEventListener("change", () => save({ ecomNotering: note.value.trim() }));
           const e = eta(s);
           const kamp = s.kampanjDatum || s.kampanjStatus ? [isISO(s.kampanjDatum) ? fmtDate(s.kampanjDatum) : "", s.kampanjStatus || ""].filter(Boolean).join(" · ") : "–";
           tb.append(h("tr", { tabIndex: 0, dataset: { style: s._id } },
             td("", "c-main", h("div", { style: "display:flex;gap:10px;align-items:flex-start" }, img ? h("img", { class: "rowthumb", style: "margin-top:0", src: imgUrl(img), alt: "", loading: "lazy" }) : null, h("div", null, h("div", { class: "prod", text: s.namn }), h("div", { class: "sub", text: [typLabel(s), styleKategori(s), (s.farger || []).join(", ")].filter(Boolean).join(" · ") }), h("div", null, styleStatusPill(s))))),
-            td("Leverans", null, e ? h("div", null, h("div", { class: "mono", text: fmtDate(e) }), h("div", { class: "days " + (diffDays(e) < 0 ? "late" : diffDays(e) <= 14 ? "soon" : ""), text: fmtDays(diffDays(e)) }), etaSrc(s) === "ETA" ? h("div", { class: "sub", text: "ETA lager (PO saknar leveransdatum)" }) : h("div", { class: "sub", text: "enligt PO" })) : h("span", { class: "muted", text: inProduction(s) ? "PO saknar leveransdatum" : "ingen PO" })),
-            td("Kampanjfoto", null, kamp),
-            td("E-com-foto", null, isISO(s.ecomPlatDatum) ? h("div", null, h("div", { class: "mono", text: fmtDate(s.ecomPlatDatum) }), h("div", { class: "days " + (diffDays(s.ecomPlatDatum) < 0 ? "" : diffDays(s.ecomPlatDatum) <= 14 ? "soon" : ""), text: fmtDays(diffDays(s.ecomPlatDatum)) }), h("span", { class: "pill es-" + (s.ecomBilder ? slug(s.ecomBilder) : "x"), text: s.ecomBilder || "planerad" })) : h("span", { class: "pill es-" + (s.ecomBilder ? slug(s.ecomBilder) : "x"), text: s.ecomBilder ? s.ecomBilder + " – datum saknas" : "inte planerad av Oliver än" })),
-            td("Checklista", "foto-inline", checks),
-            td("Pris", "foto-inline", h("div", { style: "display:grid;gap:4px" }, pris, gmEl)),
-            td("Lansering", "foto-inline", lans),
-            td("Notering", "foto-inline", note)));
+            td("Delivery", null, e ? h("div", null, h("div", { class: "mono", text: fmtDate(e) }), h("div", { class: "days " + (diffDays(e) < 0 ? "late" : diffDays(e) <= 14 ? "soon" : ""), text: fmtDays(diffDays(e)) }), etaSrc(s) === "ETA" ? h("div", { class: "sub", text: "ETA warehouse (the PO has no delivery date)" }) : h("div", { class: "sub", text: "per PO" })) : h("span", { class: "muted", text: inProduction(s) ? "The PO has no delivery date" : "no PO" })),
+            td("Campaign shoot", null, kamp),
+            td("E-com photo", null, isISO(s.ecomPlatDatum) ? h("div", null, h("div", { class: "mono", text: fmtDate(s.ecomPlatDatum) }), h("div", { class: "days " + (diffDays(s.ecomPlatDatum) < 0 ? "" : diffDays(s.ecomPlatDatum) <= 14 ? "soon" : ""), text: fmtDays(diffDays(s.ecomPlatDatum)) }), h("span", { class: "pill es-" + (s.ecomBilder ? slug(s.ecomBilder) : "x"), text: s.ecomBilder || "planned" })) : h("span", { class: "pill es-" + (s.ecomBilder ? slug(s.ecomBilder) : "x"), text: s.ecomBilder ? s.ecomBilder + " – date missing" : "not planned by Oliver yet" })),
+            td("Checklist", "foto-inline", checks),
+            td("Price", "foto-inline", h("div", { style: "display:grid;gap:4px" }, pris, gmEl)),
+            td("Launch", "foto-inline", lans),
+            td("Note", "foto-inline", note)));
         }
         tb.addEventListener("click", (e) => { if (e.target.closest("input, select, button, label")) return; const tr = e.target.closest("tr[data-style]"); if (tr) openStyle(tr.dataset.style); });
         card.append(h("div", { class: "ledger-wrap" }, t));
         cards.push(card);
       }
       this.cards.replaceChildren(...cards);
-      if (!list.length) this.cards.append(h("div", { class: "empty" }, h("strong", { text: "Inget att visa" }), h("span", { text: "Byt säsong eller rensa filtret." })));
-      this.count.textContent = list.length + " produkter" + (season ? " i " + season : " (alla säsonger)");
+      if (!list.length) this.cards.append(h("div", { class: "empty" }, h("strong", { text: "Nothing to show" }), h("span", { text: "Change season or clear the filter." })));
+      this.count.textContent = list.length + " products" + (season ? " i " + season : " (all seasons)");
     }
   };
 
@@ -2481,16 +2512,16 @@ import * as P from "./platform.js";
   const TygerView = {
     mount(root) {
       const st = UI.tyger;
-      const q = searchBox("q_tyger", "Sök tyg eller leverantör …", st, () => this.update());
-      const fs = selectEl("f_t_status", [["", "Alla statusar"]].concat(TYG_STATUS), st.status);
+      const q = searchBox("q_tyger", "Search fabric or supplier …", st, () => this.update());
+      const fs = selectEl("f_t_status", [["", "All statuses"]].concat(TYG_STATUS), st.status);
       fs.addEventListener("change", () => { st.status = fs.value; this.update(); });
       this.count = h("span", { class: "count" });
-      const { t, tb } = table([["Tyg"], ["Leverantör"], ["Status"], ["Används i"], ["Eget lager"], ["Senast beställd"], ["Kommentar"]]);
+      const { t, tb } = table([["Tyg"], ["Supplier"], ["Status"], ["Used in"], ["Eget lager"], ["Last ordered"], ["Comment"]]);
       this.tb = tb;
       tb.addEventListener("click", (e) => { const tr = e.target.closest("tr[data-id]"); if (tr) openTyg(tr.dataset.id); });
       tb.addEventListener("keydown", (e) => { if (e.key !== "Enter") return; const tr = e.target.closest("tr[data-id]"); if (tr) openTyg(tr.dataset.id); });
       this.empty = h("div", { class: "empty", hidden: true });
-      root.append(h("p", { class: "lede", text: "Alla tyger ni provat eller använder, skrivna som ni pratar om dem, t.ex. \"Japan Blue inhouse – Westpoint Canvas 223\". Nya tyg som skrivs in på en sample hamnar här automatiskt. Meter ni själva äger ligger under Lager." }), h("section", { class: "filters" }, q, fs, this.count), h("section", { class: "ledger-wrap" }, t, this.empty));
+      root.append(h("p", { class: "lede", text: "All fabrics you have tried or use, written the way you talk about them, e.g. \"Japan Blue inhouse – Westpoint Canvas 223\". New fabrics typed on a sample end up here automatically. Metres you own yourselves are under Stock." }), h("section", { class: "filters" }, q, fs, this.count), h("section", { class: "ledger-wrap" }, t, this.empty));
     },
     update() {
       const st = UI.tyger, q = norm(st.q);
@@ -2500,19 +2531,19 @@ import * as P from "./platform.js";
         const nStyles = uniq(used.map((s) => s.styleId)).length;
         const lastOrder = used.map((s) => s.bestalld).filter(isISO).sort().pop();
         const statusCell = td("Status", null, t.status ? h("span", { class: "pill ts-" + slug(t.status), text: t.status }) : h("span", { class: "muted", text: "–" }));
-        if (isISO(t.aterDatum)) statusCell.append(h("div", { class: "sub", text: "åter " + fmtDate(t.aterDatum) }));
-        if (isISO(t.aterDatum) && /slut/i.test(t.status || "") && diffDays(t.aterDatum) <= 0) statusCell.append(h("span", { class: "flag", text: "Kolla tillgången" }));
+        if (isISO(t.aterDatum)) statusCell.append(h("div", { class: "sub", text: "again " + fmtDate(t.aterDatum) }));
+        if (isISO(t.aterDatum) && /slut/i.test(t.status || "") && diffDays(t.aterDatum) <= 0) statusCell.append(h("span", { class: "flag", text: "Check availability" }));
         return h("tr", { tabIndex: 0, dataset: { id: t._id } },
-          td("", "c-main", h("div", { class: "prod", text: t.namn || "Namnlöst tyg" }), h("div", { class: "sub", text: t._id })),
-          td("Leverantör", null, t.leverantor || ""), statusCell,
-          td("Används i", null, used.length ? used.length + (used.length === 1 ? " sample" : " samples") + " · " + nStyles + (nStyles === 1 ? " style" : " styles") : "–"),
+          td("", "c-main", h("div", { class: "prod", text: t.namn || "Unnamed fabric" }), h("div", { class: "sub", text: t._id })),
+          td("Supplier", null, t.leverantor || ""), statusCell,
+          td("Used in", null, used.length ? used.length + (used.length === 1 ? " sample" : " samples") + " · " + nStyles + (nStyles === 1 ? " style" : " styles") : "–"),
           td("Eget lager", null, stockText(t._id) || h("span", { class: "muted", text: "–" })),
-          td("Senast beställd", "mono", lastOrder ? fmtDate(lastOrder) : ""),
-          td("Kommentar", "note", t.kommentar || ""));
+          td("Last ordered", "mono", lastOrder ? fmtDate(lastOrder) : ""),
+          td("Comment", "note", t.kommentar || ""));
       }));
       this.empty.hidden = list.length > 0;
-      if (!list.length) this.empty.replaceChildren(h("strong", { text: loaded.has("tyger") ? (D.tyger.length ? "Inget matchar" : "Inga tyger ännu") : "Laddar tyger …" }));
-      this.count.textContent = list.length + " av " + D.tyger.length + " tyger";
+      if (!list.length) this.empty.replaceChildren(h("strong", { text: loaded.has("tyger") ? (D.tyger.length ? "Nothing matches" : "No fabrics yet") : "Loading fabrics …" }));
+      this.count.textContent = list.length + " of " + D.tyger.length + " fabrics";
     }
   };
 
@@ -2522,29 +2553,29 @@ import * as P from "./platform.js";
       const st = UI.lager;
       const upd = () => { this.update(); persist(); };
       this.strip = makeStrip([
-        { key: "meter", label: "Meter tyg kvar (ca)" },
-        { key: "antal", label: "Antal trims kvar" },
-        { key: "partier", label: "Partier i lager" },
-        { key: "saknar", label: "Saknar mängd", cls: "t-warn" },
-        { key: "bestallda", label: "Beställda" },
-        { key: "reserverade", label: "Reserverade" }
+        { key: "meter", label: "Metres of fabric left (approx.)" },
+        { key: "antal", label: "Trims left" },
+        { key: "partier", label: "Batches in stock" },
+        { key: "saknar", label: "No quantity", cls: "t-warn" },
+        { key: "bestallda", label: "Ordered" },
+        { key: "reserverade", label: "Reserved" }
       ], st, () => { this.seg.sync(); upd(); });
-      const q = searchBox("q_lager", "Sök tyg, färg, plats, style …", st, () => this.update());
-      this.fPlats = filterSelect("f_l_plats", "Alla platser", st, "plats", upd);
-      this.seg = makeSeg([["I lager", "I lager"], ["Beställd", "Beställd"], ["Förbrukad", "Förbrukad"], ["alla", "Alla"]], st, "status", upd);
+      const q = searchBox("q_lager", "Search fabric, colour, location, style …", st, () => this.update());
+      this.fPlats = filterSelect("f_l_plats", "All locations", st, "plats", upd);
+      this.seg = makeSeg([["I lager", "I lager"], ["Beställd", "Beställd"], ["Förbrukad", "Förbrukad"], ["alla", "All"]], st, "status", upd);
       if (!st.typ) st.typ = "alla";
       const typState = { get typ() { return st.typ; }, set typ(v) { st.typ = v; }, view: null };
-      this.segTyp = makeSeg([["tyg", "Tyg"], ["trims", "Trims"], ["alla", "Tyg + trims"]], typState, "typ", upd);
+      this.segTyp = makeSeg([["tyg", "Tyg"], ["trims", "Trims"], ["alla", "Fabric + trims"]], typState, "typ", upd);
       this.segTyp.el.setAttribute("aria-label", "Typ");
-      const grp = selectEl("f_l_group", [["plats", "Gruppera per plats"], ["tyg", "Gruppera per tyg"], ["none", "Ingen gruppering"]], st.group);
+      const grp = selectEl("f_l_group", [["plats", "Group by location"], ["tyg", "Group by fabric"], ["none", "No grouping"]], st.group);
       grp.addEventListener("change", () => { st.group = grp.value; upd(); });
       this.count = h("span", { class: "count" });
-      const { t, tb } = table([["Artikel"], ["Plats"], ["Kvar"], ["Reserverad för"], ["Uppdaterad"], ["Status"], ["Kommentar"]]);
+      const { t, tb } = table([["Item"], ["Location"], ["Left"], ["Reserved for"], ["Updated"], ["Status"], ["Comment"]]);
       this.tb = tb;
       tb.addEventListener("click", (e) => { if (e.target.closest("button")) return; const tr = e.target.closest("tr[data-id]"); if (tr) openLager(tr.dataset.id); });
       tb.addEventListener("keydown", (e) => { if (e.key !== "Enter" || e.target.closest("button")) return; const tr = e.target.closest("tr[data-id]"); if (tr) openLager(tr.dataset.id); });
       this.empty = h("div", { class: "empty", hidden: true });
-      root.append(h("p", { class: "lede", text: "Tyg och trims som Rubato äger: var det ligger och hur mycket som är kvar – meter för tyg, antal för trims (knappar, dragkedjor, etiketter …). Uppdatera när en order har sytts eller när leverantören har räknat." }), this.strip.el, h("section", { class: "filters", "aria-label": "Filter" }, q, this.segTyp.el, this.fPlats.el, this.seg.el, grp, this.count), h("section", { class: "ledger-wrap" }, t, this.empty));
+      root.append(h("p", { class: "lede", text: "Fabric and trims that Rubato owns: where it is and how much is left – metres for fabric, quantity for trims (buttons, zips, labels …). Update when an order has been sewn or when the supplier has counted." }), this.strip.el, h("section", { class: "filters", "aria-label": "Filter" }, q, this.segTyp.el, this.fPlats.el, this.seg.el, grp, this.count), h("section", { class: "ledger-wrap" }, t, this.empty));
     },
     update() {
       const st = UI.lager, q = norm(st.q);
@@ -2576,7 +2607,7 @@ import * as P from "./platform.js";
         if (q && ![l._id, lotName(l), l.farg, l.storlek, isTrims(l) ? "trims" : "tyg", l.plats, l.kommentar, reservedName(l), l.status].join(" ").toLowerCase().includes(q)) return false;
         return true;
       });
-      const keyOf = st.group === "plats" ? (l) => l.plats || "Utan plats" : st.group === "tyg" ? (l) => lotName(l) : () => "";
+      const keyOf = st.group === "plats" ? (l) => l.plats || "No location" : st.group === "tyg" ? (l) => lotName(l) : () => "";
       list.sort((a, b) => keyOf(a).localeCompare(keyOf(b), "sv") || lotName(a).localeCompare(lotName(b), "sv") || (a.farg || "").localeCompare(b.farg || "", "sv") || a._id.localeCompare(b._id));
       const rows = [];
       let last = null;
@@ -2589,10 +2620,10 @@ import * as P from "./platform.js";
           const knownM = inL.filter((x) => !isTrims(x) && num(x.meter) != null);
           const knownS = inL.filter((x) => isTrims(x) && num(x.antal) != null);
           const unknown = inL.filter((x) => lotQty(x) == null).length;
-          const bits = [k, grpLots.length + (grpLots.length === 1 ? " parti" : " partier")];
-          if (knownM.length) bits.push("ca " + fmtM(knownM.reduce((a, x) => a + num(x.meter), 0)) + " m");
+          const bits = [k, grpLots.length + (grpLots.length === 1 ? " batch" : " batches")];
+          if (knownM.length) bits.push("approx. " + fmtM(knownM.reduce((a, x) => a + num(x.meter), 0)) + " m");
           if (knownS.length) bits.push(fmtSt(knownS.reduce((a, x) => a + num(x.antal), 0)));
-          if (unknown) bits.push(unknown + " utan mängd");
+          if (unknown) bits.push(unknown + " no quantity");
           rows.push(h("tr", { class: "group" }, h("td", { colSpan: 7, text: bits.join(" · ") })));
         }
         rows.push(lagerRow(l));
@@ -2601,11 +2632,11 @@ import * as P from "./platform.js";
       this.empty.hidden = list.length > 0;
       if (!list.length) {
         this.empty.replaceChildren(...(!loaded.has("lager")
-          ? [h("strong", { text: db ? "Laddar lager …" : "Inget lager att visa" })]
-          : D.lager.length ? [h("strong", { text: "Inget matchar filtret" }), h("span", { text: "Byt status, plats eller rensa sökningen." })]
-          : [h("strong", { text: "Inga partier ännu" }), h("span", { text: "Lägg till det första med \"+ Nytt parti\": tyg eller trims, var det ligger och hur mycket." })]));
+          ? [h("strong", { text: db ? "Loading stock …" : "No stock to show" })]
+          : D.lager.length ? [h("strong", { text: "Nothing matches the filter" }), h("span", { text: "Change status or location, or clear the search." })]
+          : [h("strong", { text: "No batches yet" }), h("span", { text: "Add the first one with \"+ New batch\": fabric or trims, where it is and how much." })]));
       }
-      this.count.textContent = list.length + " av " + D.lager.length + " partier";
+      this.count.textContent = list.length + " of " + D.lager.length + " batches";
     }
   };
   function lagerRow(l) {
@@ -2613,27 +2644,27 @@ import * as P from "./platform.js";
     const t = tygOf(l);
     const trm = isTrims(l);
     const sub = [l._id, trm ? "Trims" : "", l.farg, trm ? l.storlek : (num(l.bredd) != null ? l.bredd + " cm" : "")].filter(Boolean).join(" · ");
-    const kvar = h("td", { "data-label": "Kvar", class: "c-exp" });
+    const kvar = h("td", { "data-label": "Left", class: "c-exp" });
     const qn = lotQty(l), qi = num(trm ? l.inkoptAntal : l.inkoptMeter);
     if (qn != null) kvar.append(h("div", { class: "mono", text: fmtQty(l, qn) }));
-    else if (l.status === "I lager") kvar.append(h("span", { class: "flag", text: trm ? "Ange antal" : "Ange meter" }));
+    else if (l.status === "I lager") kvar.append(h("span", { class: "flag", text: trm ? "Enter quantity" : "Enter metres" }));
     else kvar.append(h("span", { class: "muted", text: "–" }));
-    if (qi != null) kvar.append(h("div", { class: "sub", text: "inköpt " + (trm ? fmtSt(qi) : fmtM(qi) + " m") }));
+    if (qi != null) kvar.append(h("div", { class: "sub", text: "purchased " + (trm ? fmtSt(qi) : fmtM(qi) + " m") }));
     const upd = l.raknad || (l.andrad ? String(l.andrad).slice(0, 10) : "");
     tr.append(
       td("", "c-main", h("div", { class: "prod" + (t && t.status === "Slut" ? " late-text" : ""), text: lotName(l) }), h("div", { class: "sub", text: sub })),
-      td("Plats", null, h("span", { class: "place", text: l.plats || "" })),
+      td("Location", null, h("span", { class: "place", text: l.plats || "" })),
       kvar,
-      td("Reserverad för", null, reservedName(l) || ""),
-      td("Uppdaterad", "mono", isISO(upd) ? fmtDate(upd) : ""),
+      td("Reserved for", null, reservedName(l) || ""),
+      td("Updated", "mono", isISO(upd) ? fmtDate(upd) : ""),
       td("Status", "c-status", h("span", { class: "pill ls-" + slug(l.status || "x"), text: l.status || "–" })),
-      td("Kommentar", "note", l.kommentar || "")
+      td("Comment", "note", l.kommentar || "")
     );
     return tr;
   }
 
   // ---------- COO: rullande 12 månader ----------
-  const EV_TYP = [["kollektion", "Kollektion & produkt"], ["inkop", "Inköp"], ["drop", "Drop & lansering"], ["innehall", "Innehåll"], ["massor", "Mässor & event"], ["ekonomi", "Ekonomi & admin"], ["lokaler", "Lokaler & personal"]];
+  const EV_TYP = [["kollektion", "Collection & product"], ["inkop", "Purchasing"], ["drop", "Drop & launch"], ["innehall", "Content"], ["massor", "Fairs & events"], ["ekonomi", "Finance & admin"], ["lokaler", "Premises & staff"]];
   const EV_TYP_LABEL = Object.fromEntries(EV_TYP);
   const EV_STATUS = ["Planerad", "Pågår", "Klar", "Inställd"];
   const EV_OWNER_DEFAULT = { kollektion: "Carl", inkop: "Elliot", drop: "Jakob", innehall: "Oliver", massor: "Jakob", ekonomi: "Elliot", lokaler: "Jakob" };
@@ -2651,20 +2682,20 @@ import * as P from "./platform.js";
       const base = { sasong: st.sasong || "", drop: st.drop || "", styleId: st._id, open: () => openStyle(st._id) };
       if (!["klar", "skip", "paus"].includes(p.lage) && p.po) {
         const xs = samplesOfStyle(st._id);
-        if (p.best && (st.typ || "Nyhet") === "Nyhet") add(Object.assign({}, base, { key: "s-best-" + st._id, typ: "kollektion", titel: "Sample beställd senast: " + st.namn, datum: p.best, agare: "Alex", klar: xs.some((x) => isISO(x.bestalld)) }));
-        if (p.inne && (st.typ || "Nyhet") === "Nyhet") add(Object.assign({}, base, { key: "s-inne-" + st._id, typ: "kollektion", titel: "Sample inne senast: " + st.namn, datum: p.inne, agare: "Alex", klar: xs.some((x) => x.status === "Mottagen") }));
-        add(Object.assign({}, base, { key: "s-po-" + st._id, typ: "inkop", titel: "PO senast: " + st.namn, datum: p.po, agare: "Elliot", klar: hasPlacedPo(st) }));
+        if (p.best && (st.typ || "Nyhet") === "Nyhet") add(Object.assign({}, base, { key: "s-best-" + st._id, typ: "kollektion", titel: "Sample ordered by: " + st.namn, datum: p.best, agare: "Alex", klar: xs.some((x) => isISO(x.bestalld)) }));
+        if (p.inne && (st.typ || "Nyhet") === "Nyhet") add(Object.assign({}, base, { key: "s-inne-" + st._id, typ: "kollektion", titel: "Sample in by: " + st.namn, datum: p.inne, agare: "Alex", klar: xs.some((x) => x.status === "Mottagen") }));
+        add(Object.assign({}, base, { key: "s-po-" + st._id, typ: "inkop", titel: "PO by: " + st.namn, datum: p.po, agare: "Elliot", klar: hasPlacedPo(st) }));
       }
-      if (isISO(st.fotoSenast)) add(Object.assign({}, base, { key: "s-foto-" + st._id, typ: "innehall", titel: "Fotosample senast: " + st.namn, datum: st.fotoSenast, agare: "Oliver", klar: fotoState(st).key === "finns" }));
-      if (isISO(st.kampanjDatum)) add(Object.assign({}, base, { key: "s-kamp-" + st._id, typ: "innehall", titel: "Kampanjfoto: " + st.namn, datum: st.kampanjDatum, agare: "Oliver", klar: ["Fotad", "Klar"].includes(st.kampanjStatus) }));
-      if (isISO(st.ecomPlatDatum)) add(Object.assign({}, base, { key: "s-ecom-" + st._id, typ: "innehall", titel: "E-com-plåtning: " + st.namn, datum: st.ecomPlatDatum, agare: "Oliver", klar: ["Fotade", "Retuscherade", "Publicerade"].includes(st.ecomBilder) }));
-      if (isISO(st.ecomLansering)) add(Object.assign({}, base, { key: "s-lans-" + st._id, typ: "drop", titel: "Lansering: " + st.namn, datum: st.ecomLansering, agare: "Jakob", klar: st.ecomBilder === "Publicerade" && !!st.ecomShopify }));
+      if (isISO(st.fotoSenast)) add(Object.assign({}, base, { key: "s-foto-" + st._id, typ: "innehall", titel: "Photo sample by: " + st.namn, datum: st.fotoSenast, agare: "Oliver", klar: fotoState(st).key === "finns" }));
+      if (isISO(st.kampanjDatum)) add(Object.assign({}, base, { key: "s-kamp-" + st._id, typ: "innehall", titel: "Campaign shoot: " + st.namn, datum: st.kampanjDatum, agare: "Oliver", klar: ["Fotad", "Klar"].includes(st.kampanjStatus) }));
+      if (isISO(st.ecomPlatDatum)) add(Object.assign({}, base, { key: "s-ecom-" + st._id, typ: "innehall", titel: "E-com shoot: " + st.namn, datum: st.ecomPlatDatum, agare: "Oliver", klar: ["Fotade", "Retuscherade", "Publicerade"].includes(st.ecomBilder) }));
+      if (isISO(st.ecomLansering)) add(Object.assign({}, base, { key: "s-lans-" + st._id, typ: "drop", titel: "Launch: " + st.namn, datum: st.ecomLansering, agare: "Jakob", klar: st.ecomBilder === "Publicerade" && !!st.ecomShopify }));
     }
     for (const d of D.drops) {
       const members = D.styles.filter((x) => dropKey(x.sasong, x.drop) === dropKey(d.sasong, d.namn) && styleStatusNorm(x.status) !== "Kastad");
       const base = { sasong: d.sasong, drop: d.namn, open: () => openDrop(d._id) };
-      if (isISO(d.lansering) && !d._coo) add(Object.assign({}, base, { key: "d-lans-" + d._id, typ: "drop", titel: "Drop-datum: " + d.namn + " " + d.sasong, datum: d.lansering, agare: "Jakob", klar: d.lansering < todayISO() || (members.length > 0 && members.every((x) => x.ecomBilder === "Publicerade")) }));
-      if (isISO(d.klartSenast)) add(Object.assign({}, base, { key: "d-klart-" + d._id, typ: "inkop", titel: "I lager senast: " + d.namn + " " + d.sasong, datum: d.klartSenast, agare: "Elliot", klar: members.length > 0 && members.every((x) => styleStatusNorm(x.status) === "Levererad") }));
+      if (isISO(d.lansering) && !d._coo) add(Object.assign({}, base, { key: "d-lans-" + d._id, typ: "drop", titel: "Drop date: " + d.namn + " " + d.sasong, datum: d.lansering, agare: "Jakob", klar: d.lansering < todayISO() || (members.length > 0 && members.every((x) => x.ecomBilder === "Publicerade")) }));
+      if (isISO(d.klartSenast)) add(Object.assign({}, base, { key: "d-klart-" + d._id, typ: "inkop", titel: "In stock by: " + d.namn + " " + d.sasong, datum: d.klartSenast, agare: "Elliot", klar: members.length > 0 && members.every((x) => styleStatusNorm(x.status) === "Levererad") }));
     }
     for (const po of D.po) {
       const st0 = poStatusNorm(po.status); if (PO_DRAFT.includes(st0)) continue;
@@ -2672,10 +2703,10 @@ import * as P from "./platform.js";
       const nr = po.nr || po._id;
       const base = { sasong: po.sasong || "", drop: po.drop || "", poId: po._id, open: () => openPo(po._id) };
       const rank = PO_STATUS.indexOf(st0);
-      if (ms.produktion) add(Object.assign({}, base, { key: "po-prod-" + po._id, typ: "inkop", titel: "Produktionsstart " + nr + " · " + (po.leverantor || ""), datum: ms.produktion, agare: "Elliot", klar: rank >= PO_STATUS.indexOf("PO bekräftad") }));
+      if (ms.produktion) add(Object.assign({}, base, { key: "po-prod-" + po._id, typ: "inkop", titel: "Production start " + nr + " · " + (po.leverantor || ""), datum: ms.produktion, agare: "Elliot", klar: rank >= PO_STATUS.indexOf("PO bekräftad") }));
       if (ms.exfactory) add(Object.assign({}, base, { key: "po-ex-" + po._id, typ: "inkop", titel: "Ex-factory " + nr + " · " + (po.leverantor || ""), datum: ms.exfactory, agare: "Elliot", klar: rank >= PO_STATUS.indexOf("Skickad") }));
-      if (ms.leverans) add(Object.assign({}, base, { key: "po-lev-" + po._id, typ: "inkop", titel: "Leverans till lager " + nr, datum: ms.leverans, agare: "Alex", klar: st0 === "Inlevererad" }));
-      paymentPlan(po).forEach((x, i) => { if (x.datum) add(Object.assign({}, base, { key: "po-pay-" + po._id + "-" + x.idx, typ: "inkop", titel: (x.typ.includes("100") ? "Betalning " : x.typ.includes("netto") ? "Slutbetalning " : i === 0 ? "Handpenning " : "Betalning ") + nr + (money ? " · " + fmtTkr(x.belopp) : ""), datum: x.datum, agare: "Elliot", klar: !!x.betald })); });
+      if (ms.leverans) add(Object.assign({}, base, { key: "po-lev-" + po._id, typ: "inkop", titel: "Delivery to warehouse " + nr, datum: ms.leverans, agare: "Alex", klar: st0 === "Inlevererad" }));
+      paymentPlan(po).forEach((x, i) => { if (x.datum) add(Object.assign({}, base, { key: "po-pay-" + po._id + "-" + x.idx, typ: "inkop", titel: (x.typ.includes("100") ? "Payment " : x.typ.includes("netto") ? "Final payment " : i === 0 ? "Deposit " : "Payment ") + nr + (money ? " · " + fmtTkr(x.belopp) : ""), datum: x.datum, agare: "Elliot", klar: !!x.betald })); });
     }
     return out;
   }
@@ -2684,28 +2715,28 @@ import * as P from "./platform.js";
     const manual = D.handelser.map((e) => Object.assign({}, e, { auto: false, open: () => openEvent(e._id) }));
     return autoEvents().concat(manual).filter((e) => isISO(e.datum) && ((e.datum >= w.from && e.datum <= w.to) || (e.slut && e.slut >= w.from && e.datum <= w.to)) && (e.datum >= todayISO() || isOverdue(e) || (e.slut && e.slut >= todayISO()) || e.datum >= addDays(todayISO(), -30)));
   }
-  const evPill = (e) => h("span", { class: "pill ev-" + (isOverdue(e) ? "sen" : slug(e.status || "Planerad")), text: isOverdue(e) ? "Försenad" : e.status || "Planerad" });
+  const evPill = (e) => h("span", { class: "pill ev-" + (isOverdue(e) ? "sen" : slug(e.status || "Planerad")), text: isOverdue(e) ? "Late" : e.status || "Planerad" });
   const CooView = {
     mount(root) {
       const st = UI.coo;
       const upd = () => { this.update(); persist(); };
       this.strip = makeStrip([
-        { key: "sen", label: "Försenade", cls: "t-late" },
-        { key: "v7", label: "Inom 7 dagar", cls: "t-warn" },
-        { key: "d30", label: "Inom 30 dagar" },
-        { key: "man", label: "Manuella händelser" },
-        { key: "mina", label: "Mina" }
+        { key: "sen", label: "Late", cls: "t-late" },
+        { key: "v7", label: "Within 7 days", cls: "t-warn" },
+        { key: "d30", label: "Within 30 days" },
+        { key: "man", label: "Manual events" },
+        { key: "mina", label: "Mine" }
       ], st, () => upd());
-      const q = searchBox("q_coo", "Sök händelse, PO, style …", st, () => this.update());
-      this.seg = makeSeg([["lanseringar", "Lanseringar"], ["tidslinje", "Tidslinje"], ["30", "Nästa 30 dagar"], ["lista", "Lista"]], st, "mode", upd);
-      this.fAgare = filterSelect("f_c_agare", "Alla ägare", st, "agare", upd);
-      this.fSeason = filterSelect("f_c_season", "Alla säsonger", st, "season", upd);
-      this.typeBar = h("div", { class: "seg", role: "group", "aria-label": "Typ" });
+      const q = searchBox("q_coo", "Search event, PO, style …", st, () => this.update());
+      this.seg = makeSeg([["lanseringar", "Launches"], ["tidslinje", "Timeline"], ["30", "Next 30 days"], ["lista", "List"]], st, "mode", upd);
+      this.fAgare = filterSelect("f_c_agare", "All owners", st, "agare", upd);
+      this.fSeason = filterSelect("f_c_season", "All seasons", st, "season", upd);
+      this.typeBar = h("div", { class: "seg", role: "group", "aria-label": "Type" });
       this.autoBox = h("input", { type: "checkbox", checked: st.visaAuto !== false, onchange: () => { st.visaAuto = this.autoBox.checked; upd(); } });
       this.count = h("span", { class: "count" });
       this.body = h("div", { class: "cards" });
-      root.append(h("p", { class: "lede", text: "Vad som lanseras när, månad för månad: varje drop med sina produkter och var de står – levererat, foto, i Shopify. Mässor och andra händelser visas i samma flöde. Tidslinje och lista finns kvar för den som vill se alla deadlines." }),
-        this.strip.el, h("section", { class: "filters", "aria-label": "Filter" }, q, this.seg.el, this.fAgare.el, this.fSeason.el, this.typeBar, h("label", { class: "checkline" }, this.autoBox, "Visa automatiska"), this.count), this.body);
+      root.append(h("p", { class: "lede", text: "What launches when, month by month: every drop with its products and where they stand – delivered, photo, in Shopify. Fairs and other events are shown in the same flow. Timeline and list remain for anyone who wants to see every deadline." }),
+        this.strip.el, h("section", { class: "filters", "aria-label": "Filter" }, q, this.seg.el, this.fAgare.el, this.fSeason.el, this.typeBar, h("label", { class: "checkline" }, this.autoBox, "Show automatic"), this.count), this.body);
       this.renderTypeBar();
     },
     renderTypeBar() {
@@ -2742,16 +2773,16 @@ import * as P from "./platform.js";
       const simple = st.mode === "lanseringar" && !st.view; this.typeBar.hidden = simple; this.autoBox.parentElement.hidden = simple; this.fAgare.el.hidden = simple;
       if (simple) { this.body.append(...this.launches(list)); this.count.textContent = ""; return; }
       if (st.mode === "tidslinje" && !st.view) this.body.append(this.timeline(list));
-      else if (st.mode === "30" && !st.view) this.body.append(this.listCard(list.filter((e) => (e.datum <= addDays(t, 30) && e.status !== "Klar") || isOverdue(e)), "Nästa 30 dagar", "Försenat överst, sedan i datumordning."));
-      else this.body.append(this.listCard(list, st.view ? ({ sen: "Försenade", v7: "Inom 7 dagar", d30: "Inom 30 dagar", man: "Manuella händelser", mina: "Mina händelser" })[st.view] : "Alla händelser 12 månader", ""));
-      this.count.textContent = list.length + " händelser · " + all.filter((e) => !e.auto).length + " manuella";
+      else if (st.mode === "30" && !st.view) this.body.append(this.listCard(list.filter((e) => (e.datum <= addDays(t, 30) && e.status !== "Klar") || isOverdue(e)), "Next 30 days", "Late first, then in date order."));
+      else this.body.append(this.listCard(list, st.view ? ({ sen: "Late", v7: "Within 7 days", d30: "Within 30 days", man: "Manual events", mina: "My events" })[st.view] : "All events 12 months", ""));
+      this.count.textContent = list.length + " events · " + all.filter((e) => !e.auto).length + " manual";
     },
     // Lanseringar: månad för månad, drop för drop, med produkterna och var de står.
     launches(list) {
       const st = UI.coo, t = todayISO();
       const w = evWindow();
       const live = (x) => !x.grund && !isIdea(x) && !["Kastad", "Pausad"].includes(styleStatusNorm(x.status));
-      const etaOf = (x) => { const pos = poLinesOf(x._id).map((l) => l.po).filter((p) => !PO_DRAFT.includes(poStatusNorm(p.status))); if (!pos.length) return null; if (pos.every((p) => poStatusNorm(p.status) === "Inlevererad")) return { key: "inne", label: "Levererad" }; const ds = pos.map((p) => (isISO(p.leveransOnskad) ? p.leveransOnskad : poEta(p))).filter(Boolean).sort(); return { key: ds[0] && ds[0] < t ? "sen" : "vantar", label: ds[0] ? "Leverans " + fmtDate(ds[0]) : "PO lagd, datum saknas" }; };
+      const etaOf = (x) => { const pos = poLinesOf(x._id).map((l) => l.po).filter((p) => !PO_DRAFT.includes(poStatusNorm(p.status))); if (!pos.length) return null; if (pos.every((p) => poStatusNorm(p.status) === "Inlevererad")) return { key: "inne", label: "Levererad" }; const ds = pos.map((p) => (isISO(p.leveransOnskad) ? p.leveransOnskad : poEta(p))).filter(Boolean).sort(); return { key: ds[0] && ds[0] < t ? "sen" : "vantar", label: ds[0] ? "Delivery " + fmtDate(ds[0]) : "PO placed, date missing" }; };
       const chip = (cls, txt) => h("span", { class: "pill " + cls, text: txt });
       const prodRow = (x) => {
         const img = styleImage(x); const eta = etaOf(x); const foto = x.ecomBilder || "";
@@ -2759,18 +2790,18 @@ import * as P from "./platform.js";
           img ? h("img", { class: "rowthumb", style: "margin:0", src: imgUrl(img), alt: "", loading: "lazy" }) : h("div", { class: "rowthumb", style: "margin:0" }),
           h("div", { class: "launch-main" }, h("div", { class: "prod", text: x.namn }), h("div", { class: "sub", text: [styleKategori(x), (x.farger || []).join(", "), x.leverantor].filter(Boolean).join(" · ") })),
           h("div", { class: "launch-chips" },
-            eta ? chip(eta.key === "inne" ? "ts-ok" : eta.key === "sen" ? "ts-slut" : "ts-delvis-slut", eta.label) : chip("ts-utgatt", styleStatusNorm(x.status) === "Levererad" ? "Levererad" : "Ingen PO"),
-            chip(["Publicerade", "Retuscherade", "Fotade"].includes(foto) ? "ts-ok" : foto ? "ts-delvis-slut" : "ts-utgatt", foto ? "Foto: " + foto.toLowerCase() : "Foto ej planerat"),
-            chip(x.ecomShopify ? "ts-ok" : "ts-utgatt", x.ecomShopify ? "I Shopify" : "Ej i Shopify")));
+            eta ? chip(eta.key === "inne" ? "ts-ok" : eta.key === "sen" ? "ts-slut" : "ts-delvis-slut", eta.label) : chip("ts-utgatt", styleStatusNorm(x.status) === "Levererad" ? "Levererad" : "No PO"),
+            chip(["Publicerade", "Retuscherade", "Fotade"].includes(foto) ? "ts-ok" : foto ? "ts-delvis-slut" : "ts-utgatt", foto ? "Photo: " + foto.toLowerCase() : "Photo not planned"),
+            chip(x.ecomShopify ? "ts-ok" : "ts-utgatt", x.ecomShopify ? "In Shopify" : "Not in Shopify")));
       };
       const dropCard = (d, members, date) => {
         const done = members.filter((x) => x.ecomShopify && ["Publicerade"].includes(x.ecomBilder || "")).length;
         const dd = date ? diffDays(date) : null;
         const card = h("section", { class: "card launch-card" + (dd != null && dd < 0 ? " past" : "") });
-        card.append(h("div", { class: "card-head", style: d._id ? "cursor:pointer" : "", onclick: () => { if (d._id) openDrop(d._id); } }, h("div", null, h("h3", { text: (d.namn || "Utan drop") + " · " + (d.sasong || "") }), h("span", { class: "sub", text: members.length + " produkter · " + done + " klara i Shopify" + (isISO(d.klartSenast) ? " · i lager senast " + fmtDate(d.klartSenast) : "") })),
-          date ? h("div", { class: "launch-date" }, h("div", { class: "mono", text: fmtDate(date) }), h("div", { class: "days " + (dd < 0 ? "" : dd <= 14 ? "soon" : ""), text: dd < 0 ? "lanserad" : fmtDays(dd) })) : h("span", { class: "pill ts-utgatt", text: "Datum saknas" })));
+        card.append(h("div", { class: "card-head", style: d._id ? "cursor:pointer" : "", onclick: () => { if (d._id) openDrop(d._id); } }, h("div", null, h("h3", { text: (d.namn || "No drop") + " · " + (d.sasong || "") }), h("span", { class: "sub", text: members.length + " products · " + done + " ready in Shopify" + (isISO(d.klartSenast) ? " · in stock by " + fmtDate(d.klartSenast) : "") })),
+          date ? h("div", { class: "launch-date" }, h("div", { class: "mono", text: fmtDate(date) }), h("div", { class: "days " + (dd < 0 ? "" : dd <= 14 ? "soon" : ""), text: dd < 0 ? "launched" : fmtDays(dd) })) : h("span", { class: "pill ts-utgatt", text: "Date missing" })));
         const ms = members.slice().sort((a, b) => (styleKategori(a) || "").localeCompare(styleKategori(b) || "", "sv") || (a.namn || "").localeCompare(b.namn || "", "sv"));
-        card.append(h("div", { class: "launch-list" }, ms.length ? ms.map(prodRow) : h("p", { class: "hint", style: "padding:8px 16px", text: "Inga produkter kopplade till droppen än." })));
+        card.append(h("div", { class: "launch-list" }, ms.length ? ms.map(prodRow) : h("p", { class: "hint", style: "padding:8px 16px", text: "No products linked to the drop yet." })));
         return card;
       };
       const q = norm(st.q);
@@ -2790,10 +2821,10 @@ import * as P from "./platform.js";
       }
       const rest = drops.filter((d) => !usedDrop.has(d._id) && !(isISO(d.lansering) && d.lansering < t)).sort((a, b) => seasonRank(a.sasong) - seasonRank(b.sasong) || (a.namn || "").localeCompare(b.namn || "", "sv"));
       const restWith = rest.map((d) => [d, styles.filter((x) => dropKey(x.sasong, x.drop) === dropKey(d.sasong, d.namn))]).filter(([d, ms]) => ms.length);
-      if (restWith.length) { out.push(h("h2", { class: "launch-month", text: "Utan lanseringsdatum" })); for (const [d, ms] of restWith) out.push(dropCard(d, ms, null)); }
+      if (restWith.length) { out.push(h("h2", { class: "launch-month", text: "No launch date" })); for (const [d, ms] of restWith) out.push(dropCard(d, ms, null)); }
       const loose = styles.filter((x) => !x.drop && !["Levererad"].includes(styleStatusNorm(x.status)));
-      if (loose.length) { out.push(h("h2", { class: "launch-month", text: "Utan drop" })); out.push(dropCard({ _id: null, namn: "Utan drop", sasong: "" }, loose, null)); }
-      if (!out.length) out.push(h("div", { class: "empty" }, h("strong", { text: "Inga lanseringar" }), h("span", { text: "Sätt lanseringsdatum på dropparna under Kollektion så dyker de upp här." })));
+      if (loose.length) { out.push(h("h2", { class: "launch-month", text: "No drop" })); out.push(dropCard({ _id: null, namn: "No drop", sasong: "" }, loose, null)); }
+      if (!out.length) out.push(h("div", { class: "empty" }, h("strong", { text: "No launches" }), h("span", { text: "Set a launch date on the drops under Collection and they appear here." })));
       return out;
     },
     timeline(list) {
@@ -2813,57 +2844,58 @@ import * as P from "./platform.js";
       const rowTop = [];
       for (const r of rows) { r.lanes = laneOf(r.items); r.n = Math.max(1, ...r.lanes.map((x) => x + 1)); rowTop.push(H); r.y = H; H += pad + r.n * laneH + pad; }
       H += 14;
-      const el = svg("svg", { viewBox: "0 0 " + W + " " + H, class: "coo-tl", role: "img", "aria-label": "Tidslinje 12 månader" });
+      const el = svg("svg", { viewBox: "0 0 " + W + " " + H, class: "coo-tl", role: "img", "aria-label": "Timeline 12 months" });
       months.forEach((m, i) => { el.append(svg("rect", { x: X(m), y: top - 6, width: X(i + 1 < months.length ? months[i + 1] : end) - X(m), height: H - top + 6, class: "mbg" + (i % 2 ? " alt" : "") })); el.append(svg("text", { x: X(m) + 5, y: top - 12, class: "lbl" }, monthLabel(m.slice(0, 7)))); });
-      rows.forEach((r) => { el.append(svg("line", { x1: 0, x2: W, y1: r.y, y2: r.y, class: "grid" })); el.append(svg("text", { x: 0, y: r.y + 16, class: "lev evt-" + r.k }, r.l)); el.append(svg("text", { x: 0, y: r.y + 30, class: "sub" }, r.items.length ? r.items.length + " st" + (r.items.filter(isOverdue).length ? " · " + r.items.filter(isOverdue).length + " försenade" : "") : "")); });
+      rows.forEach((r) => { el.append(svg("line", { x1: 0, x2: W, y1: r.y, y2: r.y, class: "grid" })); el.append(svg("text", { x: 0, y: r.y + 16, class: "lev evt-" + r.k }, r.l)); el.append(svg("text", { x: 0, y: r.y + 30, class: "sub" }, r.items.length ? r.items.length + " pcs" + (r.items.filter(isOverdue).length ? " · " + r.items.filter(isOverdue).length + " late" : "") : "")); });
       el.append(svg("line", { x1: X(t), x2: X(t), y1: top - 6, y2: H, class: "today" }));
-      el.append(svg("text", { x: X(t) + 4, y: H - 3, class: "lbl today-l" }, "idag"));
+      el.append(svg("text", { x: X(t) + 4, y: H - 3, class: "lbl today-l" }, "today"));
       rows.forEach((r) => r.items.forEach((e, i) => {
         const y = r.y + pad + r.lanes[i] * laneH + laneH / 2;
         const late = isOverdue(e);
         const g = svg("g", { class: "ev evt-" + r.k + (late ? " late" : "") + (e.status === "Klar" ? " done" : "") + (e.auto ? " auto" : ""), style: "cursor:pointer" });
-        g.append(svg("title", null, (e.titel || "") + " · " + fmtDate(e.datum) + (e.slut ? "–" + fmtDate(e.slut) : "") + " · " + (e.agare || "") + " · " + (late ? "FÖRSENAD" : e.status || "") + (e.auto ? " · automatisk från " + (e.poId ? "PO" : e.styleId ? "style" : "drop") : "")));
+        g.append(svg("title", null, (e.titel || "") + " · " + fmtDate(e.datum) + (e.slut ? "–" + fmtDate(e.slut) : "") + " · " + (e.agare || "") + " · " + (late ? "LATE" : e.status || "") + (e.auto ? " · automatic from " + (e.poId ? "PO" : e.styleId ? "style" : "drop") : "")));
         const x0 = X(e.datum < start ? start : e.datum);
         if (e.slut) { const x1 = X(e.slut > end ? end : e.slut); const bw = Math.max(6, x1 - x0); g.append(svg("rect", { x: x0, y: y - 7, width: bw, height: 14, rx: 2, class: "bar" })); if (bw > 90) g.append(svg("text", { x: x0 + 4, y: y + 4, class: "lab onbar" }, (e.titel || "").slice(0, Math.floor(bw / 6.5)))); else g.append(svg("text", { x: x0 + bw + 5, y: y + 4, class: "lab" }, (e.titel || "").slice(0, 34))); }
         else { g.append(svg("circle", { cx: x0, cy: y, r: 5, class: e.auto ? "dot auto" : "dot" })); g.append(svg("text", { x: x0 + 9, y: y + 4, class: "lab" }, (e.titel || "").slice(0, 34) + ((e.titel || "").length > 34 ? "…" : ""))); }
         g.addEventListener("click", () => e.open && e.open());
         el.append(g);
       }));
-      card.append(h("div", { class: "card-head" }, h("h3", { text: "Tidslinje 12 månader" }), h("span", { class: "sub", text: inWin.length + " händelser · " + inWin.filter(isOverdue).length + " försenade · klicka på en händelse för källan" })), h("div", { class: "tl-wrap" }, el),
-        h("div", { class: "tl-legend", style: "padding:0 16px 12px" }, h("span", null, h("i", { class: "dotc", style: "background:var(--ink)" }), " manuell"), h("span", null, h("i", { class: "dotc ant" }), " automatisk från PLM"), h("span", null, h("i", { class: "dotc", style: "background:var(--late)" }), " försenad")));
+      card.append(h("div", { class: "card-head" }, h("h3", { text: "Timeline 12 months" }), h("span", { class: "sub", text: inWin.length + " events · " + inWin.filter(isOverdue).length + " late · click an event for the source" })), h("div", { class: "tl-wrap" }, el),
+        h("div", { class: "tl-legend", style: "padding:0 16px 12px" }, h("span", null, h("i", { class: "dotc", style: "background:var(--ink)" }), " manual"), h("span", null, h("i", { class: "dotc ant" }), " automatic from PLM"), h("span", null, h("i", { class: "dotc", style: "background:var(--late)" }), " late")));
       return card;
     },
     listCard(items, title, sub) {
       const card = h("section", { class: "card" });
       const sorted = items.slice().sort((a, b) => (isOverdue(b) - isOverdue(a)) || a.datum.localeCompare(b.datum));
-      card.append(h("div", { class: "card-head" }, h("h3", { text: title }), h("span", { class: "sub", text: sorted.length + " händelser" + (sub ? " · " + sub : "") })));
-      if (!sorted.length) { card.append(h("p", { class: "hint", style: "padding:12px 16px", text: "Inget här." })); return card; }
-      const { t, tb } = table([["Datum"], ["Händelse"], ["Typ"], ["Ägare"], ["Säsong"], ["Status"], [""]]);
+      card.append(h("div", { class: "card-head" }, h("h3", { text: title }), h("span", { class: "sub", text: sorted.length + " events" + (sub ? " · " + sub : "") })));
+      if (!sorted.length) { card.append(h("p", { class: "hint", style: "padding:12px 16px", text: "Nothing here." })); return card; }
+      const { t, tb } = table([["Date"], ["Event"], ["Type"], ["Owner"], ["Season"], ["Status"], [""]]);
       for (const e of sorted) {
         const d = diffDays(e.datum);
         const ro = !canWrite || !db;
         const cb = e.auto ? null : h("input", { type: "checkbox", checked: e.status === "Klar", disabled: ro, "aria-label": "Klar", onchange: async () => { await write("handelser", e._id, { status: cb.checked ? "Klar" : "Planerad", andrad: new Date().toISOString() }); } });
         tb.append(h("tr", { tabIndex: 0, class: isOverdue(e) ? "ev-late" : null, dataset: { ev: e.key || e._id } },
-          td("Datum", "mono", fmtDate(e.datum) + (e.slut ? "–" + fmtDate(e.slut) : ""), h("div", { class: "days " + (d < 0 && e.status !== "Klar" ? "late" : d <= 7 ? "soon" : ""), text: e.status === "Klar" ? "" : fmtDays(d) })),
-          td("", "c-main", h("div", { class: "prod", text: e.titel || "" }), h("div", { class: "sub", text: [e.drop, e.auto ? "automatisk" : "", e.kommentar].filter(Boolean).join(" · ") })),
-          td("Typ", null, h("span", { class: "chip evt-" + e.typ, text: EV_TYP_LABEL[e.typ] || e.typ })),
-          td("Ägare", null, e.agare || "–"),
-          td("Säsong", "mono", e.sasong || ""),
+          td("Date", "mono", fmtDate(e.datum) + (e.slut ? "–" + fmtDate(e.slut) : ""), h("div", { class: "days " + (d < 0 && e.status !== "Klar" ? "late" : d <= 7 ? "soon" : ""), text: e.status === "Klar" ? "" : fmtDays(d) })),
+          td("", "c-main", h("div", { class: "prod", text: e.titel || "" }), h("div", { class: "sub", text: [e.drop, e.auto ? "automatic" : "", e.kommentar].filter(Boolean).join(" · ") })),
+          td("Type", null, h("span", { class: "chip evt-" + e.typ, text: EV_TYP_LABEL[e.typ] || e.typ })),
+          td("Owner", null, e.agare || "–"),
+          td("Season", "mono", e.sasong || ""),
           td("Status", null, evPill(e)),
-          td("", null, cb ? h("label", { class: "checkline" }, cb, "Klar") : h("button", { class: "linkish", type: "button", text: "Öppna källa", onclick: (ev) => { ev.stopPropagation(); e.open && e.open(); } }))));
+          td("", null, cb ? h("label", { class: "checkline" }, cb, "Klar") : h("button", { class: "linkish", type: "button", text: "Open source", onclick: (ev) => { ev.stopPropagation(); e.open && e.open(); } }))));
       }
       tb.addEventListener("click", (ev) => { if (ev.target.closest("input, label, button")) return; const tr = ev.target.closest("tr[data-ev]"); if (!tr) return; const e = sorted.find((x) => (x.key || x._id) === tr.dataset.ev); if (e && e.open) e.open(); });
       card.append(h("div", { class: "ledger-wrap" }, t));
       return card;
     }
   };
-  const EV_LABELS = { titel: "Titel", typ: "Typ", datum: "Datum", slut: "Slut", agare: "Ägare", ansvarig: "Ansvarig", status: "Status", sasong: "Säsong", drop: "Drop", poId: "PO", styleId: "Style", kommentar: "Kommentar" };
+  const EV_LABELS = { titel: "Title", typ: "Typ", datum: "Date", slut: "Slut", agare: "Owner", ansvarig: "Responsible", status: "Status", sasong: "Season", drop: "Drop", poId: "PO", styleId: "Style", kommentar: "Comment" };
   function openEvent(id, preset) {
+    if (designOnly()) return;
     const isNew = !id;
     const e = isNew ? Object.assign({ _id: null, typ: "massor", status: "Planerad", datum: todayISO(), logg: [] }, preset || {}) : byId(D.handelser, id);
-    if (!e) { toast("Hittar inte händelsen."); return; }
+    if (!e) { toast("Cannot find the event."); return; }
     const ro = !canWrite || !db;
-    const fTitel = inp("f_etitel", e.titel, { placeholder: "t.ex. Pitti Uomo, Momsdeklaration, Flytt till Söder Mälarstrand" });
+    const fTitel = inp("f_etitel", e.titel, { placeholder: "e.g. Pitti Uomo, VAT return, Move to Söder Mälarstrand" });
     const fTyp = selectEl("f_etyp", EV_TYP, e.typ || "massor");
     const fDatum = inp("f_edatum", e.datum, { type: "date" });
     const fSlut = inp("f_eslut", e.slut, { type: "date" });
@@ -2871,42 +2903,42 @@ import * as P from "./platform.js";
     const fStatus = selectEl("f_estatus", EV_STATUS, e.status || "Planerad");
     const fSas = seasonSelect("f_esas", e.sasong);
     const fDrop = dropSelect("f_edrop", e.drop, fSas);
-    const fPo = selectEl("f_epo", [["", "– ingen –"]].concat(D.po.filter((p) => !PO_DRAFT.includes(poStatusNorm(p.status))).map((p) => [p._id, (p.nr || p._id) + " · " + (p.leverantor || "")])), e.poId || "");
-    const fStyle = selectEl("f_estyle", [["", "– ingen –"]].concat(D.styles.filter((x) => !x.grund && styleStatusNorm(x.status) !== "Kastad").sort((a, b) => (a.namn || "").localeCompare(b.namn || "", "sv")).map((x) => [x._id, x.namn + (x.sasong ? " · " + x.sasong : "")])), e.styleId || "");
+    const fPo = selectEl("f_epo", [["", "– none –"]].concat(D.po.filter((p) => !PO_DRAFT.includes(poStatusNorm(p.status))).map((p) => [p._id, (p.nr || p._id) + " · " + (p.leverantor || "")])), e.poId || "");
+    const fStyle = selectEl("f_estyle", [["", "– none –"]].concat(D.styles.filter((x) => !x.grund && styleStatusNorm(x.status) !== "Kastad").sort((a, b) => (a.namn || "").localeCompare(b.namn || "", "sv")).map((x) => [x._id, x.namn + (x.sasong ? " · " + x.sasong : "")])), e.styleId || "");
     const fKom = area("f_ekom", e.kommentar);
-    const fAnsv = inp("f_eansv", e.ansvarig, { list: "dlAgare", autocomplete: "off", placeholder: "t.ex. Oliver eller Kalle, Jakob" });
+    const fAnsv = inp("f_eansv", e.ansvarig, { list: "dlAgare", autocomplete: "off", placeholder: "e.g. Oliver or Kalle, Jakob" });
     fTyp.addEventListener("change", () => { if (!fAgare.value.trim() || AGARE.includes(fAgare.value.trim())) fAgare.value = EV_OWNER_DEFAULT[fTyp.value] || ""; });
     const form = h("form", { class: "form", autocomplete: "off", onsubmit: (ev) => ev.preventDefault() },
-      field("Titel", fTitel, { full: true }), field("Typ", fTyp), field("Ägare", fAgare),
-      field("Datum", fDatum), field("Slut (om period)", fSlut, { hint: "Tomt = en dag" }),
-      field("Status", fStatus), field("Säsong", fSas), field("Drop", fDrop), h("div"),
-      field("Koppla till PO", fPo), field("Koppla till style", fStyle),
-      field("Ansvarig för fasen", fAnsv), field("Kommentar", fKom, { full: true }));
+      field("Title", fTitel, { full: true }), field("Type", fTyp), field("Owner", fAgare),
+      field("Date", fDatum), field("End (if a period)", fSlut, { hint: "Empty = one day" }),
+      field("Status", fStatus), field("Season", fSas), field("Drop", fDrop), h("div"),
+      field("Link to PO", fPo), field("Link to style", fStyle),
+      field("Responsible for the phase", fAnsv), field("Comment", fKom, { full: true }));
     if (ro) lock(form);
     const logUl = h("ul", { class: "log" });
     async function save() {
       const o = { titel: fTitel.value.trim(), typ: fTyp.value, datum: fDatum.value || null, slut: fSlut.value || null, agare: fAgare.value.trim(), status: fStatus.value, sasong: fSas.value.trim(), drop: fDrop.value.trim(), poId: fPo.value || null, styleId: fStyle.value || null, kommentar: fKom.value.trim() };
       o.ansvarig = fAnsv.value.trim();
       if (!isNew && isISO(e.datum) && isISO(o.datum) && o.datum !== e.datum && isISO(e.slut) && o.slut === e.slut) o.slut = addDays(e.slut, daysBetween(e.datum, o.datum));
-      if (!o.titel) { toast("Ge händelsen en titel."); fTitel.focus(); return; }
-      if (!o.datum) { toast("Sätt ett datum."); fDatum.focus(); return; }
-      if (o.slut && o.slut < o.datum) { toast("Slutdatum ligger före startdatum."); return; }
+      if (!o.titel) { toast("Give the event a title."); fTitel.focus(); return; }
+      if (!o.datum) { toast("Set a date."); fDatum.focus(); return; }
+      if (o.slut && o.slut < o.datum) { toast("The end date is before the start date."); return; }
       const now = new Date().toISOString();
       if (isNew) {
         const nid = await freshId("handelser", D.handelser, "H", 3);
-        const body = Object.assign({ id: nid, logg: [logEntry("Händelse skapad")], andrad: now }, o);
-        if (await create("handelser", nid, body)) { if (!byId(D.handelser, nid)) D.handelser.push(Object.assign({}, body, { _id: nid })); toast("Sparad"); closeSheet(); }
+        const body = Object.assign({ id: nid, logg: [logEntry("Event created")], andrad: now }, o);
+        if (await create("handelser", nid, body)) { if (!byId(D.handelser, nid)) D.handelser.push(Object.assign({}, body, { _id: nid })); toast("Saved"); closeSheet(); }
       } else {
         const changes = describeChanges(e, o, EV_LABELS);
         if (!changes.length) { closeSheet(); return; }
         const lansFlytt = e.matris === "drop" && !e.hor_till && isISO(o.datum) && o.datum !== e.datum ? launchImpactText(o.sasong, o.drop, o.datum) : "";
-        if (lansFlytt) setTimeout(() => { if ($("sheet").hidden) toast("Lansering " + fmtDate(o.datum) + ". " + lansFlytt); }, 700);
-        if (await write("handelser", e._id, Object.assign({}, o, { andrad: now, logg: (e.logg || []).concat(changes.map(logEntry)) }))) { toast("Sparat"); closeSheet(); await mxMoveKids(e, o); }
+        if (lansFlytt) setTimeout(() => { if ($("sheet").hidden) toast("Launch " + fmtDate(o.datum) + ". " + lansFlytt); }, 700);
+        if (await write("handelser", e._id, Object.assign({}, o, { andrad: now, logg: (e.logg || []).concat(changes.map(logEntry)) }))) { toast("Saved"); closeSheet(); await mxMoveKids(e, o); }
       }
     }
     const body = [form];
-    if (!isNew) body.push(h("section", null, h("h3", { class: "sec-title", text: "Historik" }), logUl));
-    openSheet({ tag: isNew ? "Ny" : EV_TYP_LABEL[e.typ] || e._id, title: isNew ? "Ny händelse" : e.titel, sub: isNew ? "" : [fmtDate(e.datum) + (e.slut ? "–" + fmtDate(e.slut) : ""), e.agare, e.sasong].filter(Boolean).join(" · "), body, foot: footButtons({ onDelete: isNew ? null : async () => { if (await remove("handelser", e._id)) { toast("Borttagen"); closeSheet(); } }, canDelete: true, onSave: save }), ctx: { refresh: () => { if (!isNew && !byId(D.handelser, e._id)) { closeSheet(); return; } if (!isNew) renderLogInto(logUl, (byId(D.handelser, e._id) || e).logg); } }, focus: isNew ? "f_etitel" : null });
+    if (!isNew) body.push(h("section", null, h("h3", { class: "sec-title", text: "History" }), logUl));
+    openSheet({ flagRef: isNew ? null : { typ: "handelse", ref: e._id, titel: e.titel, tab: "coo" }, tag: isNew ? "New" : EV_TYP_LABEL[e.typ] || e._id, title: isNew ? "New event" : e.titel, sub: isNew ? "" : [fmtDate(e.datum) + (e.slut ? "–" + fmtDate(e.slut) : ""), e.agare, e.sasong].filter(Boolean).join(" · "), body, foot: footButtons({ onDelete: isNew ? null : async () => { if (await remove("handelser", e._id)) { toast("Removed"); closeSheet(); } }, canDelete: true, onSave: save }), ctx: { refresh: () => { if (!isNew && !byId(D.handelser, e._id)) { closeSheet(); return; } if (!isNew) renderLogInto(logUl, (byId(D.handelser, e._id) || e).logg); } }, focus: isNew ? "f_etitel" : null });
     if (!isNew) renderLogInto(logUl, e.logg);
   }
 
@@ -2917,21 +2949,21 @@ import * as P from "./platform.js";
   // Lista över de betalningar (POs) som bygger upp en summa i betalningsmatrisen
   function openPayList(xs) {
     const sum = xs.reduce((a, x) => a + x.belopp, 0);
-    const { t, tb } = table([["Förfaller"], ["PO"], ["Del"], ["Belopp", "num"], ["I valuta", "num"], ["Status"]]);
+    const { t, tb } = table([["Due"], ["PO"], ["Share"], ["Amount", "num"], ["In currency", "num"], ["Status"]]);
     for (const x of xs.slice().sort((a, b) => (a.datum || "").localeCompare(b.datum || ""))) {
       tb.append(h("tr", { tabIndex: 0, style: "cursor:pointer", onclick: () => openPo(x.po._id) },
-        td("Förfaller", "mono", x.datum ? fmtDate(x.datum) : "–"),
+        td("Due", "mono", x.datum ? fmtDate(x.datum) : "–"),
         td("PO", "c-main", h("div", { class: "prod", text: x.po.nr || x.po._id }), h("div", { class: "sub", text: [x.po.sasong, x.po.drop].filter(Boolean).join(" ") })),
-        td("Del", null, x.typ, x.kalla === "antagande" ? h("div", { class: "sub", text: "villkor saknas – antaget" }) : null),
-        td("Belopp", "num", fmtSEK(x.belopp)),
-        td("I valuta", "num", x.valuta && x.valuta !== "SEK" ? fmtCur(x.beloppValuta, x.valuta) : "–"),
+        td("Share", null, x.typ, x.kalla === "antagande" ? h("div", { class: "sub", text: "terms missing – assumed" }) : null),
+        td("Amount", "num", fmtSEK(x.belopp)),
+        td("In currency", "num", x.valuta && x.valuta !== "SEK" ? fmtCur(x.beloppValuta, x.valuta) : "–"),
         td("Status", null, poStatusPill(x.po))));
     }
-    openSheet({ tag: xs[0].po.leverantor || "", title: fmtTkr(sum), sub: xs.length + " betalningar · klicka på en rad för PO:n", body: [h("div", { class: "ledger-wrap" }, t)], foot: footButtons({ onSave: null }) });
+    openSheet({ tag: xs[0].po.leverantor || "", title: fmtTkr(sum), sub: xs.length + " payments · click a row for the PO", body: [h("div", { class: "ledger-wrap" }, t)], foot: footButtons({ onSave: null }) });
   }
   const LevView = {
     mount(root) {
-      const { t, tb } = table([["Leverantör"], ["Valuta"], ["Betalningsvillkor"], ["Ledtider"], ["Öppna POs"], ["Obetalt", "num"], ["Kontakt"]]);
+      const { t, tb } = table([["Supplier"], ["Currency"], ["Payment terms"], ["Lead times"], ["Open POs"], ["Unpaid", "num"], ["Contact"]]);
       this.tb = tb;
       tb.addEventListener("click", (e) => { if (e.target.closest("button")) return; const tr = e.target.closest("tr[data-id]"); if (tr) openLev(tr.dataset.id); });
       tb.addEventListener("keydown", (e) => { if (e.key !== "Enter") return; const tr = e.target.closest("tr[data-id]"); if (tr) openLev(tr.dataset.id); });
@@ -2940,22 +2972,22 @@ import * as P from "./platform.js";
       this.sGul = inp("set_gul", "", { type: "number", min: "0", step: "1" });
       this.sRisk = inp("set_risk", "", { type: "number", min: "0", max: "50", step: "1" });
       const saveSettings = async (patch, msg) => { if (!db) return; try { await db.doc("installningar/app").set(Object.assign({}, D.settings, patch, { andrad: new Date().toISOString() })); toast(msg); } catch (e) { writeError(e); } };
-      const saveBtn = h("button", { class: "btn small", type: "button", text: "Spara regler", onclick: () => saveSettings({ utvarderingDagar: num(this.sUtv.value) ?? 7, standardFrakt: num(this.sFrakt.value) ?? 7, marginalGul: num(this.sGul.value) ?? 14, valutarisk: num(this.sRisk.value) ?? 10 }, "Reglerna sparade") });
+      const saveBtn = h("button", { class: "btn small", type: "button", text: "Save rules", onclick: () => saveSettings({ utvarderingDagar: num(this.sUtv.value) ?? 7, standardFrakt: num(this.sFrakt.value) ?? 7, marginalGul: num(this.sGul.value) ?? 14, valutarisk: num(this.sRisk.value) ?? 10 }, "Rules saved") });
       this.fxIn = {}; CURS.forEach((c) => { this.fxIn[c] = inp("fx_" + c, "", { type: "number", min: "0", step: "0.0001", inputmode: "decimal" }); });
-      const fxBtn = h("button", { class: "btn small", type: "button", text: "Spara kurser", onclick: () => { const k = {}; CURS.forEach((c) => { const v = num(this.fxIn[c].value); if (v) k[c] = v; }); saveSettings({ kurser: k, kurserDatum: todayISO() }, "Kurser sparade"); } });
+      const fxBtn = h("button", { class: "btn small", type: "button", text: "Save rates", onclick: () => { const k = {}; CURS.forEach((c) => { const v = num(this.fxIn[c].value); if (v) k[c] = v; }); saveSettings({ kurser: k, kurserDatum: todayISO() }, "Rates saved"); } });
       this.fxNote = h("span", { class: "sub" });
-      this.settings = h("section", { class: "panel" }, h("h3", { class: "sec-title", text: "Valutakurser (SEK per enhet) och planeringsregler" }),
-        h("div", { class: "form three" }, field("EUR", this.fxIn.EUR), field("GBP", this.fxIn.GBP), field("JPY", this.fxIn.JPY, { hint: "SEK per 1 JPY, t.ex. 0,0657" })),
-        h("div", { class: "form three" }, field("Utvärdering (dagar)", this.sUtv, { hint: "Tid från sample inne till beslut" }), field("Standardfrakt (dagar)", this.sFrakt, { hint: "Används när leverantören saknar frakt" }), field("Gult läge under (dagar)", this.sGul, { hint: "Marginal innan en style blir röd" })),
-        h("div", { class: "form three" }, field("Valutastress i GM1 (%)", this.sRisk, { hint: "Hur mycket SEK antas försvagas mot leverantörens valuta i stresstestet av prismarginalerna (E-com)" })),
+      this.settings = h("section", { class: "panel" }, h("h3", { class: "sec-title", text: "Exchange rates (SEK per unit) and planning rules" }),
+        h("div", { class: "form three" }, field("EUR", this.fxIn.EUR), field("GBP", this.fxIn.GBP), field("JPY", this.fxIn.JPY, { hint: "SEK per 1 JPY, e.g. 0.0657" })),
+        h("div", { class: "form three" }, field("Evaluation (days)", this.sUtv, { hint: "Time from sample in to decision" }), field("Standard freight (days)", this.sFrakt, { hint: "Used when the supplier has no freight time" }), field("Yellow below (days)", this.sGul, { hint: "Margin before a style turns red" })),
+        h("div", { class: "form three" }, field("Currency stress in GM1 (%)", this.sRisk, { hint: "How much SEK is assumed to weaken against the supplier's currency in the stress test of the price margins (E-com)" })),
         canWrite && db ? h("div", { class: "quick" }, fxBtn, saveBtn, this.fxNote) : this.fxNote);
       if (!canWrite || !db) [this.sUtv, this.sFrakt, this.sGul, this.sRisk].concat(Object.values(this.fxIn)).forEach((x) => (x.disabled = true));
-      this.expo = h("section", { class: "strip", "aria-label": "Valutaexponering" });
+      this.expo = h("section", { class: "strip", "aria-label": "Currency exposure" });
       this.timeline = h("section", { class: "card" });
       this.upcoming = h("section", { class: "card" });
       UI.lev = UI.lev || { season: "" };
-      this.fSeason = filterSelect("f_l_season", "Alla säsonger", UI.lev, "season", () => this.update());
-      root.append(h("p", { class: "lede", text: "Betalningsschemat räknas från varje lagd PO och leverantörens villkor, i leverantörens valuta och i SEK till dagens kurs. Filtrera per säsong för att se vad AW26, SS27 eller AW27 kostar att betala, månad för månad." }),
+      this.fSeason = filterSelect("f_l_season", "All seasons", UI.lev, "season", () => this.update());
+      root.append(h("p", { class: "lede", text: "The payment schedule is calculated from every placed PO and the supplier's terms, in the supplier's currency and in SEK at today's rate. Filter by season to see what AW26, SS27 or AW27 costs to pay, month by month." }),
         h("section", { class: "filters", "aria-label": "Filter" }, this.fSeason.el), this.expo, this.timeline, this.upcoming, h("section", { class: "ledger-wrap" }, t), this.settings);
     },
     update() {
@@ -2973,27 +3005,27 @@ import * as P from "./platform.js";
         const vs = l.villkorStatus || (Array.isArray(l.villkor) && l.villkor.length ? "Bekräftade" : "Okända");
         return h("tr", { tabIndex: 0, dataset: { id: l._id } },
           td("", "c-main", h("div", { class: "prod", text: l.namn }), h("div", { class: "sub" }, chip(l.typ || "Producent"), l.kod ? h("span", { class: "mono", text: " " + l.kod }) : null)),
-          td("Valuta", null, l.valuta || h("span", { class: "muted", text: "–" })),
-          td("Betalningsvillkor", null, h("div", { text: termsText(l) || (l.villkorText || "") || "–" }), h("span", { class: "pill " + (vs === "Bekräftade" ? "ts-ok" : vs === "Att förhandla" ? "ts-delvis-slut" : "ts-utgatt"), text: vs })),
-          td("Ledtider", null, h("div", { class: "sub", text: "Sample " + d(l.sampleLedtid) + (a ? " (snitt " + a.avg + ")" : "") + " · prod " + d(l.produktionstid) + " · frakt " + (num(l.frakt) == null ? std + " (std)" : num(l.frakt)) + " d" })),
-          td("Öppna POs", "mono", String(pos.length)),
-          td("Obetalt", "num", owedSek ? h("div", null, h("div", { text: fmtSEK(owedSek) }), l.valuta && l.valuta !== "SEK" ? h("div", { class: "sub", text: fmtCur(owedSek / (fx(l.valuta) || 1), l.valuta) }) : null) : h("span", { class: "muted", text: "–" })),
-          td("Kontakt", null, l.kontakt || ""));
+          td("Currency", null, l.valuta || h("span", { class: "muted", text: "–" })),
+          td("Payment terms", null, h("div", { text: termsText(l) || (l.villkorText || "") || "–" }), h("span", { class: "pill " + (vs === "Bekräftade" ? "ts-ok" : vs === "Att förhandla" ? "ts-delvis-slut" : "ts-utgatt"), text: vs })),
+          td("Lead times", null, h("div", { class: "sub", text: "Sample " + d(l.sampleLedtid) + (a ? " (average " + a.avg + ")" : "") + " · prod " + d(l.produktionstid) + " · freight " + (num(l.frakt) == null ? std + " (std)" : num(l.frakt)) + " d" })),
+          td("Open POs", "mono", String(pos.length)),
+          td("Unpaid", "num", owedSek ? h("div", null, h("div", { text: fmtSEK(owedSek) }), l.valuta && l.valuta !== "SEK" ? h("div", { class: "sub", text: fmtCur(owedSek / (fx(l.valuta) || 1), l.valuta) }) : null) : h("span", { class: "muted", text: "–" })),
+          td("Contact", null, l.kontakt || ""));
       }));
       const act = document.activeElement;
       if (![this.sUtv, this.sFrakt, this.sGul, this.sRisk].concat(Object.values(this.fxIn)).includes(act)) {
         this.sUtv.value = D.settings.utvarderingDagar ?? 7; this.sFrakt.value = D.settings.standardFrakt ?? 7; this.sGul.value = D.settings.marginalGul ?? 14; this.sRisk.value = D.settings.valutarisk ?? 10;
         CURS.forEach((c) => { this.fxIn[c].value = (D.settings.kurser || {})[c] ?? FX_DEFAULT[c]; });
       }
-      this.fxNote.textContent = D.settings.kurserDatum ? "Kurser sparade " + fmtDate(D.settings.kurserDatum) : "Standardkurser (5 nov 2026) – spara era egna.";
+      this.fxNote.textContent = D.settings.kurserDatum ? "Rates saved " + fmtDate(D.settings.kurserDatum) : "Standard rates (5 Nov 2026) – save your own.";
       this.renderExposure(open); this.renderMatrix(open, season); this.renderUpcoming(open);
     },
     renderExposure(open) {
       const byCur = {};
       for (const x of open) { const c = x.valuta || "SEK"; byCur[c] = byCur[c] || { sek: 0, val: 0 }; byCur[c].sek += x.belopp; byCur[c].val += x.beloppValuta; }
       const total = open.reduce((a, x) => a + x.belopp, 0);
-      const tiles = [h("div", { class: "tile", style: "cursor:default" }, h("span", { class: "n mono", text: fmtTkr(total) }), h("span", { class: "l", text: "Obetalt totalt (SEK)" }))];
-      for (const c of ["EUR", "GBP", "JPY", "USD", "SEK"]) { const v = byCur[c]; if (!v || !v.sek) continue; tiles.push(h("div", { class: "tile", style: "cursor:default" }, h("span", { class: "n mono", text: c === "SEK" ? fmtTkr(v.sek) : fmtCur(v.val, c) }), h("span", { class: "l", text: c === "SEK" ? "i SEK (ingen valutarisk)" : "obetalt i " + c + " = " + fmtTkr(v.sek) + " · ±5 % = ±" + fmtTkr(v.sek * 0.05) }))); }
+      const tiles = [h("div", { class: "tile", style: "cursor:default" }, h("span", { class: "n mono", text: fmtTkr(total) }), h("span", { class: "l", text: "Unpaid in total (SEK)" }))];
+      for (const c of ["EUR", "GBP", "JPY", "USD", "SEK"]) { const v = byCur[c]; if (!v || !v.sek) continue; tiles.push(h("div", { class: "tile", style: "cursor:default" }, h("span", { class: "n mono", text: c === "SEK" ? fmtTkr(v.sek) : fmtCur(v.val, c) }), h("span", { class: "l", text: c === "SEK" ? "in SEK (no currency risk)" : "unpaid in " + c + " = " + fmtTkr(v.sek) + " · ±5 % = ±" + fmtTkr(v.sek * 0.05) }))); }
       this.expo.style.setProperty("--cols", String(tiles.length));
       this.expo.replaceChildren(...tiles);
     },
@@ -3009,21 +3041,21 @@ import * as P from "./platform.js";
       const cols = (past.length ? ["Förfallet"] : []).concat(months).concat(later.length ? ["Senare"] : []);
       const colOf = (x) => x.datum.slice(0, 7) < m0 ? "Förfallet" : x.datum.slice(0, 7) > months[months.length - 1] ? "Senare" : x.datum.slice(0, 7);
       const levs = uniq(items.map((x) => x.po.leverantor)).sort((a, b) => a.localeCompare(b, "sv"));
-      box.append(h("div", { class: "card-head" }, h("h3", { text: "Betalningsschema" + (season ? " · " + season : " · alla säsonger") }), h("span", { class: "sub", text: items.length ? fmtTkr(items.reduce((a, x) => a + x.belopp, 0)) + " obetalt med datum · SEK till dagens kurs, valutabelopp under · klicka på en summa för PO:erna" + (noDate ? " · " + noDate + " betalningar utan datum (sätt orderdatum eller ex-factory på PO:n)" : "") : "Inga kommande betalningar med datum." })));
+      box.append(h("div", { class: "card-head" }, h("h3", { text: "Payment schedule" + (season ? " · " + season : " · all seasons") }), h("span", { class: "sub", text: items.length ? fmtTkr(items.reduce((a, x) => a + x.belopp, 0)) + " unpaid with a date · SEK at today's rate, currency amount below · click a sum for the POs" + (noDate ? " · " + noDate + " payments without a date (set order date or ex-factory on the PO)" : "") : "No upcoming payments with a date." })));
       if (!items.length) return;
-      const { t, tb } = table([["Leverantör"]].concat(cols.map((c) => [c === "Förfallet" || c === "Senare" ? c : monthLabel(c), "num"])).concat([["Totalt", "num"]]));
+      const { t, tb } = table([["Supplier"]].concat(cols.map((c) => [c === "Förfallet" || c === "Senare" ? c : monthLabel(c), "num"])).concat([["Total", "num"]]));
       const colTot = {}; let grand = 0;
-      const cell = (xs, cur0) => { if (!xs.length) return h("span", { class: "muted", text: "·" }); const sek = xs.reduce((a, x) => a + x.belopp, 0); const val = xs.reduce((a, x) => a + (x.beloppValuta || 0), 0); const ant = xs.some((x) => x.kalla === "antagande"); const b = h("button", { class: "linkish num", type: "button", title: xs.map((x) => (x.po.nr || x.po._id) + " · " + x.typ + " · " + fmtDate(x.datum) + " · " + fmtSEK(x.belopp)).join("\n"), onclick: () => { if (xs.length === 1) openPo(xs[0].po._id); else openPayList(xs); } }, h("div", { class: "mono", text: fmtTkr(sek) }), cur0 && cur0 !== "SEK" ? h("div", { class: "sub", text: fmtCur(val, cur0) }) : null, ant ? h("div", { class: "sub", text: "antaget" }) : null); return b; };
+      const cell = (xs, cur0) => { if (!xs.length) return h("span", { class: "muted", text: "·" }); const sek = xs.reduce((a, x) => a + x.belopp, 0); const val = xs.reduce((a, x) => a + (x.beloppValuta || 0), 0); const ant = xs.some((x) => x.kalla === "antagande"); const b = h("button", { class: "linkish num", type: "button", title: xs.map((x) => (x.po.nr || x.po._id) + " · " + x.typ + " · " + fmtDate(x.datum) + " · " + fmtSEK(x.belopp)).join("\n"), onclick: () => { if (xs.length === 1) openPo(xs[0].po._id); else openPayList(xs); } }, h("div", { class: "mono", text: fmtTkr(sek) }), cur0 && cur0 !== "SEK" ? h("div", { class: "sub", text: fmtCur(val, cur0) }) : null, ant ? h("div", { class: "sub", text: "assumed" }) : null); return b; };
       for (const lv of levs) {
         const mine = items.filter((x) => x.po.leverantor === lv); const cur0 = mine[0].valuta; const sum = mine.reduce((a, x) => a + x.belopp, 0); grand += sum;
-        const tr = h("tr", null, td("", "c-main", h("div", { class: "prod", text: lv }), h("div", { class: "sub", text: (cur0 || "SEK") + " · " + mine.length + " betalningar" })));
+        const tr = h("tr", null, td("", "c-main", h("div", { class: "prod", text: lv }), h("div", { class: "sub", text: (cur0 || "SEK") + " · " + mine.length + " payments" })));
         for (const c of cols) { const xs = mine.filter((x) => colOf(x) === c); colTot[c] = (colTot[c] || 0) + xs.reduce((a, x) => a + x.belopp, 0); tr.append(td("", "num" + (c === "Förfallet" && xs.length ? " late-text" : ""), cell(xs, cur0))); }
-        tr.append(td("Totalt", "num", h("b", { text: fmtTkr(sum) }), cur0 && cur0 !== "SEK" ? h("div", { class: "sub", text: fmtCur(mine.reduce((a, x) => a + (x.beloppValuta || 0), 0), cur0) }) : null));
+        tr.append(td("Total", "num", h("b", { text: fmtTkr(sum) }), cur0 && cur0 !== "SEK" ? h("div", { class: "sub", text: fmtCur(mine.reduce((a, x) => a + (x.beloppValuta || 0), 0), cur0) }) : null));
         tb.append(tr);
       }
-      const tot = h("tr", { class: "tot-row" }, td("", "c-main", h("b", { text: "Totalt SEK" })));
+      const tot = h("tr", { class: "tot-row" }, td("", "c-main", h("b", { text: "Total SEK" })));
       for (const c of cols) tot.append(td("", "num", h("b", { text: colTot[c] ? fmtTkr(colTot[c]) : "·" })));
-      tot.append(td("Totalt", "num", h("b", { text: fmtTkr(grand) })));
+      tot.append(td("Total", "num", h("b", { text: fmtTkr(grand) })));
       tb.append(tot);
       box.append(h("div", { class: "ledger-wrap" }, t));
     },
@@ -3031,7 +3063,7 @@ import * as P from "./platform.js";
       const box = this.timeline; box.replaceChildren();
       const items = open.filter((x) => x.datum);
       const noDate = open.length - items.length;
-      box.append(h("div", { class: "card-head" }, h("h3", { text: "Betalningsschema per leverantör" }), h("span", { class: "sub", text: items.length ? items.length + " kommande betalningar · cirkelns storlek = belopp · klicka för PO:n" + (noDate ? " · " + noDate + " utan datum (sätt orderdatum eller ex-factory på PO:n)" : "") : "Inga kommande betalningar med datum." })));
+      box.append(h("div", { class: "card-head" }, h("h3", { text: "Payment schedule per supplier" }), h("span", { class: "sub", text: items.length ? items.length + " upcoming payments · circle size = amount · click for the PO" + (noDate ? " · " + noDate + " without a date (set order date or ex-factory on the PO)" : "") : "No upcoming payments with a date." })));
       if (!items.length) return;
       const levs = uniq(items.map((x) => x.po.leverantor));
       const start = addDays(todayISO().slice(0, 7) + "-01", -31).slice(0, 7) + "-01";
@@ -3042,12 +3074,12 @@ import * as P from "./platform.js";
       const W = 1000, L = 170, R = 20, rowH = 36, top = 28;
       const H = top + levs.length * rowH + 10;
       const X = (iso) => L + (daysBetween(start, iso) / days) * (W - L - R);
-      const el = svg("svg", { viewBox: "0 0 " + W + " " + H, class: "pay-tl", role: "img", "aria-label": "Betalningsschema" });
+      const el = svg("svg", { viewBox: "0 0 " + W + " " + H, class: "pay-tl", role: "img", "aria-label": "Payment schedule" });
       // month grid
       let cur = start;
       while (cur < end) { const next = addDays(cur.slice(0, 7) + "-01", 32).slice(0, 7) + "-01"; el.append(svg("line", { x1: X(cur), x2: X(cur), y1: top - 6, y2: H, class: "grid" })); el.append(svg("text", { x: X(cur) + 4, y: top - 10, class: "lbl" }, monthLabel(cur.slice(0, 7)))); cur = next; }
       el.append(svg("line", { x1: X(todayISO()), x2: X(todayISO()), y1: top - 6, y2: H, class: "today" }));
-      el.append(svg("text", { x: X(todayISO()) + 4, y: H - 2, class: "lbl today-l" }, "idag"));
+      el.append(svg("text", { x: X(todayISO()) + 4, y: H - 2, class: "lbl today-l" }, "today"));
       const maxSek = Math.max(...items.map((x) => x.belopp), 1);
       levs.forEach((lv, i) => {
         const y = top + i * rowH + rowH / 2;
@@ -3059,19 +3091,19 @@ import * as P from "./platform.js";
         mine.forEach((x, j) => {
           const r = 5 + Math.sqrt(x.belopp / maxSek) * 13;
           const g = svg("g", { class: "pay cur-" + (x.valuta || "SEK") + (x.kalla === "antagande" ? " ant" : ""), style: "cursor:pointer" });
-          g.append(svg("title", null, (x.po.nr || x.po._id) + " · " + x.typ + " · " + fmtSEK(x.belopp) + (x.valuta !== "SEK" ? " (" + fmtCur(x.beloppValuta, x.valuta) + ")" : "") + " · " + fmtDate(x.datum) + (x.kalla === "antagande" ? " · villkor saknas, antaget 100 % vid leverans" : "")));
+          g.append(svg("title", null, (x.po.nr || x.po._id) + " · " + x.typ + " · " + fmtSEK(x.belopp) + (x.valuta !== "SEK" ? " (" + fmtCur(x.beloppValuta, x.valuta) + ")" : "") + " · " + fmtDate(x.datum) + (x.kalla === "antagande" ? " · terms missing, assumed 100 % on delivery" : "")));
           g.append(svg("circle", { cx: X(x.datum), cy: y + (j % 2 ? 4 : -4), r }));
           if (r > 10) g.append(svg("text", { x: X(x.datum), y: y + (j % 2 ? 4 : -4) + 3, class: "amt", "text-anchor": "middle" }, fmtTkr(x.belopp).replace(" tkr", "")));
           g.addEventListener("click", () => openPo(x.po._id));
           el.append(g);
         });
       });
-      box.append(h("div", { class: "tl-wrap" }, el), h("div", { class: "tl-legend", style: "padding:0 16px 12px" }, ["EUR", "GBP", "JPY", "SEK"].map((c) => h("span", null, h("i", { class: "dotc cur-" + c }), " " + c)), h("span", null, h("i", { class: "dotc ant" }), " villkor saknas – antaget vid leverans")));
+      box.append(h("div", { class: "tl-wrap" }, el), h("div", { class: "tl-legend", style: "padding:0 16px 12px" }, ["EUR", "GBP", "JPY", "SEK"].map((c) => h("span", null, h("i", { class: "dotc cur-" + c }), " " + c)), h("span", null, h("i", { class: "dotc ant" }), " terms missing – assumed on delivery")));
     },
     renderMonths(open) {
       const box = this.months; box.replaceChildren();
       const items = open.filter((x) => x.datum);
-      box.append(h("div", { class: "card-head" }, h("h3", { text: "Utbetalningar per månad" }), h("span", { class: "sub", text: "Obetalda betalningar i SEK till dagens kurs, staplade per valuta" })));
+      box.append(h("div", { class: "card-head" }, h("h3", { text: "Payments out per month" }), h("span", { class: "sub", text: "Unpaid payments in SEK at today's rate, stacked by currency" })));
       if (!items.length) return;
       const m0 = todayISO().slice(0, 7);
       const months = []; let cur = m0 + "-01"; for (let i = 0; i < 12; i++) { months.push(cur.slice(0, 7)); cur = addDays(cur, 32).slice(0, 7) + "-01"; }
@@ -3080,7 +3112,7 @@ import * as P from "./platform.js";
       if (past) data[0].byCur.Förfallet = past, data[0].tot += past;
       const maxV = Math.max(...data.map((d) => d.tot), 1);
       const W = 1000, H = 220, L = 10, B = 30, T = 26, bw = (W - 2 * L) / months.length;
-      const el = svg("svg", { viewBox: "0 0 " + W + " " + H, class: "pay-bars", role: "img", "aria-label": "Utbetalningar per månad" });
+      const el = svg("svg", { viewBox: "0 0 " + W + " " + H, class: "pay-bars", role: "img", "aria-label": "Payments out per month" });
       data.forEach((d, i) => {
         let y = H - B; const x0 = L + i * bw + bw * 0.15, w = bw * 0.7;
         for (const [c, v] of Object.entries(d.byCur).sort((a, b) => b[1] - a[1])) { const hgt = (v / maxV) * (H - B - T); y -= hgt; el.append(svg("rect", { x: x0, y, width: w, height: hgt, class: "bar cur-" + (c === "Förfallet" ? "late" : c) }, svg("title", null, monthLabel(d.ym) + " · " + c + " " + fmtTkr(v)))); }
@@ -3093,24 +3125,24 @@ import * as P from "./platform.js";
       const box = this.upcoming; box.replaceChildren();
       const lim = addDays(todayISO(), 120);
       const items = open.filter((x) => !x.datum || x.datum <= lim);
-      box.append(h("div", { class: "card-head" }, h("h3", { text: "Att betala inom 120 dagar" }), h("span", { class: "sub", text: items.length ? fmtTkr(items.reduce((a, x) => a + x.belopp, 0)) + " · bocka av när betalningen är gjord" : "Inget att betala inom 120 dagar." })));
+      box.append(h("div", { class: "card-head" }, h("h3", { text: "To pay within 120 days" }), h("span", { class: "sub", text: items.length ? fmtTkr(items.reduce((a, x) => a + x.belopp, 0)) + " · tick off when the payment is made" : "Nothing to pay within 120 days." })));
       if (!items.length) return;
-      const { t, tb } = table([["Förfaller"], ["PO"], ["Leverantör"], ["Del"], ["Belopp", "num"], ["I valuta", "num"], ["Betald"]]);
+      const { t, tb } = table([["Due"], ["PO"], ["Supplier"], ["Share"], ["Amount", "num"], ["In currency", "num"], ["Paid"]]);
       for (const x of items) {
         const d = x.datum ? diffDays(x.datum) : null;
         const cb = h("input", { type: "checkbox", disabled: !canWrite || !db, onchange: async () => {
           if (x.kalla === "manuell") { await write("po", x.po._id, x.idx === "f" ? { forskottBetald: cb.checked } : { slutBetald: cb.checked }); return; }
           const bet = Object.assign({}, x.po.betalningar || {}); bet[x.idx] = { betald: cb.checked, datum: cb.checked ? todayISO() : null, av: myId };
-          await write("po", x.po._id, { betalningar: bet, andrad: new Date().toISOString(), logg: (x.po.logg || []).concat(logEntry((cb.checked ? "Betald: " : "Markerad obetald: ") + x.typ + " " + fmtSEK(x.belopp))) });
+          await write("po", x.po._id, { betalningar: bet, andrad: new Date().toISOString(), logg: (x.po.logg || []).concat(logEntry((cb.checked ? "Paid: " : "Marked unpaid: ") + x.typ + " " + fmtSEK(x.belopp))) });
         } });
         tb.append(h("tr", { tabIndex: 0, dataset: { po: x.po._id } },
-          td("Förfaller", "mono", x.datum ? fmtDate(x.datum) : h("span", { class: "flag", text: "datum saknas" }), d != null ? h("div", { class: "days " + (d < 0 ? "late" : d <= 14 ? "soon" : ""), text: fmtDays(d) }) : null, x.datumKalla ? h("div", { class: "sub", text: x.datumKalla }) : null),
+          td("Due", "mono", x.datum ? fmtDate(x.datum) : h("span", { class: "flag", text: "date missing" }), d != null ? h("div", { class: "days " + (d < 0 ? "late" : d <= 14 ? "soon" : ""), text: fmtDays(d) }) : null, x.datumKalla ? h("div", { class: "sub", text: x.datumKalla }) : null),
           td("PO", "c-main", h("div", { class: "prod", text: x.po.nr || x.po._id }), h("div", { class: "sub" }, poStatusPill(x.po), " " + [x.po.sasong, x.po.drop].filter(Boolean).join(" "))),
-          td("Leverantör", null, x.po.leverantor || ""),
-          td("Del", null, x.typ, x.kalla === "antagande" ? h("div", { class: "sub", text: "villkor saknas – antaget" }) : null),
-          td("Belopp", "num", fmtSEK(x.belopp)),
-          td("I valuta", "num", x.valuta !== "SEK" ? fmtCur(x.beloppValuta, x.valuta) : "–"),
-          td("Betald", null, h("label", { class: "checkline" }, cb, "Betald"))));
+          td("Supplier", null, x.po.leverantor || ""),
+          td("Share", null, x.typ, x.kalla === "antagande" ? h("div", { class: "sub", text: "terms missing – assumed" }) : null),
+          td("Amount", "num", fmtSEK(x.belopp)),
+          td("In currency", "num", x.valuta !== "SEK" ? fmtCur(x.beloppValuta, x.valuta) : "–"),
+          td("Paid", null, h("label", { class: "checkline" }, cb, "Paid"))));
       }
       tb.addEventListener("click", (e) => { if (e.target.closest("input, label, button")) return; const tr = e.target.closest("tr[data-po]"); if (tr) openPo(tr.dataset.po); });
       box.append(h("div", { class: "ledger-wrap" }, t));
@@ -3121,31 +3153,31 @@ import * as P from "./platform.js";
   const EanView = {
     mount(root) {
       this.panel = h("section", { class: "panel" });
-      const q = searchBox("q_ean", "Sök EAN, style, färg, storlek …", UI.ean, () => this.update());
+      const q = searchBox("q_ean", "Search EAN, style, colour, size …", UI.ean, () => this.update());
       this.count = h("span", { class: "count" });
-      const { t, tb } = table([["EAN"], ["Style"], ["Färg"], ["Storlek"], ["Tilldelad"]]);
+      const { t, tb } = table([["EAN"], ["Style"], ["Colour"], ["Size"], ["Assigned"]]);
       this.tb = tb;
       tb.addEventListener("click", (e) => { const tr = e.target.closest("tr[data-style]"); if (tr) openStyle(tr.dataset.style); });
       this.empty = h("div", { class: "empty", hidden: true });
       this.logList = h("ul", { class: "log" });
       this.adminOpen = false;
-      root.append(this.panel, h("section", { class: "filters" }, q, this.count), h("section", { class: "ledger-wrap" }, t, this.empty), h("section", { class: "logsec" }, h("h3", { class: "sec-title", text: "Senaste tilldelningar" }), this.logList));
+      root.append(this.panel, h("section", { class: "filters" }, q, this.count), h("section", { class: "ledger-wrap" }, t, this.empty), h("section", { class: "logsec" }, h("h3", { class: "sec-title", text: "Latest assignments" }), this.logList));
     },
     update() {
       const p = D.pool; const pn = this.panel;
       if (!this.adminOpen) {
         pn.replaceChildren();
-        if (!p) pn.append(h("p", { class: "hint", text: loaded.has("pool") ? "EAN-serien är inte inställd." : "Laddar EAN-serien …" }));
+        if (!p) pn.append(h("p", { class: "hint", text: loaded.has("pool") ? "The EAN range is not set up." : "Loading the EAN range …" }));
         else {
           const pre = String(p.prefix || "");
           const next = ean13(pre + String(p.nasta).padStart(12 - pre.length, "0"));
           const left = Math.max(0, Number(p.slut) - Number(p.nasta) + 1);
           const assigned = D.styles.reduce((n, s) => n + (s.ean || []).length, 0);
           const kv = (k, v, cls) => h("div", { class: "kv" }, h("span", { class: "k", text: k }), h("span", { class: "v " + (cls || ""), text: v }));
-          pn.append(h("div", { class: "kvs" }, kv("Nästa EAN", next, "mono big"), kv("Kvar i serien", left.toLocaleString("sv-SE"), "mono big"), kv("Tilldelade i appen", String(assigned), "mono big"), kv("GS1-prefix", pre, "mono"), kv("Högsta i Shopify vid start", p.shopifyHogsta || "–", "mono")));
+          pn.append(h("div", { class: "kvs" }, kv("Next EAN", next, "mono big"), kv("Left in the range", left.toLocaleString("sv-SE"), "mono big"), kv("Assigned in the app", String(assigned), "mono big"), kv("GS1 prefix", pre, "mono"), kv("Highest in Shopify at the start", p.shopifyHogsta || "–", "mono")));
           if (p.kommentar) pn.append(h("p", { class: "hint", text: p.kommentar }));
-          pn.append(h("p", { class: "hint", text: "EAN delas ut från en godkänd style, ett nummer per färg och storlek. Låt appen vara det enda stället där nya nummer delas ut, så blir det aldrig dubbletter." }));
-          if (canAdmin && canWrite) pn.append(h("div", { class: "admin-row" }, h("button", { class: "btn small", type: "button", text: "Ändra nästa löpnummer", onclick: () => this.openAdmin() })));
+          pn.append(h("p", { class: "hint", text: "EAN is assigned from an approved style, one number per colour and size. Let the app be the only place where new numbers are assigned, so there are never duplicates." }));
+          if (canAdmin && canWrite) pn.append(h("div", { class: "admin-row" }, h("button", { class: "btn small", type: "button", text: "Change next serial number", onclick: () => this.openAdmin() })));
         }
       }
       const q = norm(UI.ean.q);
@@ -3156,12 +3188,12 @@ import * as P from "./platform.js";
       this.tb.replaceChildren(...list.map((r) => h("tr", { tabIndex: 0, dataset: { style: r.s._id } },
         td("EAN", "mono", r.e.ean),
         td("Style", "c-main", h("div", { class: "prod", text: r.s.namn }), h("div", { class: "sub", text: r.s._id + (r.s.leverantor ? " · " + r.s.leverantor : "") })),
-        td("Färg", null, r.e.farg), td("Storlek", null, r.e.storlek),
-        td("Tilldelad", "mono", r.e.t ? fmtDate(String(r.e.t).slice(0, 10)) : ""))));
+        td("Colour", null, r.e.farg), td("Size", null, r.e.storlek),
+        td("Assigned", "mono", r.e.t ? fmtDate(String(r.e.t).slice(0, 10)) : ""))));
       this.empty.hidden = list.length > 0;
-      if (!list.length) this.empty.replaceChildren(h("strong", { text: rows.length ? "Inget matchar sökningen" : "Inga EAN tilldelade ännu" }), h("span", { text: rows.length ? "Rensa sökningen." : "Godkänn en style, fyll i färger och storlekar och tryck på \"Tilldela EAN\"." }));
+      if (!list.length) this.empty.replaceChildren(h("strong", { text: rows.length ? "Nothing matches the search" : "No EAN assigned yet" }), h("span", { text: rows.length ? "Clear the search." : "Approve a style, fill in colours and sizes and press \"Assign EAN\"." }));
       this.count.textContent = list.length + " EAN";
-      renderLogInto(this.logList, D.logg.slice().reverse().map((l) => ({ t: l.t, av: l.av, text: l.antal + " EAN till " + (l.styleNamn || l.styleId) + " (" + l.forsta + (l.antal > 1 ? "–" + l.sista : "") + ")" + (l.sparad === false ? ", ej sparade på stylen" : "") })));
+      renderLogInto(this.logList, D.logg.slice().reverse().map((l) => ({ t: l.t, av: l.av, text: l.antal + " EAN for " + (l.styleNamn || l.styleId) + " (" + l.forsta + (l.antal > 1 ? "–" + l.sista : "") + ")" + (l.sparad === false ? ", not saved on the style" : "") })));
     },
     openAdmin() {
       const p = D.pool; if (!p) return;
@@ -3175,18 +3207,18 @@ import * as P from "./platform.js";
       const close = () => { this.adminOpen = false; this.update(); };
       const save = async () => {
         const n = num(i.value);
-        if (n == null || n < 0 || n > Number(p.slut) || Math.floor(n) !== n) { toast("Ange ett heltal mellan 0 och " + p.slut + "."); return; }
+        if (n == null || n < 0 || n > Number(p.slut) || Math.floor(n) !== n) { toast("Enter a whole number between 0 and " + p.slut + "."); return; }
         try {
           const ref = db.doc("ean/pool");
           const lease = await ref.acquire({ holder: myId || "admin", ttlMs: 5000 });
-          if (!lease.acquired) { toast("Någon tilldelar EAN just nu. Försök igen om några sekunder."); return; }
+          if (!lease.acquired) { toast("Someone is assigning EAN right now. Try again in a few seconds."); return; }
           await ref.update({ nasta: n, andrad: new Date().toISOString() });
-          toast("Nästa löpnummer är nu " + n); close();
+          toast("The next serial number is now " + n); close();
         } catch (e) { writeError(e); }
       };
-      pn.replaceChildren(h("h3", { class: "sec-title", text: "Ändra nästa löpnummer" }),
-        h("p", { class: "hint", text: "Löpnumret är de fyra siffrorna efter prefixet. Sätt aldrig ett lägre nummer än något som redan används i Shopify eller hos leverantörer, då blir det dubbletter." }),
-        h("div", { class: "admin-row" }, i, preview, h("span", { class: "spacer" }), h("button", { class: "btn small", type: "button", text: "Avbryt", onclick: close }), h("button", { class: "btn small primary", type: "button", text: "Spara", onclick: save })));
+      pn.replaceChildren(h("h3", { class: "sec-title", text: "Change next serial number" }),
+        h("p", { class: "hint", text: "The serial number is the four digits after the prefix. Never set a lower number than one already used in Shopify or with suppliers, or there will be duplicates." }),
+        h("div", { class: "admin-row" }, i, preview, h("span", { class: "spacer" }), h("button", { class: "btn small", type: "button", text: "Cancel", onclick: close }), h("button", { class: "btn small primary", type: "button", text: "Save", onclick: save })));
       i.focus();
     }
   };
@@ -3213,21 +3245,21 @@ import * as P from "./platform.js";
         const sys = (D.settings.storlekskoder || {})[sh.storlekssystem];
         const vs = (st.ean || []).filter((e) => e.farg.toLowerCase() === farg.toLowerCase());
         const saknar = [];
-        if (!(st.storlekar || []).length) saknar.push("storlekar");
+        if (!(st.storlekar || []).length) saknar.push("sizes");
         else if (vs.length < st.storlekar.length) saknar.push("EAN");
-        if (!sh.produkttyp) saknar.push("produkttyp");
-        if (!sh.storlekssystem) saknar.push("storlekssystem");
-        else if (sys && (st.storlekar || []).some((s) => sys[s] == null)) saknar.push("storlekskod");
-        if (!(sh.rrp_sek > 0)) saknar.push("pris");
-        if (!sh.hs_kod) saknar.push("HS-kod");
-        if (!lev || !lev.land) saknar.push("ursprungsland");
-        if (!sh.description_en) saknar.push("beskrivning");
+        if (!sh.produkttyp) saknar.push("product type");
+        if (!sh.storlekssystem) saknar.push("size system");
+        else if (sys && (st.storlekar || []).some((s) => sys[s] == null)) saknar.push("size code");
+        if (!(sh.rrp_sek > 0)) saknar.push("RRP");
+        if (!sh.hs_kod) saknar.push("HS code");
+        if (!lev || !lev.land) saknar.push("country of origin");
+        if (!sh.description_en) saknar.push("description");
         if (!sh.sammansattning) saknar.push("material");
-        if (!sh.tvattrad) saknar.push("skötselråd");
+        if (!sh.tvattrad) saknar.push("care instructions");
         const varnar = [];
-        if (!sh.size_chart) varnar.push("storlekstabell");
+        if (!sh.size_chart) varnar.push("size table");
         if (!fr.swatch) varnar.push("swatch");
-        if (!fr.colour_family) varnar.push("färgfamilj");
+        if (!fr.colour_family) varnar.push("colour family");
         if (!sh.fit_note) varnar.push("fit note");
         out.push({ key: st._id + "|" + farg, st, farg, fr, pos, saknar, varnar, pushed: !!fr.shopify_product_id });
       }
@@ -3239,24 +3271,24 @@ import * as P from "./platform.js";
       const st = UI.shopify;
       const upd = () => { this.update(); persist(); };
       this.strip = makeStrip([
-        { key: "redo", label: "Redo att pusha" },
-        { key: "saknar", label: "Saknar data", cls: "t-warn" },
-        { key: "utkast", label: "Utkast i Shopify" },
-        { key: "aktiva", label: "Aktiva i Shopify" }
+        { key: "redo", label: "Ready to push" },
+        { key: "saknar", label: "Missing data", cls: "t-warn" },
+        { key: "utkast", label: "Draft in Shopify" },
+        { key: "aktiva", label: "Active in Shopify" }
       ], st, () => { this.seg.sync(); upd(); });
-      const q = searchBox("q_shopify", "Sök style, färg, leverantör …", st, () => this.update());
-      this.fLev = filterSelect("f_sh_lev", "Alla leverantörer", st, "lev", upd);
-      this.fSeason = filterSelect("f_sh_season", "Alla säsonger", st, "season", upd);
-      this.seg = makeSeg([["ej", "Ej i Shopify"], ["i", "I Shopify"], ["alla", "Alla"]], st, "status", upd);
-      const allaBox = h("label", { class: "chk" }, h("input", { type: "checkbox", checked: !!st.alla, onchange: (e) => { st.alla = e.target.checked; upd(); } }), " Visa även godkända styles utan PO");
+      const q = searchBox("q_shopify", "Search style, colour, supplier …", st, () => this.update());
+      this.fLev = filterSelect("f_sh_lev", "All suppliers", st, "lev", upd);
+      this.fSeason = filterSelect("f_sh_season", "All seasons", st, "season", upd);
+      this.seg = makeSeg([["ej", "Not in Shopify"], ["i", "In Shopify"], ["alla", "All"]], st, "status", upd);
+      const allaBox = h("label", { class: "chk" }, h("input", { type: "checkbox", checked: !!st.alla, onchange: (e) => { st.alla = e.target.checked; upd(); } }), " Also show approved styles without a PO");
       this.count = h("span", { class: "count" });
       this.selCount = h("span");
       this.tray = h("div", { class: "tray", hidden: true }, this.selCount,
-        h("button", { class: "btn small primary", type: "button", text: "Skapa utkast i Shopify", onclick: () => this.pushSelected() }),
-        h("button", { class: "btn small", type: "button", text: "Rensa val", onclick: () => { shopSel.clear(); this.update(); } }));
-      const { t, tb } = table([["", "c-check"], ["Style"], ["Färg"], ["Leverantör"], ["Säsong"], ["PO"], ["Data"], ["Shopify"]]);
+        h("button", { class: "btn small primary", type: "button", text: "Create draft in Shopify", onclick: () => this.pushSelected() }),
+        h("button", { class: "btn small", type: "button", text: "Clear selection", onclick: () => { shopSel.clear(); this.update(); } }));
+      const { t, tb } = table([["", "c-check"], ["Style"], ["Colour"], ["Supplier"], ["Season"], ["PO"], ["Data"], ["Shopify"]]);
       this.tb = tb;
-      this.allBox = h("input", { type: "checkbox", "aria-label": "Välj alla redo", onchange: () => { (this.visible || []).filter((r) => !r.pushed && !r.saknar.length).forEach((r) => (this.allBox.checked ? shopSel.add(r.key) : shopSel.delete(r.key))); this.update(); } });
+      this.allBox = h("input", { type: "checkbox", "aria-label": "Select all ready", onchange: () => { (this.visible || []).filter((r) => !r.pushed && !r.saknar.length).forEach((r) => (this.allBox.checked ? shopSel.add(r.key) : shopSel.delete(r.key))); this.update(); } });
       t.querySelector("th.c-check").append(this.allBox);
       this.empty = h("div", { class: "empty", hidden: true });
       this.result = h("div", { class: "shopify-result" });
@@ -3284,24 +3316,24 @@ import * as P from "./platform.js";
       this.visible = list;
       for (const k of [...shopSel]) if (!all.some((r) => r.key === k && !r.pushed)) shopSel.delete(k);
       this.tb.replaceChildren(...list.map((r) => {
-        const box = h("input", { type: "checkbox", "aria-label": "Välj " + r.st.namn + " " + r.farg, checked: shopSel.has(r.key), disabled: r.pushed || r.saknar.length > 0, onchange: () => { if (box.checked) shopSel.add(r.key); else shopSel.delete(r.key); ShopifyView.update(); } });
+        const box = h("input", { type: "checkbox", "aria-label": "Select " + r.st.namn + " " + r.farg, checked: shopSel.has(r.key), disabled: r.pushed || r.saknar.length > 0, onchange: () => { if (box.checked) shopSel.add(r.key); else shopSel.delete(r.key); ShopifyView.update(); } });
         const status = r.pushed
-          ? h("a", { class: "chip " + (r.fr.shopify_status === "ACTIVE" ? "b-godkand" : "b-ny-runda"), href: "https://admin.shopify.com/store/atemporubato/products/" + r.fr.shopify_product_id, target: "_blank", rel: "noopener", text: (r.fr.shopify_status === "ACTIVE" ? "Aktiv" : "Utkast") + " · " + (r.fr.shopify_handle || "") })
-          : chip("Ej i Shopify");
+          ? h("a", { class: "chip " + (r.fr.shopify_status === "ACTIVE" ? "b-godkand" : "b-ny-runda"), href: "https://admin.shopify.com/store/atemporubato/products/" + r.fr.shopify_product_id, target: "_blank", rel: "noopener", text: (r.fr.shopify_status === "ACTIVE" ? "Active" : "Utkast") + " · " + (r.fr.shopify_handle || "") })
+          : chip("Not in Shopify");
         return h("tr", { tabIndex: 0, dataset: { style: r.st._id } },
           h("td", { class: "c-check" }, box),
           td("Style", "c-main", h("div", { class: "prod", text: r.st.namn }), h("div", { class: "sub", text: r.st._id + " · " + (r.st.status || "") })),
-          td("Färg", null, r.fr.swatch ? h("span", { class: "sh-swatch", style: "background:" + r.fr.swatch }) : null, r.farg),
-          td("Leverantör", null, r.st.leverantor || ""),
-          td("Säsong", null, [r.st.sasong, r.st.drop].filter(Boolean).join(" · ")),
-          td("PO", null, r.pos.length ? h("div", { class: "sub" }, uniq(r.pos.map((p) => p.nr || p._id)).map((id) => tag(id))) : h("span", { class: "sub", text: "Ingen PO" })),
-          td("Data", null, r.saknar.length ? h("span", { class: "flag bad", text: "Saknar " + r.saknar.join(", ") }) : r.varnar.length ? h("span", { class: "flag", text: "Redo · utan " + r.varnar.join(", ") }) : h("span", { class: "flag eval", text: "Redo" })),
+          td("Colour", null, r.fr.swatch ? h("span", { class: "sh-swatch", style: "background:" + r.fr.swatch }) : null, r.farg),
+          td("Supplier", null, r.st.leverantor || ""),
+          td("Season", null, [r.st.sasong, r.st.drop].filter(Boolean).join(" · ")),
+          td("PO", null, r.pos.length ? h("div", { class: "sub" }, uniq(r.pos.map((p) => p.nr || p._id)).map((id) => tag(id))) : h("span", { class: "sub", text: "No PO" })),
+          td("Data", null, r.saknar.length ? h("span", { class: "flag bad", text: "Missing " + r.saknar.join(", ") }) : r.varnar.length ? h("span", { class: "flag", text: "Ready · without " + r.varnar.join(", ") }) : h("span", { class: "flag eval", text: "Ready" })),
           td("Shopify", null, status));
       }));
       this.empty.hidden = list.length > 0;
-      if (!list.length) this.empty.replaceChildren(h("strong", { text: all.length ? "Inget matchar" : "Inget att pusha ännu" }), h("span", { text: all.length ? "Ändra filter eller sökning." : "Färgvägar dyker upp här när en style ligger i en PO och har färger ifyllda." }));
-      this.count.textContent = list.length + " av " + all.length;
-      this.selCount.textContent = shopSel.size + (shopSel.size === 1 ? " vald" : " valda");
+      if (!list.length) this.empty.replaceChildren(h("strong", { text: all.length ? "Nothing matches" : "Nothing to push yet" }), h("span", { text: all.length ? "Change filter or search." : "Colourways appear here once a style is on a PO and has colours filled in." }));
+      this.count.textContent = list.length + " of " + all.length;
+      this.selCount.textContent = shopSel.size + (shopSel.size === 1 ? " selected" : " selected");
       this.tray.hidden = shopSel.size === 0 || !canWrite;
       this.allBox.checked = list.length > 0 && list.filter((r) => !r.pushed && !r.saknar.length).every((r) => shopSel.has(r.key));
     },
@@ -3310,30 +3342,39 @@ import * as P from "./platform.js";
       if (!keys.length) return;
       const { data: { session } } = await P.supabase.auth.getSession();
       const ul = h("ul", { class: "log" });
-      this.result.replaceChildren(h("h4", { class: "sec-title", text: "Pushar " + keys.length + " färgvägar till Shopify (utkast)" }), ul);
+      this.result.replaceChildren(h("h4", { class: "sec-title", text: "Pushing " + keys.length + " colourways to Shopify (draft)" }), ul);
       let ok = 0;
       for (const key of keys) {
         const [style_id, farg] = key.split("|");
         const st = byId(D.styles, style_id);
-        const li = h("li", null, h("time", { text: (st ? st.namn : style_id) + " · " + farg }), h("div", { text: "Skickar …" }));
+        const li = h("li", null, h("time", { text: (st ? st.namn : style_id) + " · " + farg }), h("div", { text: "Sending …" }));
         ul.append(li);
         try {
           const res = await fetch("/api/shopify", { method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer " + (session ? session.access_token : "") }, body: JSON.stringify({ action: "create", style_id, farg }) });
           const j = await res.json();
-          if (j.admin_url) { ok++; li.lastChild.replaceChildren(h("span", { class: "okline", text: "Skapad som utkast. " }), h("a", { href: j.admin_url, target: "_blank", rel: "noopener", text: "Öppna i Shopify" })); shopSel.delete(key); }
-          else li.lastChild.replaceChildren(h("span", { class: "late-text", text: (j.error || "Fel") + (j.errors && j.errors.length ? ": " + j.errors.join(" ") : "") }));
-        } catch (e) { li.lastChild.replaceChildren(h("span", { class: "late-text", text: "Nätverksfel: " + e.message })); }
+          if (j.admin_url) { ok++; li.lastChild.replaceChildren(h("span", { class: "okline", text: "Created as draft. " }), h("a", { href: j.admin_url, target: "_blank", rel: "noopener", text: "Open in Shopify" })); shopSel.delete(key); }
+          else li.lastChild.replaceChildren(h("span", { class: "late-text", text: (j.error || "Error") + (j.errors && j.errors.length ? ": " + j.errors.join(" ") : "") }));
+        } catch (e) { li.lastChild.replaceChildren(h("span", { class: "late-text", text: "Network error: " + e.message })); }
       }
-      toast(ok + " av " + keys.length + " skapade i Shopify");
+      toast(ok + " of " + keys.length + " created in Shopify");
       this.update();
     }
   };
+
+  // ---------- FLAGGA: direktmejl (bara hostad) ----------
+  // Appen sparar flaggan själv; servern skickar mejlet till dem som valts. Går mejlet inte att skicka kommer flaggan med i mejlet kl. 10.
+  async function hostedNotifyFlag(id) {
+    const { data: { session } } = await P.supabase.auth.getSession();
+    const res = await fetch("/api/flagga", { method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer " + (session ? session.access_token : "") }, body: JSON.stringify({ id }) });
+    if (!res.ok) return null;
+    return res.json();
+  }
 
   // ---------- COO: matrisvy (hosted-only) ----------
   // Kritisk linje per drop och per event. Rader = föräldrar (hor_till tom, matris satt), kolumner = mallens faser
   // (installningar "planeringsmallar"), celler = barnen (hor_till = förälderns id, fas = kolumnens fas).
   // Elliots COO-vy ligger orörd som läget "Lista".
-  const MX_SECTIONS = [["drop", "Drops", "Ny drop"], ["pr", "PR-träffar", "Ny PR-träff"], ["in_residence", "In Residence", "Nytt In Residence"], ["massa", "Mässor", "Ny mässa"], ["invigning", "Lokaler", "Ny invigning"]];
+  const MX_SECTIONS = [["drop", "Drops", "New drop"], ["pr", "PR events", "New PR event"], ["in_residence", "In Residence", "New In Residence"], ["massa", "Fairs", "New fair"], ["invigning", "Premises", "New opening"]];
   const MX_PARENT_FAS = { drop: "lansering" };
   const MX_DROP_LABELS = ["Drop 1", "Drop 2", "Drop 3", "Tailoring", "Coats"];
   const mxStore = {
@@ -3348,11 +3389,11 @@ import * as P from "./platform.js";
   const mxToggle = (id) => { mxIsOpen(id); if (mxOpen.has(id)) mxOpen.delete(id); else mxOpen.add(id); mxStore.set(mxOpenKey(), [...mxOpen]); };
   const mxMallar = () => (D.settings && D.settings.planeringsmallar) || {};
   const mxParentFas = (matris) => MX_PARENT_FAS[matris] || "event";
-  const mxLedtid = (o) => { o = Number(o) || 0; if (o === 0) return "dag 0"; const a = Math.abs(o); const t = a % 7 === 0 ? a / 7 + " v" : a + " d"; return t + (o < 0 ? " före" : " efter"); };
+  const mxLedtid = (o) => { o = Number(o) || 0; if (o === 0) return "day 0"; const a = Math.abs(o); const t = a % 7 === 0 ? a / 7 + " v" : a + " d"; return t + (o < 0 ? " before" : " after"); };
   const mxShort = (iso) => { if (!isISO(iso)) return ""; const [, m, d] = iso.split("-").map(Number); return d + " " + MONTHS[m - 1]; };
   const mxIsTbd = (e) => /^TBD\s/i.test(e.titel || "");
-  const mxState = (e) => (e.status === "Inställd" ? "installd" : e.status === "Klar" ? "klar" : isISO(e.datum) && e.datum < todayISO() ? "sen" : e.status === "Pågår" ? "pagar" : "planerad");
-  const MX_STATE_LABEL = { planerad: "Planerad", pagar: "Pågår", klar: "Klar", sen: "Försenad", installd: "Inställd" };
+  const mxState = (e) => (e.status === "Inställd" ? "installd" : e.status === "Klar" ? "klar" : isISO(e.datum) && e.datum < todayISO() ? "sen" : e.status === "Pågår" ? "pagar" : "planned");
+  const MX_STATE_LABEL = { planerad: "Planerad", pagar: "Pågår", klar: "Klar", sen: "Late", installd: "Inställd" };
   const mxHasPerson = (e, name) => !name || norm(e.ansvarig || e.agare || "").split(/\s*,\s*|\s+och\s+/).includes(norm(name));
   const mxStripTbd = (t) => String(t || "").replace(/^TBD\s+/i, "");
   const mxFirstName = (a) => String(a || "").split(/\s*,\s*/)[0] || "";
@@ -3370,7 +3411,7 @@ import * as P from "./platform.js";
 
   function mxCell(e, krock, dim) {
     const s = mxState(e);
-    return h("button", { "data-id": e._id, class: "mx-cell" + (krock(e) ? " krock" : "") + (dim ? " dim" : "") + (s === "installd" ? " installd" : ""), type: "button", title: e.titel + " · " + MX_STATE_LABEL[s] + (krock(e) ? " · fler händelser samma dag" : ""), onclick: () => openEvent(e._id) },
+    return h("button", { "data-id": e._id, class: "mx-cell" + (krock(e) ? " krock" : "") + (dim ? " dim" : "") + (s === "installd" ? " installd" : ""), type: "button", title: e.titel + " · " + MX_STATE_LABEL[s] + (krock(e) ? " · more events the same day" : ""), onclick: () => openEvent(e._id) },
       h("span", { class: "mx-date" }, h("i", { class: "mx-dot " + s }), mxShort(e.datum) + (e.slut && e.slut !== e.datum ? "–" + mxShort(e.slut) : "")),
       h("span", { class: "mx-who", text: e.ansvarig || e.agare || "" }));
   }
@@ -3397,20 +3438,20 @@ import * as P from "./platform.js";
     if (!canWrite || !db) return;
     const id = await mxNextId();
     const etikett = p.matris === "drop" ? p.drop || mxStripTbd(p.titel) : mxStripTbd(p.titel);
-    const body = Object.assign({ id, logg: [logEntry("Skapad från mallen (" + row.namn + ", " + mxLedtid(row.offset_dagar) + ")")], andrad: new Date().toISOString() }, mxChildBody(p, row, p.matris, etikett));
-    if (await mxCreate(id, body)) { toast(id + " skapad"); scheduleRefresh(); }
+    const body = Object.assign({ id, logg: [logEntry("Created from the template (" + row.namn + ", " + mxLedtid(row.offset_dagar) + ")")], andrad: new Date().toISOString() }, mxChildBody(p, row, p.matris, etikett));
+    if (await mxCreate(id, body)) { toast(id + " created"); scheduleRefresh(); }
   }
 
   function mxNewFromTemplate(matris, label) {
     const mall = mxMallar()[matris] || [];
-    if (!mall.length) { toast("Mallen \"" + matris + "\" saknas i inställningarna."); return; }
+    if (!mall.length) { toast("The template \"" + matris + "\" is missing in the settings."); return; }
     const isDrop = matris === "drop";
     const pfas = mxParentFas(matris);
     const prow = mall.find((r) => r.fas === pfas) || { fas: pfas, ansvarig: "Jakob", bana: "" };
-    const fNamn = inp("f_mxnamn", "", { placeholder: isDrop ? "t.ex. SS27 Drop 3" : "t.ex. London PR Drop 3" });
+    const fNamn = inp("f_mxnamn", "", { placeholder: isDrop ? "e.g. SS27 Drop 3" : "e.g. London PR Drop 3" });
     const fSas = seasonSelect("f_mxsas", MXS.sasong || "");
-    const fDropSel = selectEl("f_mxdrop", [["", isDrop ? "Välj …" : "– ingen –"]].concat(MX_DROP_LABELS.map((x) => [x, x])).concat([["__annat", "Annat …"]]), "");
-    const fDropAnnat = inp("f_mxdropannat", "", { placeholder: "Egen etikett" }); fDropAnnat.hidden = true;
+    const fDropSel = selectEl("f_mxdrop", [["", isDrop ? "Choose …" : "– none –"]].concat(MX_DROP_LABELS.map((x) => [x, x])).concat([["__annat", "Other …"]]), "");
+    const fDropAnnat = inp("f_mxdropannat", "", { placeholder: "Own label" }); fDropAnnat.hidden = true;
     fDropSel.addEventListener("change", () => { fDropAnnat.hidden = fDropSel.value !== "__annat"; });
     const fDatum = inp("f_mxdatum", "", { type: "date" });
     const fSlut = inp("f_mxslut", "", { type: "date" });
@@ -3421,53 +3462,53 @@ import * as P from "./platform.js";
     };
     fDatum.addEventListener("input", renderPreview); renderPreview();
     const form = h("form", { class: "form", autocomplete: "off", onsubmit: (ev) => ev.preventDefault() },
-      field("Namn", fNamn, { full: true }), field("Säsong", fSas),
-      field(isDrop ? "Drop-etikett" : "Drop (valfritt)", h("div", { style: "display:grid;gap:6px" }, fDropSel, fDropAnnat)),
-      field(isDrop ? "Lanseringsdatum" : "Datum", fDatum), isDrop ? h("div") : field("Slut (om flera dagar)", fSlut));
+      field("Name", fNamn, { full: true }), field("Season", fSas),
+      field(isDrop ? "Drop label" : "Drop (optional)", h("div", { style: "display:grid;gap:6px" }, fDropSel, fDropAnnat)),
+      field(isDrop ? "Launch date" : "Date", fDatum), isDrop ? h("div") : field("End (if several days)", fSlut));
     async function save(btn) {
       const etikett = fDropSel.value === "__annat" ? fDropAnnat.value.trim() : fDropSel.value;
       const namn = fNamn.value.trim();
-      if (!namn) { toast("Ge den ett namn."); fNamn.focus(); return; }
-      if (!isISO(fDatum.value)) { toast("Sätt ett datum."); fDatum.focus(); return; }
-      if (isDrop && !etikett) { toast("Välj drop-etikett."); fDropSel.focus(); return; }
+      if (!namn) { toast("Give it a name."); fNamn.focus(); return; }
+      if (!isISO(fDatum.value)) { toast("Set a date."); fDatum.focus(); return; }
+      if (isDrop && !etikett) { toast("Choose a drop label."); fDropSel.focus(); return; }
       if (btn) btn.disabled = true;
       try {
         const now = new Date().toISOString();
         const pid = await mxNextId();
         const datum = fDatum.value;
         const slut = !isDrop && isISO(fSlut.value) && fSlut.value >= datum ? fSlut.value : datum;
-        const parent = { id: pid, titel: namn, typ: isDrop ? "drop" : (matris === "invigning" ? "lokaler" : "massor"), datum, slut, sasong: fSas.value.trim(), drop: etikett, agare: mxFirstName(prow.ansvarig) || "Jakob", ansvarig: prow.ansvarig || "Jakob", bana: prow.bana || "", status: "Planerad", kommentar: "", poId: null, styleId: null, hor_till: null, fas: pfas, offset_dagar: 0, matris, logg: [logEntry("Skapad från mallen " + label)], andrad: now };
+        const parent = { id: pid, titel: namn, typ: isDrop ? "drop" : (matris === "invigning" ? "lokaler" : "massor"), datum, slut, sasong: fSas.value.trim(), drop: etikett, agare: mxFirstName(prow.ansvarig) || "Jakob", ansvarig: prow.ansvarig || "Jakob", bana: prow.bana || "", status: "Planerad", kommentar: "", poId: null, styleId: null, hor_till: null, fas: pfas, offset_dagar: 0, matris, logg: [logEntry("Created from the template " + label)], andrad: now };
         if (!(await mxCreate(pid, parent))) return;
         const p = Object.assign({}, parent, { _id: pid });
         let n = 1;
         for (const row of mall) {
           if (row.fas === pfas) continue;
           const id = await mxNextId();
-          const body = Object.assign({ id, logg: [logEntry("Skapad från mallen " + label + " (" + mxLedtid(row.offset_dagar) + ")")], andrad: now }, mxChildBody(p, row, matris, isDrop ? etikett : mxStripTbd(namn)));
+          const body = Object.assign({ id, logg: [logEntry("Created from the template " + label + " (" + mxLedtid(row.offset_dagar) + ")")], andrad: now }, mxChildBody(p, row, matris, isDrop ? etikett : mxStripTbd(namn)));
           if (await mxCreate(id, body)) n++;
         }
-        toast(n + " händelser skapade (" + pid + ")");
+        toast(n + " events created (" + pid + ")");
         mxIsOpen(pid);
         closeSheet(); scheduleRefresh();
       } finally { if (btn) btn.disabled = false; }
     }
-    const saveBtn = h("button", { class: "btn primary", type: "button", text: "Skapa från mallen", onclick: (ev) => save(ev.target) });
-    openSheet({ tag: "Ny", title: label, sub: mall.length + " händelser enligt mallen", body: [form, h("section", null, h("h3", { class: "sec-title", text: "Mallen" }), preview)], foot: [h("button", { class: "btn", type: "button", text: "Avbryt", onclick: closeSheet }), saveBtn], focus: "f_mxnamn" });
+    const saveBtn = h("button", { class: "btn primary", type: "button", text: "Create from the template", onclick: (ev) => save(ev.target) });
+    openSheet({ tag: "New", title: label, sub: mall.length + " events per the template", body: [form, h("section", null, h("h3", { class: "sec-title", text: "The template" }), preview)], foot: [h("button", { class: "btn", type: "button", text: "Cancel", onclick: closeSheet }), saveBtn], focus: "f_mxnamn" });
   }
 
   function mxPoPanel(p) {
     const pos = D.po.filter((po) => norm(po.sasong) === norm(p.sasong) && p.drop && (po._drops && po._drops.length ? po._drops : [po.drop]).some((n) => norm(n) === norm(p.drop)));
-    if (!p.drop) return h("p", { class: "sub", text: "Ingen drop-etikett på lanseringen, så inga PO:er kan matchas." });
-    if (!pos.length) return h("p", { class: "sub", text: "Inga PO:er med säsong " + (p.sasong || "–") + " och drop " + p.drop + "." });
+    if (!p.drop) return h("p", { class: "sub", text: "No drop label on the launch, so no POs can be matched." });
+    if (!pos.length) return h("p", { class: "sub", text: "No POs with season " + (p.sasong || "–") + " and drop " + p.drop + "." });
     const t = h("table", { class: "ledger mx-po" });
-    t.append(h("thead", null, h("tr", null, ...["PO", "Leverantör", "Status", "Önskad leverans", "Planerad ex", "ETA lager", "Fotosample"].map((x) => h("th", { text: x })))));
+    t.append(h("thead", null, h("tr", null, ...["PO", "Supplier", "Status", "Requested delivery", "Planned ex", "ETA warehouse", "Fotosample"].map((x) => h("th", { text: x })))));
     const tb = h("tbody");
     for (const po of pos.sort((a, b) => String(a.nr || a._id).localeCompare(String(b.nr || b._id), "sv"))) {
       const eta = typeof poEta === "function" ? poEta(po) : po.etaLager;
       tb.append(h("tr", { class: "mx-po-row" },
         h("td", null, h("button", { class: "linklike", type: "button", text: po.nr || po._id, onclick: () => { closeSheet(); switchTab("produktion"); openPo(po._id); } })),
         h("td", { text: po.leverantor || "" }), h("td", null, h("span", { class: "chip", text: poStatusNorm(po.status) || "" })),
-        h("td", { class: "mono", text: fmtDate(po.leveransOnskad) }), h("td", { class: "mono", text: fmtDate(po.planeradEx) || (isISO(po.bekraftadEx) ? "bekr. " + fmtDate(po.bekraftadEx) : "") }),
+        h("td", { class: "mono", text: fmtDate(po.leveransOnskad) }), h("td", { class: "mono", text: fmtDate(po.planeradEx) || (isISO(po.bekraftadEx) ? "conf. " + fmtDate(po.bekraftadEx) : "") }),
         h("td", { class: "mono", text: fmtDate(eta) }), h("td", { text: po.fotosample || "" })));
       const rader = (po.rader || []).filter((r) => r.produkt || r.styleId);
       if (rader.length) {
@@ -3475,7 +3516,7 @@ import * as P from "./platform.js";
           const st = r.styleId ? byId(D.styles, r.styleId) : null;
           const ps = r.perStorlek ? Object.values(r.perStorlek).reduce((a, x) => a + (num(x) || 0), 0) : 0;
           const antal = ps || num(r.antal) || 0;
-          return h("span", { class: "mx-prod-item" }, h("span", { text: (st && st.namn) || r.produkt || r.styleId }), h("span", { class: "sub", text: " · " + (fargText(r.farg) || r.farg || "TBA") + " · " + antal + " st" }));
+          return h("span", { class: "mx-prod-item" }, h("span", { text: (st && st.namn) || r.produkt || r.styleId }), h("span", { class: "sub", text: " · " + (fargText(r.farg) || r.farg || "TBA") + " · " + antal + " pcs" }));
         }));
         tb.append(h("tr", { class: "mx-po-prod" }, h("td", { colspan: "7" }, list)));
       }
@@ -3489,10 +3530,10 @@ import * as P from "./platform.js";
     renderLogInto(logUl, p.logg);
     const others = kids.filter((k) => !cols.includes(k.fas));
     return h("div", { class: "mx-detail" },
-      p.matris === "drop" ? h("section", null, h("h3", { class: "sec-title", text: "PO:er och produkter · " + [p.sasong, p.drop].filter(Boolean).join(" ") }), mxPoPanel(p)) : null,
-      others.length ? h("section", null, h("h3", { class: "sec-title", text: "Utanför mallen" }), h("div", { class: "mx-others" }, ...others.map((k) => h("button", { class: "btn small", type: "button", text: k.titel + " · " + mxShort(k.datum), onclick: () => openEvent(k._id) })))) : null,
-      h("section", null, h("h3", { class: "sec-title", text: "Kommentar" }), p.kommentar ? h("p", { class: "mx-kom", text: p.kommentar }) : h("p", { class: "sub", text: "Ingen kommentar." })),
-      h("section", null, h("h3", { class: "sec-title", text: "Historik" }), logUl));
+      p.matris === "drop" ? h("section", null, h("h3", { class: "sec-title", text: "POs and products · " + [p.sasong, p.drop].filter(Boolean).join(" ") }), mxPoPanel(p)) : null,
+      others.length ? h("section", null, h("h3", { class: "sec-title", text: "Outside the template" }), h("div", { class: "mx-others" }, ...others.map((k) => h("button", { class: "btn small", type: "button", text: k.titel + " · " + mxShort(k.datum), onclick: () => openEvent(k._id) })))) : null,
+      h("section", null, h("h3", { class: "sec-title", text: "Comment" }), p.kommentar ? h("p", { class: "mx-kom", text: p.kommentar }) : h("p", { class: "sub", text: "No comment." })),
+      h("section", null, h("h3", { class: "sec-title", text: "History" }), logUl));
   }
 
   function mxMatrix(matris, label, newLabel, model) {
@@ -3506,11 +3547,11 @@ import * as P from "./platform.js";
     rows.sort((a, b) => String(a.datum || "").localeCompare(String(b.datum || "")));
     const ro = !canWrite || !db;
     const head = h("div", { class: "mx-head" }, h("h3", { class: "sec-title", text: label + " · " + rows.length }), ro ? null : h("button", { class: "btn small", type: "button", text: newLabel, onclick: () => mxNewFromTemplate(matris, newLabel) }));
-    if (!mall.length) return h("section", { class: "mx-sec" }, head, h("p", { class: "sub", text: "Mallen saknas i inställningarna (planeringsmallar." + matris + ")." }));
+    if (!mall.length) return h("section", { class: "mx-sec" }, head, h("p", { class: "sub", text: "The template is missing in the settings (planeringsmallar." + matris + ")." }));
     const t = h("table", { class: "mx" });
     t.append(h("thead", null, h("tr", null, h("th", { class: "mx-rowh", text: matris === "drop" ? "Drop" : "Event" }), ...mall.map((r) => h("th", { class: r.fas === pfas ? "mx-parentcol" : null }, h("span", { text: r.namn }), h("span", { class: "sub", text: mxLedtid(r.offset_dagar) }))))));
     const tb = h("tbody");
-    if (!rows.length) tb.append(h("tr", null, h("td", { colspan: String(cols.length + 1), class: "sub", text: "Inget att visa med valda filter." })));
+    if (!rows.length) tb.append(h("tr", null, h("td", { colspan: String(cols.length + 1), class: "sub", text: "Nothing to show with the chosen filters." })));
     for (const p of rows) {
       const kids = model.kids.get(p._id) || [];
       const open = mxIsOpen(p._id);
@@ -3518,14 +3559,14 @@ import * as P from "./platform.js";
       const tr = h("tr", { class: "mx-row" + (tbd ? " tbd" : "") + (open ? " open" : "") });
       tr.append(h("th", { class: "mx-rowh", scope: "row" },
         h("button", { class: "mx-name", type: "button", "aria-expanded": String(open), onclick: () => { mxToggle(p._id); MatrisView.update(); } }, h("span", { class: "mx-caret", text: open ? "▾" : "▸" }), h("span", { text: p.titel })),
-        h("span", { class: "sub", text: [mxShort(p.datum), p.sasong, p.drop, matris === "drop" && dropOf({ sasong: p.sasong, drop: p.drop }) && isISO(dropOf({ sasong: p.sasong, drop: p.drop }).klartSenast) ? "i lager senast " + mxShort(dropOf({ sasong: p.sasong, drop: p.drop }).klartSenast) : ""].filter(Boolean).join(" · ") })));
+        h("span", { class: "sub", text: [mxShort(p.datum), p.sasong, p.drop, matris === "drop" && dropOf({ sasong: p.sasong, drop: p.drop }) && isISO(dropOf({ sasong: p.sasong, drop: p.drop }).klartSenast) ? "in stock by " + mxShort(dropOf({ sasong: p.sasong, drop: p.drop }).klartSenast) : ""].filter(Boolean).join(" · ") })));
       for (const r of mall) {
         const td = h("td");
         if (r.fas === pfas) td.append(mxCell(p, model.krock, MXS.ansvarig && !mxHasPerson(p, MXS.ansvarig)));
         else {
           const ks = kids.filter((k) => k.fas === r.fas).sort((a, b) => String(a.datum).localeCompare(String(b.datum)));
           if (ks.length) ks.forEach((k) => td.append(mxCell(k, model.krock, MXS.ansvarig && !mxHasPerson(k, MXS.ansvarig))));
-          else if (!ro) td.append(h("button", { class: "mx-add", type: "button", title: "Skapa \"" + r.namn + "\" från mallen (" + mxLedtid(r.offset_dagar) + ")", text: "+", onclick: () => mxAddChild(p, r) }));
+          else if (!ro) td.append(h("button", { class: "mx-add", type: "button", title: "Create \"" + r.namn + "\" from the template (" + mxLedtid(r.offset_dagar) + ")", text: "+", onclick: () => mxAddChild(p, r) }));
         }
         tr.append(td);
       }
@@ -3542,9 +3583,9 @@ import * as P from "./platform.js";
     const xs = D.handelser.filter((e) => isISO(e.datum) && e.datum <= to && (e.datum >= from || (e.status !== "Klar" && e.status !== "Inställd")) && e.status !== "Klar" && e.status !== "Inställd" && (!who || mxHasPerson(e, who)))
       .sort((a, b) => a.datum.localeCompare(b.datum));
     return h("section", { class: "mx-week" },
-      h("h3", { class: "sec-title", text: "Min vecka" + (who ? " · " + who : "") }),
+      h("h3", { class: "sec-title", text: "My week" + (who ? " · " + who : "") }),
       xs.length ? h("ul", null, ...xs.map((e) => h("li", null, h("button", { class: "linklike", type: "button", onclick: () => openEvent(e._id) }, h("i", { class: "mx-dot " + mxState(e) }), h("span", { class: "mono", text: mxShort(e.datum) }), " ", e.titel))))
-        : h("p", { class: "sub", text: "Inget på " + (who || "någon") + " de kommande 7 dagarna." }));
+        : h("p", { class: "sub", text: "Nothing for " + (who || "anyone") + " in the coming 7 days." }));
   }
 
   const MatrisView = {
@@ -3558,13 +3599,13 @@ import * as P from "./platform.js";
       const model = mxModel();
       const seasons = uniq(D.handelser.map((e) => e.sasong).filter(Boolean)).sort();
       const people = uniq(D.handelser.flatMap((e) => String(e.ansvarig || "").split(/\s*,\s*/)).filter(Boolean)).sort((a, b) => a.localeCompare(b, "sv"));
-      const sSel = selectEl("f_mxsas_f", [["", "Alla säsonger"]].concat(seasons.map((x) => [x, x])), MXS.sasong);
+      const sSel = selectEl("f_mxsas_f", [["", "All seasons"]].concat(seasons.map((x) => [x, x])), MXS.sasong);
       sSel.addEventListener("change", () => { MXS.sasong = sSel.value; mxSave(); this.update(); });
-      const aSel = selectEl("f_mxansv_f", [["", "Alla ansvariga"]].concat(people.map((x) => [x, x])), MXS.ansvarig);
+      const aSel = selectEl("f_mxansv_f", [["", "All responsible"]].concat(people.map((x) => [x, x])), MXS.ansvarig);
       aSel.addEventListener("change", () => { MXS.ansvarig = aSel.value; mxSave(); this.update(); });
       const tbdBox = h("input", { type: "checkbox", checked: MXS.tbd, onchange: () => { MXS.tbd = tbdBox.checked; mxSave(); this.update(); } });
-      const tbd = h("label", { class: "checkline" }, tbdBox, "Visa TBD");
-      const legend = h("span", { class: "mx-legend" }, ...["planerad", "pagar", "klar", "sen"].map((s) => h("span", null, h("i", { class: "mx-dot " + s }), MX_STATE_LABEL[s])), h("span", null, h("i", { class: "mx-krockbox" }), "Samma dag"));
+      const tbd = h("label", { class: "checkline" }, tbdBox, "Show TBD");
+      const legend = h("span", { class: "mx-legend" }, ...["planned", "pagar", "klar", "sen"].map((s) => h("span", null, h("i", { class: "mx-dot " + s }), MX_STATE_LABEL[s])), h("span", null, h("i", { class: "mx-krockbox" }), "Same day"));
       this.bar.replaceChildren(sSel, aSel, tbd, legend);
       this.body.replaceChildren(mxWeek(), ...MX_SECTIONS.map(([m, l, n]) => mxMatrix(m, l, n, model)));
     }
@@ -3572,8 +3613,8 @@ import * as P from "./platform.js";
 
   const CooMatrisView = {
     mount(root) {
-      this.seg = h("div", { class: "seg mx-seg", role: "group", "aria-label": "Vy" });
-      this.btns = [["matris", "Matris"], ["lista", "Lista"]].map(([v, l]) => { const b = h("button", { type: "button", text: l, onclick: () => { if (MXS.vy === v) return; MXS.vy = v; mxSave(); this.remount(); } }); b.dataset.v = v; return b; });
+      this.seg = h("div", { class: "seg mx-seg", role: "group", "aria-label": "View" });
+      this.btns = [["matris", "Matrix"], ["lista", "List"]].map(([v, l]) => { const b = h("button", { type: "button", text: l, onclick: () => { if (MXS.vy === v) return; MXS.vy = v; mxSave(); this.remount(); } }); b.dataset.v = v; return b; });
       this.seg.append(...this.btns);
       this.inner = h("div", { style: "display:grid;gap:16px" });
       root.append(this.seg, this.inner);
@@ -3602,14 +3643,14 @@ import * as P from "./platform.js";
       let n = 0;
       for (const x of plan) {
         const fresh = byId(D.handelser, x.k._id) || x.k;
-        const ok = await write("handelser", x.k._id, { datum: x.nd, slut: x.ns, andrad: new Date().toISOString(), logg: (fresh.logg || []).concat(logEntry("Flyttad med lanseringen från " + fmtDate(x.k.datum) + " till " + fmtDate(x.nd))) });
+        const ok = await write("handelser", x.k._id, { datum: x.nd, slut: x.ns, andrad: new Date().toISOString(), logg: (fresh.logg || []).concat(logEntry("Moved with the launch from " + fmtDate(x.k.datum) + " to " + fmtDate(x.nd))) });
         if (ok) n++;
       }
-      toast(n + " faser flyttade"); closeSheet(); scheduleRefresh();
+      toast(n + " phases moved"); closeSheet(); scheduleRefresh();
     };
-    openSheet({ tag: "Flytta", title: "Flytta alla faser med?", sub: e.titel + ": " + fmtDate(e.datum) + " → " + fmtDate(o.datum),
-      body: [e.matris === "drop" && launchImpactText(o.sasong, o.drop, o.datum) ? h("p", { class: "mx-kom", text: "Leveranser: " + launchImpactText(o.sasong, o.drop, o.datum) }) : null, h("p", { text: "Varje fas får lanseringens nya datum plus sin ledtid från mallen. Nej flyttar bara " + (e.matris === "drop" ? "lanseringen" : "eventet") + "." }), list],
-      foot: [h("button", { class: "btn", type: "button", text: "Nej, bara " + (e.matris === "drop" ? "lanseringen" : "eventet"), onclick: closeSheet }), h("button", { class: "btn primary", type: "button", text: "Ja, flytta " + plan.length + " faser", onclick: (ev) => doMove(ev.target) })] });
+    openSheet({ tag: "Move", title: "Move all phases along?", sub: e.titel + ": " + fmtDate(e.datum) + " → " + fmtDate(o.datum),
+      body: [e.matris === "drop" && launchImpactText(o.sasong, o.drop, o.datum) ? h("p", { class: "mx-kom", text: "Deliveries: " + launchImpactText(o.sasong, o.drop, o.datum) }) : null, h("p", { text: "Each phase gets the launch's new date plus its lead time from the template. No moves only " + (e.matris === "drop" ? "the launch" : "the event") + "." }), list],
+      foot: [h("button", { class: "btn", type: "button", text: "No, only " + (e.matris === "drop" ? "the launch" : "the event"), onclick: closeSheet }), h("button", { class: "btn primary", type: "button", text: "Yes, move " + plan.length + " phases", onclick: (ev) => doMove(ev.target) })] });
   }
 
   // ---------- tabs ----------
@@ -3619,22 +3660,23 @@ import * as P from "./platform.js";
       const st = UI.bibliotek;
       const upd = () => { this.update(); persist(); };
       this.strip = makeStrip([
-        { key: "ideer", label: "Produktidéer" },
-        { key: "hosAlex", label: "Hos Alex för sampling", cls: "t-warn" },
-        { key: "sampling", label: "Under sampling" },
-        { key: "godkanda", label: "Godkända" },
-        { key: "produktion", label: "I produktion / levererade" },
-        { key: "utanBild", label: "Utan bild", cls: "t-warn" }
+        { key: "ideer", label: "Ideas not ready for design" },
+        { key: "hosConor", label: "With Conor for design", cls: "t-warn" },
+        { key: "hosAlex", label: "Sample can be ordered (Alex)", cls: "t-warn" },
+        { key: "sampling", label: "In sampling" },
+        { key: "godkanda", label: "Approved" },
+        { key: "produktion", label: "In production / delivered" },
+        { key: "utanBild", label: "No image", cls: "t-warn" }
       ], st, () => { this.seg.sync(); upd(); });
-      const q = searchBox("q_lib", "Sök style, idé, tyg, leverantör …", st, () => this.update());
-      this.fSeason = filterSelect("f_l_season", "Alla säsonger", st, "season", upd);
-      this.fKat = filterSelect("f_l_kat", "Alla kategorier", st, "kat", upd);
-      this.fLev = filterSelect("f_l_lev", "Alla leverantörer", st, "lev", upd);
-      this.seg = makeSeg([["alla", "Allt"], ["ideer", "Idéer"], ["aktiva", "Sampling & godkända"], ["klara", "I produktion"], ["arkiv", "Pausade & kastade"]], st, "status", upd);
-      this.segMode = makeSeg([["styles", "Per säsong"], ["grund", "Grundstyles"]], st, "mode", upd);
+      const q = searchBox("q_lib", "Search style, idea, fabric, supplier …", st, () => this.update());
+      this.fSeason = filterSelect("f_l_season", "All seasons", st, "season", upd);
+      this.fKat = filterSelect("f_l_kat", "All categories", st, "kat", upd);
+      this.fLev = filterSelect("f_l_lev", "All suppliers", st, "lev", upd);
+      this.seg = makeSeg([["alla", "All"], ["ideer", "Ideas"], ["aktiva", "Sampling & approved"], ["klara", "I produktion"], ["arkiv", "Paused & dropped"]], st, "status", upd);
+      this.segMode = makeSeg([["styles", "By season"], ["grund", "Base styles"]], st, "mode", upd);
       this.count = h("span", { class: "count" });
       this.body = h("div", { style: "display:grid;gap:26px" });
-      root.append(h("p", { class: "lede", text: "Alla styles och produktidéer på ett ställe – även innan en sample är beställd. Skapa en idé med beskrivning, tyg, mått och bilder och skicka den till Alex. En grundstyle (t.ex. Roper Shirt) återanvänds i flera kollektioner via varianter." }),
+      root.append(h("p", { class: "lede", text: "All styles and ideas in one place – even before a sample is ordered. Create an idea with description, fabric, measurements and images, then send it to design or straight to sampling. A base style (e.g. Roper Shirt) is reused across collections through variants." }),
         this.strip.el, h("section", { class: "filters", "aria-label": "Filter" }, q, this.fSeason.el, this.fKat.el, this.fLev.el, this.seg.el, this.segMode.el, this.count), this.body);
     },
     filtered() {
@@ -3642,8 +3684,9 @@ import * as P from "./platform.js";
       return D.styles.filter((s) => {
         const ss = styleStatusNorm(s.status);
         switch (st.view) {
-          case "ideer": if (ss !== "Produktidé") return false; break;
-          case "hosAlex": if (ss !== "Idé under utveckling") return false; break;
+          case "ideer": if (ss !== ST_IDE) return false; break;
+          case "hosConor": if (ss !== ST_DESIGN) return false; break;
+          case "hosAlex": if (ss !== ST_KANBEST) return false; break;
           case "sampling": if (ss !== "Sampling") return false; break;
           case "godkanda": if (ss !== "Godkänd") return false; break;
           case "produktion": if (!PROD_STATUS.includes(ss)) return false; break;
@@ -3669,18 +3712,18 @@ import * as P from "./platform.js";
       this.fSeason.fill(seasons); this.fKat.fill(KATEGORIER); this.fLev.fill(uniq(D.styles.map((s) => s.leverantor)));
       this.seg.sync(); this.segMode.sync();
       const S = (x) => styleStatusNorm(x.status);
-      this.strip.set({ ideer: D.styles.filter((s) => S(s) === "Produktidé" && !s.grund).length, hosAlex: D.styles.filter((s) => S(s) === "Idé under utveckling").length, sampling: D.styles.filter((s) => S(s) === "Sampling").length, godkanda: D.styles.filter((s) => S(s) === "Godkänd").length, produktion: D.styles.filter((s) => PROD_STATUS.includes(S(s))).length, utanBild: D.styles.filter((s) => !styleImage(s) && !["Kastad", "Pausad"].includes(S(s))).length });
+      this.strip.set({ ideer: D.styles.filter((s) => S(s) === ST_IDE && !s.grund).length, hosConor: D.styles.filter((s) => S(s) === ST_DESIGN).length, hosAlex: D.styles.filter((s) => S(s) === ST_KANBEST).length, sampling: D.styles.filter((s) => S(s) === "Sampling").length, godkanda: D.styles.filter((s) => S(s) === "Godkänd").length, produktion: D.styles.filter((s) => PROD_STATUS.includes(S(s))).length, utanBild: D.styles.filter((s) => !styleImage(s) && !["Kastad", "Pausad"].includes(S(s))).length });
       const list = this.filtered();
       this.body.replaceChildren();
       if (st.mode === "grund" && !st.view) {
         const gs = grundStyles().filter((g) => list.includes(g) || variantsOf(g._id).some((v) => list.includes(v)));
         const loose = list.filter((s) => !isGrund(s) && !grundOf(s));
-        const sec = h("section", { class: "lib-sec" }, h("div", { class: "lib-h" }, h("h3", { text: "Grundstyles" }), h("span", { class: "sub", text: gs.length + (gs.length === 1 ? " grundstyle" : " grundstyles") + " · " + loose.length + " styles utan grundstyle" })));
-        if (!gs.length) sec.append(h("p", { class: "hint", text: "Inga grundstyles ännu. Öppna en style och välj plagget den bygger på under \"Grundstyle\" – den valda stylen blir grundstyle." }));
+        const sec = h("section", { class: "lib-sec" }, h("div", { class: "lib-h" }, h("h3", { text: "Base styles" }), h("span", { class: "sub", text: gs.length + (gs.length === 1 ? " base style" : " base styles") + " · " + loose.length + " styles without a base style" })));
+        if (!gs.length) sec.append(h("p", { class: "hint", text: "No base styles yet. Open a style and choose the garment it builds on under \"Base style\" – the chosen style becomes a base style." }));
         else sec.append(h("div", { class: "cards" }, gs.map((g) => this.grundCard(g, list))));
         this.body.append(sec);
         if (loose.length) {
-          const sec2 = h("section", { class: "lib-sec" }, h("div", { class: "lib-h" }, h("h3", { text: "Utan grundstyle" }), h("span", { class: "sub", text: "Öppna en style och välj \"Grundstyle\" för att koppla den." })), h("div", { class: "pgrid" }, loose.sort((a, b) => (a.namn || "").localeCompare(b.namn || "", "sv")).map((s) => KollView.card(s))));
+          const sec2 = h("section", { class: "lib-sec" }, h("div", { class: "lib-h" }, h("h3", { text: "No base style" }), h("span", { class: "sub", text: "Open a style and choose \"Base style\" to link it." })), h("div", { class: "pgrid" }, loose.sort((a, b) => (a.namn || "").localeCompare(b.namn || "", "sv")).map((s) => KollView.card(s))));
           this.body.append(sec2);
         }
         this.count.textContent = list.length + " styles";
@@ -3689,51 +3732,141 @@ import * as P from "./platform.js";
       const groups = new Map();
       for (const s of list) { const k = s.sasong || "Utan säsong"; if (!groups.has(k)) groups.set(k, []); groups.get(k).push(s); }
       const keys = [...groups.keys()].sort((a, b) => (a === "Utan säsong") - (b === "Utan säsong") || seasonRank(b) - seasonRank(a) || b.localeCompare(a, "sv"));
-      const order = { "Produktidé": 0, "Idé under utveckling": 1, Sampling: 2, "Godkänd": 3, "PO lagd": 4, "I produktion": 5, Levererad: 6, Pausad: 7, Kastad: 8 };
+      const order = { [ST_IDE]: -1, [ST_DESIGN]: 0, [ST_KANBEST]: 1, Sampling: 2, "Godkänd": 3, "PO lagd": 4, "I produktion": 5, Levererad: 6, Pausad: 7, Kastad: 8 };
       for (const k of keys) {
         const items = groups.get(k).sort((a, b) => (order[S(a)] ?? 9) - (order[S(b)] ?? 9) || (a.namn || "").localeCompare(b.namn || "", "sv"));
         const nI = items.filter((s) => isIdea(s) && !s.grund).length;
-        this.body.append(h("section", { class: "lib-sec" }, h("div", { class: "lib-h" }, h("h3", { text: k }), h("span", { class: "sub", text: items.length + (items.length === 1 ? " style" : " styles") + (nI ? " · " + nI + (nI === 1 ? " idé" : " idéer") : "") })), h("div", { class: "pgrid" }, items.map((s) => KollView.card(s)))));
+        this.body.append(h("section", { class: "lib-sec" }, h("div", { class: "lib-h" }, h("h3", { text: k }), h("span", { class: "sub", text: items.length + (items.length === 1 ? " style" : " styles") + (nI ? " · " + nI + (nI === 1 ? " idea" : " ideas") : "") })), h("div", { class: "pgrid" }, items.map((s) => KollView.card(s)))));
       }
-      if (!list.length) this.body.append(h("div", { class: "empty" }, h("strong", { text: loaded.has("styles") ? (D.styles.length ? "Inget matchar" : "Inga styles ännu") : "Laddar …" }), h("span", { text: "Skapa en produktidé med \"+ Ny produktidé\"." })));
-      this.count.textContent = list.length + " av " + D.styles.length + " styles";
+      if (!list.length) this.body.append(h("div", { class: "empty" }, h("strong", { text: loaded.has("styles") ? (D.styles.length ? "Nothing matches" : "No styles yet") : "Loading …" }), h("span", { text: "Create an idea with \"+ New idea\"." })));
+      this.count.textContent = list.length + " of " + D.styles.length + " styles";
     },
     grundCard(g, list) {
       const img = styleImage(g) || variantsOf(g._id).map(styleImage).find(Boolean);
       const vs = variantsOf(g._id);
       const open = () => openStyle(g._id);
       return h("article", { class: "gcard" },
-        h("div", { class: "gimg", onclick: open }, img ? h("img", { src: imgUrl(img), alt: g.namn, loading: "lazy" }) : h("span", { class: "noimg", text: "Ingen bild" })),
+        h("div", { class: "gimg", onclick: open }, img ? h("img", { src: imgUrl(img), alt: g.namn, loading: "lazy" }) : h("span", { class: "noimg", text: "No image" })),
         h("div", { class: "gbody" },
           h("div", null, h("div", { class: "gname", onclick: open, text: g.namn }), h("div", { class: "sub", text: [styleKategori(g), g.leverantor, g.beskrivning].filter(Boolean).join(" · ") })),
-          h("div", { class: "gvars" }, vs.length ? vs.map((v) => h("button", { class: "gvar", type: "button", onclick: () => openStyle(v._id) }, h("span", { style: "min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" }, v.namn, h("span", { class: "sub", text: [styleTyg(v), (v.farger || []).join(", ")].filter(Boolean).map((x) => " · " + x).join("") })), h("span", { class: "sub mono", text: [v.sasong, v.drop].filter(Boolean).join(" ") || "–" }), styleStatusPill(v))) : h("p", { class: "hint", style: "margin:0", text: "Inga varianter ännu." })),
-          canWrite && db ? h("div", null, h("button", { class: "btn small", type: "button", text: "+ Ny variant", onclick: () => openStyle(null, { grundId: g._id, namn: g.namn, kategori: g.kategori || "", leverantor: g.leverantor || "", storlekar: (g.storlekar || []).slice(), mattFran: g._id, status: "Produktidé", sasong: UI.bibliotek.season && UI.bibliotek.season !== "Utan säsong" ? UI.bibliotek.season : "" }) })) : null));
+          h("div", { class: "gvars" }, vs.length ? vs.map((v) => h("button", { class: "gvar", type: "button", onclick: () => openStyle(v._id) }, h("span", { style: "min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" }, v.namn, h("span", { class: "sub", text: [styleTyg(v), (v.farger || []).join(", ")].filter(Boolean).map((x) => " · " + x).join("") })), h("span", { class: "sub mono", text: [v.sasong, v.drop].filter(Boolean).join(" ") || "–" }), styleStatusPill(v))) : h("p", { class: "hint", style: "margin:0", text: "No variants yet." })),
+          canWrite && db ? h("div", null, h("button", { class: "btn small", type: "button", text: "+ New variant", onclick: () => openStyle(null, { grundId: g._id, namn: g.namn, kategori: g.kategori || "", leverantor: g.leverantor || "", storlekar: (g.storlekar || []).slice(), mattFran: g._id, status: ST_IDE, sasong: UI.bibliotek.season && UI.bibliotek.season !== "Utan säsong" ? UI.bibliotek.season : "" }) })) : null));
     }
   };
 
+  // ---------- DESIGN (Conor) ----------
+  // Extern designer: ser bara idéer som Carl har markerat som redo att designa, med en nedskalad brief. Inga priser, PO, leverantörer eller EAN.
+  const designOnly = () => ME.flikar.length > 0 && ME.flikar.every((t) => t === "design");
+  const designInbox = () => D.styles.filter((s) => styleStatusNorm(s.status) === ST_DESIGN).sort((a, b) => String((a.overlamnad && a.overlamnad.t) || a.andrad || "").localeCompare(String((b.overlamnad && b.overlamnad.t) || b.andrad || "")));
+  const designDone = () => D.styles.filter((s) => s.design && s.design.klar && styleStatusNorm(s.status) !== ST_DESIGN && !["Kastad"].includes(styleStatusNorm(s.status))).sort((a, b) => String(b.design.klar).localeCompare(String(a.design.klar))).slice(0, 30);
+  const DesignView = {
+    mount(root) {
+      root.append(h("p", { class: "lede", text: "Ideas that are ready to design. Open an idea to see the brief, upload the design and send it on to sampling." }));
+      this.host = h("div", { style: "display:grid;gap:16px" }); root.append(this.host);
+    },
+    update() {
+      const card = (title, sub, items, empty, done) => {
+        const c = h("section", { class: "card" + (done ? "" : " inbox") }, h("div", { class: "card-head" }, h("h3", { text: title }), h("span", { class: "sub", text: sub })));
+        if (!items.length) { c.append(h("p", { class: "hint", style: "padding:12px 16px", text: empty })); return c; }
+        const { t, tb } = table([["Idea"], ["Season"], ["Tyg"], [done ? "Design done" : "From Carl"], ["", "num"]]);
+        for (const s of items) {
+          const img = styleImage(s); const n = ((s.design && s.design.bilder) || []).length;
+          const when = done ? s.design.klar : (s.overlamnad && s.overlamnad.t);
+          tb.append(h("tr", { tabIndex: 0, dataset: { style: s._id } },
+            td("", "c-main", h("div", { style: "display:flex;gap:10px;align-items:flex-start" }, img ? h("img", { class: "rowthumb", style: "margin-top:0", src: imgUrl(img), alt: "", loading: "lazy" }) : null,
+              h("div", null, h("div", { class: "prod", text: s.namn }), h("div", { class: "sub", text: [styleKategori(s), grundOf(s) ? "variant of " + grundOf(s).namn : "", n ? n + (n === 1 ? " design file" : " design files") : ""].filter(Boolean).join(" · ") }), s.beskrivning ? h("div", { class: "note", text: s.beskrivning }) : null))),
+            td("Season", "mono", [s.sasong, s.drop].filter(Boolean).join(" · ")),
+            td("Tyg", null, styleTyg(s) || h("span", { class: "muted", text: "–" })),
+            td(done ? "Design done" : "From Carl", "mono", when ? fmtDate(String(when).slice(0, 10)) : "–"),
+            td("", "num", h("button", { class: "btn small" + (done ? "" : " primary"), type: "button", text: done ? "Open" : "Open brief" }))));
+        }
+        tb.addEventListener("click", (e) => { const tr = e.target.closest("tr[data-style]"); if (tr) openDesign(tr.dataset.style); });
+        tb.addEventListener("keydown", (e) => { if (e.key !== "Enter") return; const tr = e.target.closest("tr[data-style]"); if (tr) openDesign(tr.dataset.style); });
+        c.append(h("div", { class: "ledger-wrap" }, t));
+        return c;
+      };
+      const todo = designInbox(), done = designDone();
+      this.host.replaceChildren(
+        card("To design", todo.length + (todo.length === 1 ? " idea waiting for design" : " ideas waiting for design"), todo, "Nothing to design right now. Carl sends ideas here when they are ready.", false),
+        card("Designed", "Sent on to sampling", done, "No designed ideas yet.", true));
+    }
+  };
+  function openDesign(id) {
+    const st = byId(D.styles, id);
+    if (!st) { toast("Cannot find the idea."); return; }
+    const current = () => byId(D.styles, id) || st;
+    const ro = !canWrite || !db;
+    const waiting = () => styleStatusNorm(current().status) === ST_DESIGN;
+    const g = grundOf(st);
+    const row = (k, v) => (String(v || "").trim() ? h("div", { class: "brief-row" }, h("span", { class: "k", text: k }), h("div", { class: "v", text: String(v).trim() })) : null);
+    const brief = h("section", null, h("h3", { class: "sec-title", text: "Brief from Carl" }), h("div", { class: "brief" },
+      row("Description", st.beskrivning), row("Category", styleKategori(st)), row("Season", [st.sasong, st.drop].filter(Boolean).join(" · ")), row("Tyg", styleTyg(st)),
+      row("Sizes", sizesOf(st).join(", ")), row("Builds on", g ? g.namn : ""), row("Measurements", [st.mattFran ? "Same measurements as " + refName(st.mattFran) : "", st.mattlista].filter(Boolean).join("\n")),
+      row("References and links", st.referenser), row("Comment", st.kommentar)));
+    const refImgs = styleAllImages(st);
+    const refSec = h("section", null, h("h3", { class: "sec-title", text: "Images and references" + (refImgs.length ? " (" + refImgs.length + ")" : "") }), refImgs.length ? gallery(refImgs, {}) : h("p", { class: "hint", text: "No images from Carl yet." }));
+    const dz = () => current().design || {};
+    const designSec = bilderSection({ title: "Design", empty: "No design files uploaded yet.", addLabel: "+ Upload design", ro, current: () => ({ bilder: dz().bilder || [] }),
+      save: async (ids, text) => write("styles", id, { design: Object.assign({}, dz(), { bilder: ids }), andrad: new Date().toISOString(), logg: (current().logg || []).concat(logEntry("Design: " + text)) }) });
+    const fLank = inp("f_dlank", dz().lank || "", { type: "url", placeholder: "https://… (Figma, Drive or PDF)" });
+    const fKom = h("textarea", { id: "f_dkom", rows: 3, placeholder: "What Carl and Alex need to know about the design" }); fKom.value = dz().kommentar || "";
+    const state = h("p", { class: "hint" });
+    const syncState = () => { const d = dz(); state.textContent = waiting() ? "Waiting for design." : d.klar ? "Design done " + fmtDate(String(d.klar).slice(0, 10)) + " – sent to sampling." : "The style is no longer in design."; };
+    const form = h("form", { class: "form", autocomplete: "off", onsubmit: (e) => e.preventDefault() },
+      h("div", { class: "field full" }, h("label", { for: "f_dlank", text: "Link to design file" }), fLank),
+      h("div", { class: "field full" }, h("label", { for: "f_dkom", text: "Comment to Carl and Alex" }), fKom), state);
+    if (ro) lock(form);
+    const save = async (done, btn) => {
+      const cur = current(); const now = new Date().toISOString(); const d = Object.assign({}, cur.design || {}, { lank: fLank.value.trim(), kommentar: fKom.value.trim() });
+      if (done && !(d.bilder || []).length && !d.lank) { toast("Upload the design or add a link before you send it on."); return; }
+      if (btn) btn.disabled = true;
+      const patch = { design: d, andrad: now };
+      if (done) { d.klar = now; d.av = myId; patch.status = ST_KANBEST; patch.overlamnad = { till: "Alex", t: now, av: myId, fran: "design" }; patch.logg = (cur.logg || []).concat(logEntry("Design done – sent to sampling, sample can be ordered")); }
+      else if (d.lank !== ((cur.design || {}).lank || "") || d.kommentar !== ((cur.design || {}).kommentar || "")) patch.logg = (cur.logg || []).concat(logEntry("Design updated"));
+      const ok = await write("styles", id, patch);
+      if (btn) btn.disabled = false;
+      if (ok) { toast(done ? "Sent to sampling – Alex can order a sample" : "Saved"); closeSheet(); }
+    };
+    const right = h("div", { class: "foot-right" }, h("button", { class: "btn", type: "button", text: ro ? "Close" : "Cancel", onclick: closeSheet }));
+    if (!ro) { right.append(h("button", { class: "btn" + (waiting() ? "" : " primary"), type: "button", text: "Save", onclick: (e) => save(false, e.target) })); if (waiting()) right.append(h("button", { class: "btn primary", type: "button", text: "Design done – send to sampling", onclick: (e) => save(true, e.target) })); }
+    openSheet({ flagRef: { typ: "style", ref: id, titel: st.namn + (st.sasong ? " · " + st.sasong : ""), tab: "design" }, tag: "Design", title: st.namn, sub: [styleKategori(st), st.sasong, st.drop].filter(Boolean).join(" · "),
+      body: [brief, refSec, designSec, h("section", null, h("h3", { class: "sec-title", text: "To Carl and Alex" }), form)], foot: [h("div"), right],
+      ctx: { refresh: () => { if (!byId(D.styles, id)) { closeSheet(); return; } designSec.render(); syncState(); } } });
+    syncState();
+  }
+  // Det Conor har levererat, så som Carl och Alex ser det på stylen.
+  function designSummary(st) {
+    const d = st.design || {};
+    if (!(d.bilder || []).length && !d.lank && !d.kommentar && !d.klar) return null;
+    return h("section", null, h("h3", { class: "sec-title", text: "Design (Conor)" + (d.klar ? " – done " + fmtDate(String(d.klar).slice(0, 10)) : "") }),
+      (d.bilder || []).length ? gallery(d.bilder, {}) : null,
+      d.lank ? h("p", null, h("a", { href: d.lank, target: "_blank", rel: "noopener", text: "Open the design file" })) : null,
+      d.kommentar ? h("p", { class: "note", text: d.kommentar }) : null);
+  }
+
   // ---------- ANVÄNDARE (Elliot) ----------
-  const roleDef = (key) => { const base = ROLE_DEFAULTS[key] || ROLE_DEFAULTS.ingen; const ov = (D.roller.roller || {})[key] || {}; let flikar = Array.isArray(ov.flikar) ? ov.flikar.slice() : base.flikar; if (Array.isArray(ov.flikar) && (num(ov.flikVersion) || 1) < 2) flikar = uniq(flikar.concat(NEW_TABS.filter((t) => base.flikar.includes(t)))); return { key, namn: base.namn, flikar, redigera: typeof ov.redigera === "boolean" ? ov.redigera : base.redigera, leverantor: !!base.leverantor, fast: !!base.fast }; };
+  const roleDef = (key) => { const base = ROLE_DEFAULTS[key] || ROLE_DEFAULTS.ingen; const ov = (D.roller.roller || {})[key] || {}; let flikar = Array.isArray(ov.flikar) ? ov.flikar.slice() : base.flikar; if (Array.isArray(ov.flikar) && (num(ov.flikVersion) || 1) < 2) flikar = uniq(flikar.concat(NEW_TABS.filter((t) => base.flikar.includes(t)))); if (Array.isArray(ov.flikar) && (num(ov.flikVersion) || 1) < 3) flikar = uniq(flikar.concat(NEW_TABS_3.filter((t) => base.flikar.includes(t)))); return { key, namn: base.namn, flikar, redigera: typeof ov.redigera === "boolean" ? ov.redigera : base.redigera, leverantor: !!base.leverantor, fast: !!base.fast }; };
   const userDoc = (id) => D.anvandare.find((a) => a._id === id) || null;
   const AnvView = {
     mount(root) {
       this.people = h("div");
       this.roles = h("div");
       this.search = h("div", { class: "people" });
-      root.append(h("p", { class: "lede", text: "Vem ser vad. Alla loggar in med sitt Rubato-konto (Microsoft) och dyker upp här efter första besöket; här styr du vilken roll de får i appen och vilka flikar rollen ser. Admin (kan hantera användare) sätts i databasen av Jakob." }),
-        h("section", { class: "card" }, h("div", { class: "card-head" }, h("h3", { text: "Personer" }), h("span", { class: "sub", text: "Alla som öppnat appen eller fått en roll" })), this.search, this.people),
-        h("section", { class: "card" }, h("div", { class: "card-head" }, h("h3", { text: "Roller" }), h("span", { class: "sub", text: "Vilka flikar varje roll ser och om den får ändra" })), this.roles));
+      root.append(h("p", { class: "lede", text: "Who sees what. Everyone signs in with their Rubato account (Microsoft) and appears here after the first visit; here you control which role they get in the app and which tabs the role sees. Admin (can manage users) is set in the database by Jakob." }),
+        h("section", { class: "card" }, h("div", { class: "card-head" }, h("h3", { text: "People" }), h("span", { class: "sub", text: "Everyone who has opened the app or been given a role" })), this.search, this.people),
+        h("section", { class: "card" }, h("div", { class: "card-head" }, h("h3", { text: "Roles" }), h("span", { class: "sub", text: "Which tabs each role sees and whether it may edit" })), this.roles));
       this.renderSearch();
     },
     renderSearch() {
       if (!user || !canAdmin) { this.search.replaceChildren(); return; }
-      const q = h("input", { type: "search", placeholder: "Lägg till person – sök på namn …", "aria-label": "Sök person", style: "width:100%;padding:8px 12px;border:0;border-bottom:1px solid var(--line);background:var(--surface)" });
+      const q = h("input", { type: "search", placeholder: "Add person – search by name …", "aria-label": "Search person", style: "width:100%;padding:8px 12px;border:0;border-bottom:1px solid var(--line);background:var(--surface)" });
       const hits = h("div", { class: "hits", hidden: true });
       const run = async () => {
         let ps = [];
         try { ps = await user.search(q.value); } catch (e) {}
         ps = ps.filter((p) => p.id !== myId);
-        hits.replaceChildren(...ps.map((p) => h("button", { type: "button", onclick: async () => { hits.hidden = true; q.value = ""; await setRole(p.id, userDoc(p.id) ? userDoc(p.id).roll : "team"); } }, h("img", { class: "avatar", src: p.avatarUrl, alt: "" }), h("span", { text: p.name || "Någon" }), p.guest ? h("span", { class: "sub", text: "gäst" }) : null, userDoc(p.id) ? h("span", { class: "sub", text: "har redan roll: " + roleDef(userDoc(p.id).roll).namn }) : null)));
-        if (!ps.length) hits.replaceChildren(h("span", { class: "hint", style: "padding:8px 12px", text: q.value ? "Ingen träff. Personen måste finnas i Rubatos Claude-organisation, eller öppna appen en gång efter att du delat den." : "Skriv ett namn." }));
+        hits.replaceChildren(...ps.map((p) => h("button", { type: "button", onclick: async () => { hits.hidden = true; q.value = ""; await setRole(p.id, userDoc(p.id) ? userDoc(p.id).roll : "team"); } }, h("img", { class: "avatar", src: p.avatarUrl, alt: "" }), h("span", { text: p.name || "Someone" }), p.guest ? h("span", { class: "sub", text: "guest" }) : null, userDoc(p.id) ? h("span", { class: "sub", text: "already has the role: " + roleDef(userDoc(p.id).roll).namn }) : null)));
+        if (!ps.length) hits.replaceChildren(h("span", { class: "hint", style: "padding:8px 12px", text: q.value ? "No match. The person must be in Rubato's Claude organisation, or open the app once after you have shared it." : "Type a name." }));
         hits.hidden = false;
       };
       q.addEventListener("focus", run); q.addEventListener("input", run);
@@ -3741,58 +3874,58 @@ import * as P from "./platform.js";
       this.search.replaceChildren(q, hits);
     },
     async update() {
-      if (!canAdmin) { this.people.replaceChildren(h("p", { class: "hint", style: "padding:14px 16px", text: "Bara admin kan hantera användare." })); this.roles.replaceChildren(); return; }
+      if (!canAdmin) { this.people.replaceChildren(h("p", { class: "hint", style: "padding:14px 16px", text: "Only admin can manage users." })); this.roles.replaceChildren(); return; }
       const ids = uniq(D.anvandare.map((a) => a._id).concat(D.narvaro.map((n) => n._id), myId ? [myId] : []));
       let ps = {};
       try { if (user && ids.length) ps = await user.profiles(ids); } catch (e) {}
-      const { t, tb } = table([["Person"], ["Roll"], ["Leverantör"], ["Senast i appen"], [""]]);
+      const { t, tb } = table([["Person"], ["Role"], ["Supplier"], ["Last in the app"], [""]]);
       t.classList.add("users");
       const rows = ids.map((id) => ({ id, doc: userDoc(id), nar: D.narvaro.find((n) => n._id === id), p: ps[id] || { name: "", avatarUrl: "", guest: false } }));
       rows.sort((a, b) => (a.id === myId ? -1 : b.id === myId ? 1 : 0) || (!!b.doc - !!a.doc) || (a.p.name || "zz").localeCompare(b.p.name || "zz", "sv"));
       for (const r of rows) {
         const roll = r.doc ? r.doc.roll : "";
-        const sel = selectEl("roll_" + r.id, [["", "– Ingen roll (standard: " + roleDef(D.roller.standardRoll || "team").namn + ")"]].concat(ROLE_ORDER.map((k) => [k, roleDef(k).namn])), roll);
+        const sel = selectEl("roll_" + r.id, [["", "– No role (default: " + roleDef(D.roller.standardRoll || "team").namn + ")"]].concat(ROLE_ORDER.map((k) => [k, roleDef(k).namn])), roll);
         sel.addEventListener("change", () => setRole(r.id, sel.value, r.doc ? r.doc.leverantor : ""));
-        const lev = inp("lev_" + r.id, r.doc ? r.doc.leverantor : "", { list: "dlLev", autocomplete: "off", placeholder: "För producent" });
+        const lev = inp("lev_" + r.id, r.doc ? r.doc.leverantor : "", { list: "dlLev", autocomplete: "off", placeholder: "For manufacturer" });
         lev.disabled = roll !== "producent";
         lev.addEventListener("change", () => setRole(r.id, roll, lev.value.trim()));
         const seen = r.nar && r.nar.senast ? new Date(r.nar.senast) : null;
         tb.append(h("tr", null,
-          td("", "c-main", h("div", { style: "display:flex;gap:10px;align-items:center" }, r.p.avatarUrl ? h("img", { class: "avatar", src: r.p.avatarUrl, alt: "" }) : null, h("div", null, h("div", { class: "prod", text: (r.p.name || "Okänd person") + (r.id === myId ? " (du)" : "") }), h("div", { class: "sub", text: [r.p.guest ? "Gäst utanför organisationen" : "", r.id === myId && canAdmin ? "Editor/ägare – full åtkomst oavsett roll" : ""].filter(Boolean).join(" · ") })))),
-          td("Roll", null, sel),
-          td("Leverantör", null, lev),
-          td("Senast i appen", "mono", seen && !isNaN(seen) ? fmtDate(seen.toISOString().slice(0, 10)) + " " + String(seen.getHours()).padStart(2, "0") + ":" + String(seen.getMinutes()).padStart(2, "0") : h("span", { class: "muted", text: "–" })),
-          td("", "num", r.doc ? h("button", { class: "btn small", type: "button", text: "Ta bort roll", onclick: async () => { if (await remove("anvandare", r.id)) toast("Rollen borttagen"); } }) : null)));
+          td("", "c-main", h("div", { style: "display:flex;gap:10px;align-items:center" }, r.p.avatarUrl ? h("img", { class: "avatar", src: r.p.avatarUrl, alt: "" }) : null, h("div", null, h("div", { class: "prod", text: (r.p.name || "Unknown person") + (r.id === myId ? " (you)" : "") }), h("div", { class: "sub", text: [r.p.guest ? "Guest outside the organisation" : "", r.id === myId && canAdmin ? "Editor/owner – full access regardless of role" : ""].filter(Boolean).join(" · ") })))),
+          td("Role", null, sel),
+          td("Supplier", null, lev),
+          td("Last in the app", "mono", seen && !isNaN(seen) ? fmtDate(seen.toISOString().slice(0, 10)) + " " + String(seen.getHours()).padStart(2, "0") + ":" + String(seen.getMinutes()).padStart(2, "0") : h("span", { class: "muted", text: "–" })),
+          td("", "num", r.doc ? h("button", { class: "btn small", type: "button", text: "Remove role", onclick: async () => { if (await remove("anvandare", r.id)) toast("Role removed"); } }) : null)));
       }
-      if (!rows.length) tb.append(h("tr", null, h("td", { colSpan: 5, class: "sub", text: "Ingen har öppnat appen ännu." })));
+      if (!rows.length) tb.append(h("tr", null, h("td", { colSpan: 5, class: "sub", text: "Nobody has opened the app yet." })));
       const std = selectEl("std_roll", ROLE_ORDER.filter((k) => k !== "admin").map((k) => [k, roleDef(k).namn]), D.roller.standardRoll || "team");
-      std.addEventListener("change", async () => { try { await db.doc("behorighet/roller").set(Object.assign({}, D.roller, { standardRoll: std.value, andrad: new Date().toISOString() })); toast("Standardroll sparad"); } catch (e) { writeError(e); } });
-      this.people.replaceChildren(h("div", { class: "ledger-wrap" }, t), h("div", { class: "budget-foot", style: "padding:10px 16px;border-top:1px solid var(--line)" }, h("span", { text: "Medarbetare i organisationen utan tilldelad roll får:" }), std, h("span", { class: "sub", text: "Gäster utanför organisationen utan roll ser ingenting." })));
+      std.addEventListener("change", async () => { try { await db.doc("behorighet/roller").set(Object.assign({}, D.roller, { standardRoll: std.value, andrad: new Date().toISOString() })); toast("Default role saved"); } catch (e) { writeError(e); } });
+      this.people.replaceChildren(h("div", { class: "ledger-wrap" }, t), h("div", { class: "budget-foot", style: "padding:10px 16px;border-top:1px solid var(--line)" }, h("span", { text: "Staff in the organisation without an assigned role get:" }), std, h("span", { class: "sub", text: "Guests outside the organisation without a role see nothing." })));
       this.renderRoles();
     },
     renderRoles() {
       const tbl = h("table", { class: "rolegrid" });
-      tbl.append(h("thead", null, h("tr", null, h("th", { text: "Roll" }), TAB_DEFS.map(([k, l]) => h("th", { text: l })), h("th", { text: "Får ändra" }))));
+      tbl.append(h("thead", null, h("tr", null, h("th", { text: "Role" }), TAB_DEFS.map(([k, l]) => h("th", { text: l })), h("th", { text: "May edit" }))));
       const tb = h("tbody");
       const state = {};
       for (const k of ROLE_ORDER) {
         const r = roleDef(k); state[k] = { flikar: r.flikar.slice(), redigera: r.redigera };
-        const tr = h("tr", null, h("td", null, h("strong", { text: r.namn }), r.key === "admin" ? h("div", { class: "sub", text: "Editor/ägare i Claude" }) : r.key === "producent" ? h("div", { class: "sub", text: "Ser bara sin leverantörs POs" }) : r.key === "ingen" ? h("div", { class: "sub", text: "Standard för gäster" }) : null));
+        const tr = h("tr", null, h("td", null, h("strong", { text: r.namn }), r.key === "admin" ? h("div", { class: "sub", text: "Editor/owner in Claude" }) : r.key === "producent" ? h("div", { class: "sub", text: "Only sees their supplier's POs" }) : r.key === "ingen" ? h("div", { class: "sub", text: "Default for guests" }) : null));
         for (const [tk] of TAB_DEFS) { const cb = h("input", { type: "checkbox" }); cb.checked = r.flikar.includes(tk); cb.disabled = r.fast; cb.addEventListener("change", () => { state[k].flikar = cb.checked ? uniq(state[k].flikar.concat([tk])) : state[k].flikar.filter((x) => x !== tk); }); tr.append(h("td", null, cb)); }
         const ed = h("input", { type: "checkbox" }); ed.checked = r.redigera; ed.disabled = r.fast; ed.addEventListener("change", () => (state[k].redigera = ed.checked)); tr.append(h("td", null, ed));
         tb.append(tr);
       }
       tbl.append(tb);
-      const saveBtn = h("button", { class: "btn small primary", type: "button", text: "Spara roller", onclick: async () => { const roller = {}; for (const k of ROLE_ORDER) if (!ROLE_DEFAULTS[k].fast) roller[k] = Object.assign({ flikVersion: 2 }, state[k]); try { await db.doc("behorighet/roller").set(Object.assign({}, D.roller, { roller, andrad: new Date().toISOString() })); toast("Roller sparade"); } catch (e) { writeError(e); } } });
-      this.roles.replaceChildren(h("div", { class: "ledger-wrap", style: "padding:6px 10px" }, tbl), h("div", { class: "budget-foot", style: "padding:10px 16px;border-top:1px solid var(--line)" }, saveBtn, h("span", { class: "sub", text: "Admin och Ingen åtkomst är fasta. Ändringar gäller direkt när personen laddar om appen." })));
+      const saveBtn = h("button", { class: "btn small primary", type: "button", text: "Save roles", onclick: async () => { const roller = {}; for (const k of ROLE_ORDER) if (!ROLE_DEFAULTS[k].fast) roller[k] = Object.assign({ flikVersion: 3 }, state[k]); try { await db.doc("behorighet/roller").set(Object.assign({}, D.roller, { roller, andrad: new Date().toISOString() })); toast("Roles saved"); } catch (e) { writeError(e); } } });
+      this.roles.replaceChildren(h("div", { class: "ledger-wrap", style: "padding:6px 10px" }, tbl), h("div", { class: "budget-foot", style: "padding:10px 16px;border-top:1px solid var(--line)" }, saveBtn, h("span", { class: "sub", text: "Admin and No access are fixed. Changes apply as soon as the person reloads the app." })));
     }
   };
   async function setRole(id, roll, leverantor) {
     if (!db || !id) return;
     try {
-      if (!roll) { await db.collection("anvandare").doc(id).delete(); toast("Rollen borttagen"); return; }
+      if (!roll) { await db.collection("anvandare").doc(id).delete(); toast("Role removed"); return; }
       await db.collection("anvandare").doc(id).set({ roll, leverantor: roll === "producent" ? (leverantor || "") : "", andrad: new Date().toISOString(), av: myId });
-      toast("Roll sparad: " + roleDef(roll).namn);
+      toast("Role saved: " + roleDef(roll).namn);
     } catch (e) { writeError(e); }
   }
   function computeAccess() {
@@ -3806,47 +3939,64 @@ import * as P from "./platform.js";
   }
   function applyAccess() {
     computeAccess();
-    document.querySelectorAll("#tabs .tab").forEach((b) => { b.hidden = !ME.flikar.includes(b.dataset.tab) || b.dataset.tab === "ean"; b.classList.toggle("me", false); });
+    document.querySelectorAll("#tabs .tab").forEach((b) => b.classList.toggle("me", false));
+    renderNav();
     if (UI.tab === "ean") UI.tab = ME.flikar.includes("ecom") ? "ecom" : ME.flikar[0];
     if (!ME.flikar.length) {
-      $("view").replaceChildren(h("div", { class: "empty" }, h("strong", { text: "Du har ingen behörighet i appen än" }), h("span", { text: "Be Elliot ge dig en roll under Användare, så ser du rätt flikar nästa gång du laddar om." })));
+      $("view").replaceChildren(h("div", { class: "empty" }, h("strong", { text: "You do not have access to the app yet" }), h("span", { text: "Ask Elliot to give you a role under Users, and you will see the right tabs the next time you reload." })));
       $("actions").replaceChildren();
       banner("");
       return;
     }
+    $("gsearch").hidden = designOnly();
     if (!ME.flikar.includes(UI.tab)) switchTab(ME.flikar[0]); else renderActions();
-    if (db && !canWrite) banner(platformWrite ? "Din roll (" + roleDef(ME.roll).namn + ") har läsbehörighet i appen." : "Du har läsbehörighet. Be Elliot om en roll som får redigera.");
+    if (db && !canWrite) banner(platformWrite ? "Your role (" + roleDef(ME.roll).namn + ") has read access in the app." : "You have read access. Ask Elliot for a role that may edit.");
     else banner("");
   }
 
-  const VIEWS = { bibliotek: LibView, samples: SamplesView, ref: RefView, kollektion: KollView, produktion: ProdView, foto: FotoView, ecom: EcomView, shopify: ShopifyView, coo: CooMatrisView, tyglager: LagerView, leverantorer: LevView, ean: EanView, anvandare: AnvView };
+  const VIEWS = { bibliotek: LibView, design: DesignView, samples: SamplesView, ref: RefView, kollektion: KollView, produktion: ProdView, foto: FotoView, ecom: EcomView, shopify: ShopifyView, coo: CooMatrisView, tyglager: LagerView, leverantorer: LevView, ean: EanView, anvandare: AnvView };
   function switchTab(t) {
     if (!VIEWS[t]) t = "samples";
     if (ME.flikar.length && !ME.flikar.includes(t)) t = ME.flikar[0];
     UI.tab = t;
     document.querySelectorAll("#tabs .tab").forEach((b) => b.setAttribute("aria-selected", String(b.dataset.tab === t)));
+    lastTab[areaOf(t)] = t; renderNav();
     const root = $("view"); root.replaceChildren(); root.className = "view-" + t;
     root.style.display = "grid"; root.style.gap = "16px";
-    VIEWS[t].mount(root); VIEWS[t].update(); renderActions(); renderDiag(); persist();
+    VIEWS[t].mount(root); VIEWS[t].update(); renderActions(); renderDiag(); renderFlags(); persist();
   }
   $("tabs").addEventListener("click", (e) => { const b = e.target.closest(".tab"); if (b) switchTab(b.dataset.tab); });
+  const lastTab = {};
+  const tabAllowed = (t) => ME.flikar.includes(t) && t !== "ean" && !!VIEWS[t];
+  function renderNav() {
+    const area = areaOf(UI.tab); const nav = $("tabs"); let areas = 0;
+    document.querySelectorAll("#areas .area").forEach((b) => { const any = (AREA_TABS[b.dataset.area] || []).some(tabAllowed); b.hidden = !any; if (any) areas++; b.setAttribute("aria-selected", String(b.dataset.area === area)); });
+    $("areas").hidden = areas < 2;
+    const btns = [...nav.querySelectorAll(".tab")]; let n = 0, last = null;
+    for (const b of btns) { b.hidden = true; b.classList.remove("last"); }
+    for (const t of AREA_TABS[area]) { const b = btns.find((x) => x.dataset.tab === t); if (!b) continue; nav.append(b); b.hidden = !tabAllowed(t); const nr = b.querySelector(".nr"); if (nr) nr.textContent = !b.hidden && area === "produkt" ? String(++n) : ""; if (!b.hidden) last = b; }
+    if (last) last.classList.add("last");
+    nav.classList.toggle("flow", area === "produkt" && n > 1);
+    $("brandH").innerHTML = AREA_HEAD[area][0]; $("brandP").textContent = AREA_HEAD[area][1];
+  }
+  $("areas").addEventListener("click", (e) => { const b = e.target.closest(".area"); if (!b) return; const a = b.dataset.area; const t = lastTab[a] && tabAllowed(lastTab[a]) ? lastTab[a] : (AREA_TABS[a] || []).find(tabAllowed); if (t) switchTab(t); });
   function renderActions() {
     const a = $("actions"); a.replaceChildren();
     const add = (label, fn, primary) => a.append(h("button", { class: "btn" + (primary ? " primary" : ""), type: "button", text: label, onclick: fn }));
     const w = canWrite && !!db, t = UI.tab;
     const libSeason = () => (UI.bibliotek.season && UI.bibliotek.season !== "Utan säsong" ? UI.bibliotek.season : KollView.seasonInView() || "");
-    if ((t === "bibliotek" || t === "produktion" || t === "kollektion") && w && assets && shopTodo().length) add("Hämta Shopify-bilder (" + shopTodo().length + ")", importShopifyImages);
-    if (t === "bibliotek" && w) { add("+ Ny style", () => openStyle(null, { sasong: libSeason() })); add("+ Ny produktidé", () => openStyle(null, { status: "Produktidé", sasong: libSeason() }), true); }
-    if (t === "samples") { if (downloads) add("Exportera CSV", exportSamples); if (w) add("+ Ny style", () => openStyle(null)); if (w) add("+ Ny sample", () => openSample(null), true); }
-    if (t === "kollektion" && w) { add("+ Ny drop", () => openDrop(null, { sasong: KollView.seasonInView() || "" })); add("+ Ny sample", () => openSample(null)); add("+ Ny produktidé", () => openStyle(null, { status: "Produktidé", sasong: KollView.seasonInView() || "" })); add("+ Ny style", () => openStyle(null, { sasong: KollView.seasonInView() || "" }), true); }
-    if (t === "foto" && w) add("+ Ny sample", () => openSample(null, { version: "Fotosample" }), true);
-    if (t === "ref" && w) add("+ Nytt referensplagg", () => openRef(null), true);
-    if (t === "produktion") { if (downloads) add("Exportera CSV", exportPo); if (w) add("+ Ny PO", () => openPo(null, { sasong: ProdView.seasonInView() || "", leverantor: UI.prod.lev || "" }), true); }
-    if (t === "tyglager") { if (downloads) add("Exportera CSV", exportLager); if (w) add("+ Nytt tyg", () => openTyg(null)); if (w) add("+ Nytt parti", () => openLager(null, UI.lager.typ === "trims" ? { typ: "trims" } : null), true); }
-    if (t === "leverantorer" && w) add("+ Ny leverantör", () => openLev(null), true);
-    if (t === "ean" && downloads) add("Exportera alla EAN", exportAllEan);
-    a.append(h("button", { class: "btn", type: "button", text: "Logga ut", title: P.user.email(), onclick: P.signOut }));
-    if (t === "coo" && w) add("+ Ny händelse", () => openEvent(null), true);
+    if ((t === "bibliotek" || t === "produktion" || t === "kollektion") && w && assets && shopTodo().length) add("Fetch Shopify images (" + shopTodo().length + ")", importShopifyImages);
+    if (t === "bibliotek" && w) { add("+ New style", () => openStyle(null, { sasong: libSeason() })); add("+ New idea", () => openStyle(null, { status: ST_IDE, sasong: libSeason() }), true); }
+    if (t === "samples") { if (downloads) add("Export CSV", exportSamples); if (w) add("+ New style", () => openStyle(null)); if (w) add("+ New sample", () => openSample(null), true); }
+    if (t === "kollektion" && w) { add("+ New drop", () => openDrop(null, { sasong: KollView.seasonInView() || "" })); add("+ New sample", () => openSample(null)); add("+ New idea", () => openStyle(null, { status: ST_IDE, sasong: KollView.seasonInView() || "" })); add("+ New style", () => openStyle(null, { sasong: KollView.seasonInView() || "" }), true); }
+    if (t === "foto" && w) add("+ New sample", () => openSample(null, { version: "Fotosample" }), true);
+    if (t === "ref" && w) add("+ New reference garment", () => openRef(null), true);
+    if (t === "produktion") { if (downloads) add("Export CSV", exportPo); if (w) add("+ New PO", () => openPo(null, { sasong: ProdView.seasonInView() || "", leverantor: UI.prod.lev || "" }), true); }
+    if (t === "tyglager") { if (downloads) add("Export CSV", exportLager); if (w) add("+ New fabric", () => openTyg(null)); if (w) add("+ New batch", () => openLager(null, UI.lager.typ === "trims" ? { typ: "trims" } : null), true); }
+    if (t === "leverantorer" && w) add("+ New supplier", () => openLev(null), true);
+    if (t === "ean" && downloads) add("Export all EAN", exportAllEan);
+    a.append(h("button", { class: "btn", type: "button", text: "Sign out", title: P.user.email(), onclick: P.signOut }));
+    if (t === "coo" && w) add("+ New event", () => openEvent(null), true);
   }
   function updateCounts() {
     const set = (id, v) => { const el = $(id); if (el) el.textContent = v ? String(v) : ""; };
@@ -3858,6 +4008,7 @@ import * as P from "./platform.js";
     set("c_ref", D.ref.filter((r) => r.status !== "Tillbaka hos Rubato").length);
     set("c_ecom", "");
     set("c_foto", (() => { const season = KollView.seasonInView(); return D.styles.filter((s) => norm(s.sasong) === norm(season) && !["Kastad", "Pausad"].includes(styleStatusNorm(s.status)) && !isIdea(s) && fotoState(s).key === "saknas").length; })());
+    set("c_design", designInbox().length);
     set("c_bibliotek", D.styles.filter((s) => isIdea(s) && !s.grund).length);
     set("c_anvandare", D.anvandare.length || "");
     set("c_coo", (() => { try { return allEvents().filter((e) => isOverdue(e)).length; } catch (e) { return ""; } })());
@@ -3879,7 +4030,7 @@ import * as P from "./platform.js";
   }
   let refreshT = 0;
   function scheduleRefresh() { if (refreshT) return; refreshT = setTimeout(() => { refreshT = 0; refresh(); }, 40); }
-  function refresh() { updateCounts(); refreshLists(); VIEWS[UI.tab].update(); if (sheetCtx && sheetCtx.refresh) sheetCtx.refresh(); }
+  function refresh() { updateCounts(); refreshLists(); renderFlags(); VIEWS[UI.tab].update(); if (sheetCtx && sheetCtx.refresh) sheetCtx.refresh(); }
   function applyWriteMode() { applyAccess(); }
 
   // ---------- global sök ----------
@@ -3892,10 +4043,10 @@ import * as P from "./platform.js";
     const etas = pl.filter((x) => PO_OPEN.includes(poStatusNorm(x.po.status))).map((x) => poEta(x.po)).filter(Boolean).sort();
     const parts = [];
     const ss = styleStatusNorm(st.status);
-    if (IDEA_STATUS.includes(ss)) parts.push(["Idéstadiet", ss === "Idé under utveckling" ? "hos Alex" : "Carl"]);
-    parts.push(["Samples", xs.length ? xs.length + " (" + inne + " inne, " + vantar + " väntas" + (ark ? ", " + ark + " i arkiv" : "") + ")" : "inga"]);
-    if (pl.length) parts.push(["Produktion", [planerat ? planerat + " planerade" : "", prod ? prod + " i produktion" : "", pavag ? pavag + " på väg" : "", inlev ? inlev + " inlevererade" : ""].filter(Boolean).join(", ") + (etas[0] ? " · inkommande " + fmtDate(etas[0]) : "")]);
-    else if (!IDEA_STATUS.includes(ss)) parts.push(["Produktion", "ingen PO"]);
+    if (IDEA_STATUS.includes(ss)) parts.push(["Idea stage", ss === ST_KANBEST ? "with Alex, sample can be ordered" : ss === ST_DESIGN ? "with Conor for design" : "with Carl"]);
+    parts.push(["Samples", xs.length ? xs.length + " (" + inne + " in, " + vantar + " expected" + (ark ? ", " + ark + " in archive" : "") + ")" : "none"]);
+    if (pl.length) parts.push(["Production", [planerat ? planerat + " planned" : "", prod ? prod + " in production" : "", pavag ? pavag + " on their way" : "", inlev ? inlev + " delivered" : ""].filter(Boolean).join(", ") + (etas[0] ? " · incoming " + fmtDate(etas[0]) : "")]);
+    else if (!IDEA_STATUS.includes(ss)) parts.push(["Production", "no PO"]);
     return h("div", { class: "srch-line" }, parts.map(([k, v]) => h("span", null, k + ": ", h("b", { text: v }))));
   }
   const TYG_STOP = new Set(["cotton", "linen", "wool", "inhouse", "canvas", "twill", "100%", "silk", "cashmere", "poly", "nylon", "denim", "fabric", "tyg"]);
@@ -3907,28 +4058,28 @@ import * as P from "./platform.js";
     const rows = []; for (const po of D.po) { if (PO_DRAFT.includes(poStatusNorm(po.status))) continue; for (const r of po.rader || []) if (tygMatch(r.tyg, t.namn) || (r.styleId && viaStyle.has(r.styleId))) rows.push({ po, r }); }
     const units = rows.reduce((a, x) => a + (num(x.r.antal) || 0), 0);
     const stock = stockText(t._id);
-    return h("div", { class: "srch-line" }, h("span", null, "Samples: ", h("b", { text: String(xs.length) + (xs.filter(isArchived).length ? " (" + xs.filter(isArchived).length + " i arkiv)" : "") })), h("span", null, "Styles/idéer: ", h("b", { text: String(sts.length) })), h("span", null, "Produktion: ", h("b", { text: rows.length ? rows.length + " PO-rader · " + units + " plagg" : "–" })), h("span", null, "Eget lager: ", h("b", { text: stock || "–" })));
+    return h("div", { class: "srch-line" }, h("span", null, "Samples: ", h("b", { text: String(xs.length) + (xs.filter(isArchived).length ? " (" + xs.filter(isArchived).length + " in archive)" : "") })), h("span", null, "Styles/ideas: ", h("b", { text: String(sts.length) })), h("span", null, "Production: ", h("b", { text: rows.length ? rows.length + " PO lines · " + units + " units" : "–" })), h("span", null, "Own stock: ", h("b", { text: stock || "–" })));
   }
   const hit = (q, ...fields) => fields.join(" ").toLowerCase().includes(q);
   function openSearch(q0) {
-    const qIn = h("input", { type: "search", id: "f_gq", placeholder: "Sök style, tyg, färg, PO, sample-ID …", "aria-label": "Sök", autocomplete: "off" });
+    const qIn = h("input", { type: "search", id: "f_gq", placeholder: "Search style, fabric, colour, PO, sample ID …", "aria-label": "Search", autocomplete: "off" });
     qIn.value = q0 || "";
     const res = h("div", { style: "display:grid;gap:22px" });
     const can = (tab) => ME.flikar.includes(tab);
     function render() {
       const q = norm(qIn.value);
       res.replaceChildren();
-      if (q.length < 2) { res.append(h("p", { class: "hint", text: "Skriv minst två tecken. Sök på t.ex. ett tyg för att se var det används – i samples, arkiv, idéer och produktion – eller på en style för att se vad som är inkommande, i produktion, under sampling och på idéstadiet." })); return; }
+      if (q.length < 2) { res.append(h("p", { class: "hint", text: "Type at least two characters. Search for a fabric, for example, to see where it is used – in samples, archive, ideas and production – or for a style to see what is incoming, in production, in sampling and at the idea stage." })); return; }
       const sec = (title, items, rowFn, emptyText) => {
         const s = h("section", { class: "srch-sec" }, h("h3", { class: "sec-title", text: title + " (" + items.length + ")" }));
-        if (!items.length) { s.append(h("p", { class: "hint", text: emptyText || "Inga träffar." })); return s; }
+        if (!items.length) { s.append(h("p", { class: "hint", text: emptyText || "No matches." })); return s; }
         const ul = h("ul", { class: "mini" }, items.slice(0, 40).map(rowFn));
-        if (items.length > 40) ul.append(h("li", { class: "sub", text: "… och " + (items.length - 40) + " till. Förfina sökningen." }));
+        if (items.length > 40) ul.append(h("li", { class: "sub", text: "… and " + (items.length - 40) + " more. Refine the search." }));
         s.append(ul); return s;
       };
       if (can("bibliotek") || can("kollektion")) {
         const sts = D.styles.filter((s) => hit(q, s._id, s.namn, s.beskrivning, s.leverantor, s.kategori, styleTyg(s), (s.farger || []).join(" "), s.sasong, s.drop, grundOf(s) ? grundOf(s).namn : "", s.referenser, s.kommentar)).sort((a, b) => seasonRank(b.sasong) - seasonRank(a.sasong) || (a.namn || "").localeCompare(b.namn || "", "sv"));
-        res.append(sec("Styles och idéer", sts, (s) => h("li", null, h("button", { class: "mini-row", type: "button", onclick: () => openStyle(s._id) }, tag(s._id), h("span", { class: "mini-main" }, h("strong", { text: s.namn + (isGrund(s) ? " (grundstyle)" : "") }), h("span", { class: "sub", text: [s.sasong, s.drop, s.leverantor, styleTyg(s)].filter(Boolean).join(" · ") }), styleSummary(s)), h("span", { class: "mini-side" }, styleStatusPill(s))))));
+        res.append(sec("Styles and ideas", sts, (s) => h("li", null, h("button", { class: "mini-row", type: "button", onclick: () => openStyle(s._id) }, tag(s._id), h("span", { class: "mini-main" }, h("strong", { text: s.namn + (isGrund(s) ? " (base style)" : "") }), h("span", { class: "sub", text: [s.sasong, s.drop, s.leverantor, styleTyg(s)].filter(Boolean).join(" · ") }), styleSummary(s)), h("span", { class: "mini-side" }, styleStatusPill(s))))));
       }
       if (can("samples")) {
         const xs = D.samples.filter((s) => hit(q, s._id, styleName(s), s.version, tygName(s), s.material, s.farg, s.leverantor, s.kommentar, s.andringar, s.storlek, platsText(s), s.hangare ? "h" + s.hangare : "", seasonOf(s), beslutNorm(s.beslut))).sort((a, b) => isArchived(a) - isArchived(b) || styleName(a).localeCompare(styleName(b), "sv") || versionRank(a.version) - versionRank(b.version));
@@ -3936,35 +4087,109 @@ import * as P from "./platform.js";
       }
       if (can("tyglager")) {
         const ts = D.tyger.filter((t) => hit(q, t._id, t.namn, t.leverantor, t.kommentar, t.status) || D.lager.some((l) => l.tygId === t._id && hit(q, l.farg, l.plats, l._id))).sort((a, b) => (a.namn || "").localeCompare(b.namn || "", "sv"));
-        res.append(sec("Tyger", ts, (t) => h("li", null, h("button", { class: "mini-row", type: "button", onclick: () => openTyg(t._id) }, tag(t._id), h("span", { class: "mini-main" }, h("strong", { text: t.namn }), h("span", { class: "sub", text: t.leverantor || "" }), tygSummary(t)), h("span", { class: "mini-side" }, t.status ? h("span", { class: "pill ts-" + slug(t.status), text: t.status }) : null)))));
+        res.append(sec("Fabrics", ts, (t) => h("li", null, h("button", { class: "mini-row", type: "button", onclick: () => openTyg(t._id) }, tag(t._id), h("span", { class: "mini-main" }, h("strong", { text: t.namn }), h("span", { class: "sub", text: t.leverantor || "" }), tygSummary(t)), h("span", { class: "mini-side" }, t.status ? h("span", { class: "pill ts-" + slug(t.status), text: t.status }) : null)))));
       }
       if (can("produktion")) {
         const rows = [];
         for (const po of D.po) for (const r of po.rader || []) if (hit(q, po.nr, po._id, po.leverantor, po.sasong, po.drop, r.produkt, r.farg, r.tyg, r.beskrivning, (byId(D.styles, r.styleId) || {}).namn)) rows.push({ po, r });
         rows.sort((a, b) => String(a.po.nr || a.po._id).localeCompare(String(b.po.nr || b.po._id)));
-        res.append(sec("Produktion (PO-rader)", rows, (x) => h("li", null, h("button", { class: "mini-row", type: "button", onclick: () => openPo(x.po._id) }, h("span", { class: "tag", text: x.po.nr || x.po._id }), h("span", { class: "mini-main" }, h("strong", { text: [x.r.produkt || (byId(D.styles, x.r.styleId) || {}).namn || "Produkt", x.r.farg].filter(Boolean).join(" · ") }), h("span", { class: "sub", text: [x.po.leverantor, x.po.sasong, x.r.tyg, x.r.antal != null ? x.r.antal + " plagg" : "", poEta(x.po) ? "ETA " + fmtDate(poEta(x.po)) : ""].filter(Boolean).join(" · ") })), h("span", { class: "mini-side" }, poStatusPill(x.po))))));
+        res.append(sec("Production (PO lines)", rows, (x) => h("li", null, h("button", { class: "mini-row", type: "button", onclick: () => openPo(x.po._id) }, h("span", { class: "tag", text: x.po.nr || x.po._id }), h("span", { class: "mini-main" }, h("strong", { text: [x.r.produkt || (byId(D.styles, x.r.styleId) || {}).namn || "Product", x.r.farg].filter(Boolean).join(" · ") }), h("span", { class: "sub", text: [x.po.leverantor, x.po.sasong, x.r.tyg, x.r.antal != null ? x.r.antal + " units" : "", poEta(x.po) ? "ETA " + fmtDate(poEta(x.po)) : ""].filter(Boolean).join(" · ") })), h("span", { class: "mini-side" }, poStatusPill(x.po))))));
       }
       if (can("ref")) {
         const rs = D.ref.filter((r) => hit(q, r._id, r.plagg, r.styleNamn, r.skickadTill, r.agare, r.tracking, r.kommentar));
-        if (rs.length) res.append(sec("Ref-plagg", rs, (r) => h("li", null, h("button", { class: "mini-row", type: "button", onclick: () => openRef(r._id) }, tag(r._id), h("span", { class: "mini-main" }, h("strong", { text: r.plagg }), h("span", { class: "sub", text: [r.skickadTill, r.styleNamn ? "för " + r.styleNamn : ""].filter(Boolean).join(" · ") })), h("span", { class: "mini-side" }, h("span", { class: "pill rs-" + slug(r.status || ""), text: r.status || "–" }))))));
+        if (rs.length) res.append(sec("Ref garments", rs, (r) => h("li", null, h("button", { class: "mini-row", type: "button", onclick: () => openRef(r._id) }, tag(r._id), h("span", { class: "mini-main" }, h("strong", { text: r.plagg }), h("span", { class: "sub", text: [r.skickadTill, r.styleNamn ? "for " + r.styleNamn : ""].filter(Boolean).join(" · ") })), h("span", { class: "mini-side" }, h("span", { class: "pill rs-" + slug(r.status || ""), text: r.status || "–" }))))));
       }
     }
     let tmr = 0;
     qIn.addEventListener("input", () => { clearTimeout(tmr); tmr = setTimeout(render, 120); });
     qIn.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); render(); } });
-    openSheet({ tag: "Sök", title: "Sök i hela appen", sub: "Styles, idéer, samples, arkiv, tyger och produktion", body: [h("div", { class: "field" }, qIn), res], foot: [h("div"), h("div", { class: "foot-right" }, h("button", { class: "btn", type: "button", text: "Stäng", onclick: closeSheet }))], ctx: { refresh: render }, focus: "f_gq" });
+    openSheet({ tag: "Search", title: "Search the whole app", sub: "Styles, ideas, samples, archive, fabrics and production", body: [h("div", { class: "field" }, qIn), res], foot: [h("div"), h("div", { class: "foot-right" }, h("button", { class: "btn", type: "button", text: "Close", onclick: closeSheet }))], ctx: { refresh: render }, focus: "f_gq" });
     render();
   }
   $("gsearch").addEventListener("submit", (e) => { e.preventDefault(); openSearch($("gq").value); });
   $("gq").addEventListener("input", () => { if ($("gq").value.trim().length >= 2 && $("sheet").hidden) openSearch($("gq").value); else if (!$("sheet").hidden && $("f_gq")) { $("f_gq").value = $("gq").value; $("f_gq").dispatchEvent(new Event("input")); } });
   document.addEventListener("keydown", (e) => { if (e.key === "/" && !e.target.closest("input, textarea, select") && $("sheet").hidden) { e.preventDefault(); $("gq").focus(); } });
 
+  // ---------- FLAGGOR ----------
+  // En flagga = "det här behöver någon titta på nu". Kräver kommentar, går som direktmejl till dem man väljer,
+  // och ligger kvar överst i fliken tills någon markerar den som löst.
+  const FLAG_PEOPLE = [["elliot", "Elliot"], ["jakob", "Jakob"], ["carl", "Carl"], ["alex", "Alex"], ["oliver", "Oliver"], ["conor", "Conor"]];
+  const TAB_OWNER = { bibliotek: ["carl"], design: ["conor", "carl"], samples: ["alex"], ref: ["alex"], kollektion: ["carl"], produktion: ["elliot"], foto: ["oliver"], ecom: ["jakob"], shopify: ["jakob"], coo: ["jakob"], tyglager: ["alex"], leverantorer: ["elliot", "jakob"] };
+  const personName = (k) => (FLAG_PEOPLE.find((p) => p[0] === k) || [k, k])[1];
+  const myKey = () => { const n = norm(myName); const k = n === "alexander" ? "alex" : n; return FLAG_PEOPLE.some((p) => p[0] === k) ? k : ""; };
+  const flagsOpen = (tab) => D.flaggor.filter((f) => f.status !== "Löst" && (!tab || f.tab === tab)).sort((a, b) => String(b.t || "").localeCompare(String(a.t || "")));
+  const flagsFor = (typ, ref) => D.flaggor.filter((f) => f.status !== "Löst" && f.typ === typ && f.ref === ref);
+  const latePos = () => D.po.map((p) => ({ p, l: poLate(p) })).filter((x) => x.l).sort((a, b) => b.l.dagar - a.l.dagar);
+  function openFlagTarget(f) {
+    if (f.typ === "sample") openSample(f.ref); else if (f.typ === "po") openPo(f.ref); else if (f.typ === "drop") openDrop(f.ref); else if (f.typ === "handelse") openEvent(f.ref);
+    else if (f.typ === "style") { if (f.tab === "design" || designOnly()) openDesign(f.ref); else openStyle(f.ref, null, { full: true }); }
+  }
+  async function notifyFlag(id) { try { if (typeof hostedNotifyFlag === "function") return await hostedNotifyFlag(id); } catch (e) { console.error(e); } return null; }
+  function openFlag(o) {
+    const fText = h("textarea", { id: "f_flagtext", rows: 4, placeholder: "What is the problem, and what needs to happen?" });
+    const me = myKey(); const pre = (TAB_OWNER[o.tab] || []).filter((k) => k !== me);
+    const boxes = FLAG_PEOPLE.filter((p) => p[0] !== me).map(([k, n]) => { const cb = h("input", { type: "checkbox", value: k }); cb.checked = pre.includes(k); return h("label", null, cb, n); });
+    const form = h("form", { class: "form", autocomplete: "off", onsubmit: (e) => e.preventDefault() },
+      h("div", { class: "field full" }, h("label", { for: "f_flagtext", text: "Comment (required)" }), fText),
+      h("div", { class: "field full" }, h("label", { text: "Email directly to" }), h("div", { class: "checks" }, boxes), h("span", { class: "hint", text: "The flag stays at the top of the tab until someone marks it as resolved." })));
+    const back = () => openFlagTarget(o);
+    const save = async (btn) => {
+      const text = fText.value.trim(); const till = boxes.map((b) => b.querySelector("input")).filter((c) => c.checked).map((c) => c.value);
+      if (!text) { toast("Write a comment – a flag without an explanation helps nobody."); fText.focus(); return; }
+      if (!till.length) { toast("Choose at least one person to receive the flag."); return; }
+      btn.disabled = true;
+      const id = "F" + Date.now().toString(36).toUpperCase(); const now = new Date().toISOString();
+      const body = { typ: o.typ, ref: o.ref, titel: o.titel, tab: o.tab, text, till, av: myId, avNamn: myName || personName(me) || "", t: now, status: "Öppen" };
+      if (!(await create("flaggor", id, body))) { btn.disabled = false; return; }
+      if (!byId(D.flaggor, id)) D.flaggor.push(Object.assign({}, body, { _id: id }));
+      if (o.after) { try { await o.after(text); } catch (e) { console.error(e); } }
+      const res = await notifyFlag(id);
+      toast(res && res.skickat ? "Flagged – email sent to " + till.map(personName).join(", ") : "Flagged – " + till.map(personName).join(", ") + " will get it in the 10:00 email");
+      closeSheet(); scheduleRefresh();
+    };
+    openSheet({ tag: "Flag", title: o.titel, sub: "Sent as a direct email and stays at the top of the tab until it is resolved", body: [form],
+      foot: [h("div"), h("div", { class: "foot-right" }, h("button", { class: "btn", type: "button", text: "Back", onclick: back }), h("button", { class: "btn primary", type: "button", text: "Flag and email", onclick: (e) => save(e.target) }))], focus: "f_flagtext" });
+  }
+  async function resolveFlag(f, text) {
+    const now = new Date().toISOString();
+    if (await write("flaggor", f._id, { status: "Löst", lostAv: myId, lostNamn: myName || "", lostT: now, lostText: text || "" })) { toast("The flag is resolved"); scheduleRefresh(); }
+  }
+  function flagRow(f) {
+    const when = f.t ? fmtDate(String(f.t).slice(0, 10)) : "";
+    const acts = h("div", { class: "fa" });
+    const reset = () => acts.replaceChildren(h("button", { class: "btn small", type: "button", text: "Open", onclick: () => openFlagTarget(f) }), canWrite && db ? h("button", { class: "btn small primary", type: "button", text: "Löst", onclick: () => ask() }) : null);
+    const ask = () => { const i = h("input", { type: "text", placeholder: "What was done? (optional)", style: "min-width:200px" }); acts.replaceChildren(i, h("button", { class: "btn small primary", type: "button", text: "Mark resolved", onclick: () => resolveFlag(f, i.value.trim()) }), h("button", { class: "btn small", type: "button", text: "Cancel", onclick: reset })); i.focus(); };
+    reset();
+    return h("div", { class: "flagrow" }, h("span", { class: "pill s-Problem", text: "Flag" }), h("div", null, h("div", { class: "ft" }, h("b", { text: f.titel || f.ref }), " – ", f.text || ""), h("div", { class: "fm", text: [f.avNamn ? "of " + f.avNamn : "", when, (f.till || []).length ? "to " + f.till.map(personName).join(", ") : ""].filter(Boolean).join(" · ") })), acts);
+  }
+  function renderFlags() {
+    const box = $("flagbox"); if (!box) return;
+    const fs = flagsOpen(UI.tab); const late = UI.tab === "produktion" && !designOnly() ? latePos() : [];
+    if (!fs.length && !late.length) { box.hidden = true; box.replaceChildren(); }
+    else {
+      const n = fs.length + late.length;
+      const card = h("section", { class: "card flagbox" }, h("div", { class: "card-head" }, h("h3", { text: "Flagged" }), h("span", { class: "sub", text: n + (n === 1 ? " item" : " items") + " that need resolving. They stay here until the problem is solved." })));
+      for (const f of fs) card.append(flagRow(f));
+      for (const x of late) card.append(h("div", { class: "flagrow" }, h("span", { class: "pill s-Problem", text: "Late" }), h("div", null, h("div", { class: "ft" }, h("b", { text: (x.p.nr || x.p._id) + (x.p.leverantor ? " · " + x.p.leverantor : "") }), " – ", poLateText(x.p, x.l)), h("div", { class: "fm", text: "Automatic. Disappears when the ETA changes or the PO is delivered." })), h("div", { class: "fa" }, h("button", { class: "btn small", type: "button", text: "Open PO", onclick: () => openPo(x.p._id) }))));
+      box.replaceChildren(card); box.hidden = false;
+    }
+    const perTab = {}; for (const f of flagsOpen()) perTab[f.tab] = (perTab[f.tab] || 0) + 1;
+    if (!designOnly() && latePos().length) perTab.produktion = (perTab.produktion || 0) + latePos().length;
+    document.querySelectorAll("#tabs .tab").forEach((b) => { const tn = b.querySelector(".tn"); if (tn) tn.dataset.flags = perTab[b.dataset.tab] ? String(perTab[b.dataset.tab]) : ""; });
+    document.querySelectorAll("#areas .area").forEach((b) => { const n = (AREA_TABS[b.dataset.area] || []).filter(tabAllowed).reduce((a, t) => a + (perTab[t] || 0), 0); const el = b.querySelector("b"); if (el) el.dataset.flags = n ? String(n) : ""; });
+  }
+  const flagNote = (typ, ref) => { const fs = flagsFor(typ, ref); return fs.length ? h("div", { class: "flagnote" }, fs.map((f) => h("div", null, h("b", { text: "Flagged" + (f.avNamn ? " of " + f.avNamn : "") + ": " }), f.text || ""))) : null; };
+
   // ---------- sheet ----------
   let sheetCtx = null;
   function openSheet(o) {
-    $("sheetTag").textContent = o.tag || ""; $("sheetTag").hidden = !o.tag;
+    if (o.flagRef && o.flagRef.ref) {
+      const note = flagNote(o.flagRef.typ, o.flagRef.ref); if (note) o.body = [note].concat(o.body);
+      if (canWrite && db && o.foot && o.foot[0]) o.foot[0].append(h("button", { class: "btn small", type: "button", text: "⚑ Flag", title: "Send a flag with a comment – direct email to the people you choose", onclick: () => openFlag(o.flagRef) }));
+    }
+    $("sheetTag").textContent = tv(o.tag || ""); $("sheetTag").hidden = !o.tag;
     $("sheetTitle").textContent = o.title || "";
-    $("sheetSub").textContent = o.sub || ""; $("sheetSub").hidden = !o.sub;
+    $("sheetSub").textContent = tv(o.sub || ""); $("sheetSub").hidden = !o.sub;
     $("sheetBody").replaceChildren(...o.body.filter(Boolean));
     $("sheetFoot").replaceChildren(...(o.foot || []).filter(Boolean));
     sheetCtx = o.ctx || null;
@@ -3979,23 +4204,23 @@ import * as P from "./platform.js";
   function footButtons(o) {
     const left = h("div");
     if (o.onDelete && canWrite && db) {
-      const reset = () => left.replaceChildren(h("button", { class: "btn small danger", type: "button", text: "Ta bort", disabled: !o.canDelete, title: o.canDelete ? null : o.blockText || "Kan inte tas bort medan något är kopplat hit", onclick: () => ask() }));
-      const ask = () => left.replaceChildren(h("span", { class: "confirm" }, h("span", { text: "Ta bort för alla?" }), h("button", { class: "btn small danger", type: "button", text: "Ja, ta bort", onclick: o.onDelete }), h("button", { class: "btn small", type: "button", text: "Behåll", onclick: reset })));
+      const reset = () => left.replaceChildren(h("button", { class: "btn small danger", type: "button", text: "Remove", disabled: !o.canDelete, title: o.canDelete ? null : o.blockText || "Cannot be removed while something is linked to it", onclick: () => ask() }));
+      const ask = () => left.replaceChildren(h("span", { class: "confirm" }, h("span", { text: "Remove for everyone?" }), h("button", { class: "btn small danger", type: "button", text: "Yes, remove", onclick: o.onDelete }), h("button", { class: "btn small", type: "button", text: "Keep", onclick: reset })));
       reset();
     }
-    const right = h("div", { class: "foot-right" }, h("button", { class: "btn", type: "button", text: "Avbryt", onclick: closeSheet }));
-    if (o.onSave && canWrite && db) right.append(h("button", { class: "btn primary", type: "button", id: "btnSave", text: o.saveLabel || "Spara", onclick: o.onSave }));
+    const right = h("div", { class: "foot-right" }, h("button", { class: "btn", type: "button", text: "Cancel", onclick: closeSheet }));
+    if (o.onSave && canWrite && db) right.append(h("button", { class: "btn primary", type: "button", id: "btnSave", text: o.saveLabel || "Save", onclick: o.onSave }));
     return [left, right];
   }
   const lock = (form) => form.querySelectorAll("input, select, textarea").forEach((x) => (x.disabled = true));
 
   // ---------- sample sheet ----------
-  const S_LABELS = { sasong: "Tilltänkt säsong", markt: "Fysiskt märkt", mattGodkanda: "Mått godkända", mattKommentar: "Måttkommentar", styleId: "Style", version: "Version", leverantor: "Leverantör", farg: "Färg", tygId: "Tyg", storlek: "Storlek", prisBelopp: "Pris", prisValuta: "Valuta", status: "Status", bestalld: "Beställd", ledtid: "Ledtid", forvantad: "Förväntad leverans", mottagen: "Mottagen", tracking: "Tracking", p1Skickad: "Påminnelse 1", p2Skickad: "Påminnelse 2", platsTyp: "Plats", hangare: "Hängare", platsNotering: "Platsnotering", beslut: "Beslut", andringar: "Ändringar", kommentar: "Kommentar", utvarderad: "Utvärderad" };
+  const S_LABELS = { sasong: "Intended season", markt: "Physically labelled", mattGodkanda: "Measurements approved", mattKommentar: "Measurement comment", styleId: "Style", version: "Version", leverantor: "Supplier", farg: "Colour", tygId: "Tyg", storlek: "Size", prisBelopp: "Price", prisValuta: "Currency", status: "Status", bestalld: "Beställd", ledtid: "Lead time", forvantad: "Expected delivery", mottagen: "Mottagen", tracking: "Tracking", p1Skickad: "Reminder 1", p2Skickad: "Reminder 2", platsTyp: "Location", hangare: "Hängare", platsNotering: "Location note", beslut: "Decision", andringar: "Changes", kommentar: "Comment", utvarderad: "Evaluated" };
   const S_INPUTS = { status: "f_status", mottagen: "f_mottagen", p1Skickad: "f_p1", p2Skickad: "f_p2", beslut: "f_beslut", markt: "f_markt", mattGodkanda: "f_matt" };
 
   async function createStyleQuick(name, lev) {
     const id = await freshId("styles", D.styles, "ST-", 3);
-    const body = { id, namn: name, leverantor: lev, sasong: "", drop: "", typ: "Nyhet", status: "Sampling", klartSenast: null, fotoSenast: null, farger: [], storlekar: [], ean: [], kommentar: "", logg: [logEntry("Style skapad från en sample")], andrad: new Date().toISOString() };
+    const body = { id, namn: name, leverantor: lev, sasong: "", drop: "", typ: "Nyhet", status: "Sampling", klartSenast: null, fotoSenast: null, farger: [], storlekar: [], ean: [], kommentar: "", logg: [logEntry("Style created from a sample")], andrad: new Date().toISOString() };
     if (!(await create("styles", id, body))) return null;
     if (!byId(D.styles, id)) D.styles.push(Object.assign({}, body, { _id: id }));
     return id;
@@ -4004,7 +4229,7 @@ import * as P from "./platform.js";
     if (!name) return null;
     const hit = D.tyger.find((t) => norm(t.namn) === norm(name));
     if (hit) return hit._id;
-    const id = await freshId("tyger", D.tyger, "T-", 3);
+    const id = await freshId("fabrics", D.tyger, "T-", 3);
     const body = { id, namn: name, leverantor: lev || "", status: "", aterDatum: null, kommentar: "", andrad: new Date().toISOString() };
     if (!(await create("tyger", id, body))) return null;
     if (!byId(D.tyger, id)) D.tyger.push(Object.assign({}, body, { _id: id }));
@@ -4013,30 +4238,31 @@ import * as P from "./platform.js";
   async function approveStyleFrom(sample) {
     const x = byId(D.styles, sample.styleId);
     if (x && x.status === "Sampling") {
-      await write("styles", x._id, { status: "Godkänd", logg: (x.logg || []).concat(logEntry("Godkänd via " + sample._id + (sample.version ? " (" + sample.version + ")" : ""))), andrad: new Date().toISOString() });
-      toast("Stylen " + x.namn + " är nu godkänd och kan få EAN");
+      await write("styles", x._id, { status: "Godkänd", logg: (x.logg || []).concat(logEntry("Approved via " + sample._id + (sample.version ? " (" + sample.version + ")" : ""))), andrad: new Date().toISOString() });
+      toast("The style " + x.namn + " is now approved and can get EAN");
     }
   }
 
   function openSample(id, preset) {
+    if (designOnly()) return;
     const isNew = !id;
     let s;
     if (isNew) {
       s = Object.assign({ _id: null, status: "Beställd", bestalld: todayISO(), version: "Proto 1", logg: [] }, preset || {});
       if (s.leverantor && s.ledtid == null) { const sl = levNum(s.leverantor, "sampleLedtid"); if (sl != null) { s.ledtid = sl; s.forvantad = addDays(s.bestalld, sl); } }
-    } else { s = byId(D.samples, id); if (!s) { toast("Hittar inte " + id + "."); return; } }
+    } else { s = byId(D.samples, id); if (!s) { toast("Cannot find " + id + "."); return; } }
     const ro = !canWrite || !db;
-    const styleOpts = [["", "– Ingen style –"]].concat(D.styles.slice().sort((a, b) => (a.namn || "").localeCompare(b.namn || "", "sv")).map((x) => [x._id, x.namn + (x.leverantor ? " · " + x.leverantor : "")]));
-    if (!ro) styleOpts.push(["__ny", "+ Ny style …"]);
+    const styleOpts = [["", "– No style –"]].concat(D.styles.slice().sort((a, b) => (a.namn || "").localeCompare(b.namn || "", "sv")).map((x) => [x._id, x.namn + (x.leverantor ? " · " + x.leverantor : "")]));
+    if (!ro) styleOpts.push(["__ny", "+ New style …"]);
     const fStyle = selectEl("f_style", styleOpts, s.styleId || "");
-    const fNewStyle = inp("f_newstyle", "", { placeholder: "Namn på den nya stylen" });
-    const newWrap = field("Ny style", fNewStyle, { full: true }); newWrap.hidden = true;
+    const fNewStyle = inp("f_newstyle", "", { placeholder: "Name of the new style" });
+    const newWrap = field("New style", fNewStyle, { full: true }); newWrap.hidden = true;
     const fVersion = selectEl("f_version", VERSIONS, s.version || "Proto 1");
     const fLev = inp("f_lev", s.leverantor, { list: "dlLev", autocomplete: "off" });
     const fFarg = inp("f_farg", s.farg);
-    const fTyg = inp("f_tyg", tygName(s), { list: "dlTyg", autocomplete: "off", placeholder: "t.ex. Japan Blue inhouse – Westpoint Canvas 223" });
-    const fStorlek = inp("f_storlek", s.storlek, { placeholder: "t.ex. M eller 50" });
-    const fSas = seasonSelect("f_ssas", s.sasong, "– Samma som stylen –");
+    const fTyg = inp("f_tyg", tygName(s), { list: "dlTyg", autocomplete: "off", placeholder: "e.g. Japan Blue inhouse – Westpoint Canvas 223" });
+    const fStorlek = inp("f_storlek", s.storlek, { placeholder: "e.g. M or 50" });
+    const fSas = seasonSelect("f_ssas", s.sasong, "– Same as the style –");
     const fPris = inp("f_pris", s.prisBelopp, { type: "number", step: "0.01", min: "0", inputmode: "decimal" });
     const fValuta = selectEl("f_valuta", [["", "–"], "SEK", "EUR", "JPY", "GBP", "USD"], s.prisValuta || "");
     const fStatus = selectEl("f_status", SAMPLE_STATUS, s.status || "Beställd");
@@ -4044,21 +4270,21 @@ import * as P from "./platform.js";
     const fLed = inp("f_ledtid", s.ledtid, { type: "number", min: "0", step: "1" });
     const fForv = inp("f_forvantad", s.forvantad, { type: "date" });
     const fMott = inp("f_mottagen", s.mottagen, { type: "date" });
-    const fTrack = inp("f_tracking", s.tracking, { placeholder: "Fraktbolag och spårningsnummer" });
+    const fTrack = inp("f_tracking", s.tracking, { placeholder: "Carrier and tracking number" });
     const fP1 = inp("f_p1", s.p1Skickad, { type: "date" });
     const fP2 = inp("f_p2", s.p2Skickad, { type: "date" });
     const fPlats = selectEl("f_plats", [["", "–"]].concat(PLATSER), s.platsTyp || "");
-    const fHang = inp("f_hangare", s.hangare, { inputmode: "numeric", placeholder: "t.ex. 12" });
-    const fPNot = inp("f_platsnot", s.platsNotering, { placeholder: "Vem eller var, t.ex. Carl testar" });
+    const fHang = inp("f_hangare", s.hangare, { inputmode: "numeric", placeholder: "e.g. 12" });
+    const fPNot = inp("f_platsnot", s.platsNotering, { placeholder: "Who or where, e.g. Carl is testing" });
     const fBeslut = selectEl("f_beslut", [["", "–"]].concat(BESLUT), s.beslut || "");
-    const fMarkt = selectEl("f_markt", [["", "Nej – inte märkt än"], ["1", "Ja, märkt med ID"]], s.markt ? "1" : "");
-    const fMatt = selectEl("f_matt", [["", "– inte mätt än"], ["1", "JA – mått godkända"], ["0", "NEJ – mått avviker"]], s.mattGodkanda === true ? "1" : s.mattGodkanda === false ? "0" : "");
-    const fMattKom = inp("f_mattkom", s.mattKommentar, { placeholder: "t.ex. ärm 2 cm för lång, midja ok" });
-    const fAndr = area("f_andringar", s.andringar, "Det som ska rättas till nästa runda");
+    const fMarkt = selectEl("f_markt", [["", "No – not labelled yet"], ["1", "Yes, labelled with ID"]], s.markt ? "1" : "");
+    const fMatt = selectEl("f_matt", [["", "– not measured yet"], ["1", "YES – measurements approved"], ["0", "NO – measurements deviate"]], s.mattGodkanda === true ? "1" : s.mattGodkanda === false ? "0" : "");
+    const fMattKom = inp("f_mattkom", s.mattKommentar, { placeholder: "e.g. sleeve 2 cm too long, waist ok" });
+    const fAndr = area("f_andringar", s.andringar, "What should be corrected for the next round");
     const fKom = area("f_kommentar", s.kommentar);
     const ledHint = h("span", { class: "hint" });
-    const hangWrap = field("Hängare / krok nr", fHang);
-    const syncLedHint = () => { const n = fLev.value.trim(); const sl = levNum(n, "sampleLedtid"); const a = actualLead(n); ledHint.textContent = n ? "Standard " + (sl != null ? sl + " d" : "saknas") + (a ? " · faktiskt snitt " + a.avg + " d (" + a.n + ")" : "") : ""; };
+    const hangWrap = field("Hanger / hook no.", fHang);
+    const syncLedHint = () => { const n = fLev.value.trim(); const sl = levNum(n, "sampleLedtid"); const a = actualLead(n); ledHint.textContent = n ? "Standard " + (sl != null ? sl + " d" : "saknas") + (a ? " · actual average " + a.avg + " d (" + a.n + ")" : "") : ""; };
     const fillLead = () => { const sl = levNum(fLev.value.trim(), "sampleLedtid"); if (sl != null && !fLed.value) fLed.value = sl; if (!fForv.value && fBest.value && Number(fLed.value) > 0) fForv.value = addDays(fBest.value, Number(fLed.value)); };
     const syncPlats = () => { const isH = fPlats.value === "Hängare" || fPlats.value === "Fotohäng"; fHang.disabled = ro || !isH; hangWrap.classList.toggle("dim", !isH); };
     fStyle.addEventListener("change", () => { newWrap.hidden = fStyle.value !== "__ny"; if (!newWrap.hidden) fNewStyle.focus(); const x = byId(D.styles, fStyle.value); if (x && !fLev.value.trim()) { fLev.value = x.leverantor || ""; syncLedHint(); if (isNew) fillLead(); } });
@@ -4068,27 +4294,27 @@ import * as P from "./platform.js";
     fPlats.addEventListener("change", () => { syncPlats(); if (fPlats.value === "Hängare" || fPlats.value === "Fotohäng") fHang.focus(); });
 
     const form = h("form", { class: "form", id: "sampleForm", autocomplete: "off", onsubmit: (e) => e.preventDefault() },
-      h("h3", { class: "sec-title full", text: "Produkt" }),
+      h("h3", { class: "sec-title full", text: "Product" }),
       field("Style", fStyle, { full: true }), newWrap,
-      field("Version", fVersion), field("Leverantör", fLev),
-      field("Färg", fFarg), field("Storlek", fStorlek),
-      field("Tyg", fTyg, { hint: "Skriv fritt eller välj ett tyg som redan finns." }), field("Tilltänkt säsong", fSas, { hint: "Vilken kollektion samplen siktar på – styr prioritering" }),
-      field("Pris", fPris), field("Valuta", fValuta),
-      h("h3", { class: "sec-title full", text: "Leverans" }),
+      field("Version", fVersion), field("Supplier", fLev),
+      field("Colour", fFarg), field("Size", fStorlek),
+      field("Tyg", fTyg, { hint: "Type freely or choose a fabric that already exists." }), field("Intended season", fSas, { hint: "Which collection the sample is aimed at – drives prioritisation" }),
+      field("Price", fPris), field("Currency", fValuta),
+      h("h3", { class: "sec-title full", text: "Delivery" }),
       field("Status", fStatus), field("Beställd", fBest),
-      h("div", { class: "field" }, h("label", { for: "f_ledtid", text: "Ledtid (dagar)" }), fLed, ledHint),
-      field("Förväntad leverans", fForv, { hint: "Tomt = TBA" }),
+      h("div", { class: "field" }, h("label", { for: "f_ledtid", text: "Lead time (days)" }), fLed, ledHint),
+      field("Expected delivery", fForv, { hint: "Empty = TBA" }),
       field("Mottagen", fMott), field("Tracking", fTrack),
-      field("Påminnelse 1 skickad", fP1), field("Påminnelse 2 skickad", fP2),
-      h("h3", { class: "sec-title full", text: "Var finns samplen?" }),
-      field("Fysiskt märkt", fMarkt, { hint: "Skriv ID:t på samplen när den kommer" }), field("Plats", fPlats), hangWrap,
-      field("Notering", fPNot, { full: true }),
-      h("h3", { class: "sec-title full", text: "Mått" }),
-      field("Mått godkända", fMatt, { hint: "Mät direkt när samplen kommer" }), field("Måttkommentar", fMattKom),
-      h("h3", { class: "sec-title full", text: "Utvärdering" }),
-      field("Beslut", fBeslut),
-      field("Ändringar till nästa runda", fAndr, { full: true }),
-      field("Kommentar", fKom, { full: true }));
+      field("Reminder 1 sent", fP1), field("Reminder 2 sent", fP2),
+      h("h3", { class: "sec-title full", text: "Where is the sample?" }),
+      field("Physically labelled", fMarkt, { hint: "Write the ID on the sample when it arrives" }), field("Location", fPlats), hangWrap,
+      field("Note", fPNot, { full: true }),
+      h("h3", { class: "sec-title full", text: "Measurements" }),
+      field("Measurements approved", fMatt, { hint: "Measure as soon as the sample arrives" }), field("Measurement comment", fMattKom),
+      h("h3", { class: "sec-title full", text: "Evaluation" }),
+      field("Decision", fBeslut),
+      field("Changes for the next round", fAndr, { full: true }),
+      field("Comment", fKom, { full: true }));
     if (ro) lock(form);
     syncLedHint(); syncPlats();
 
@@ -4097,29 +4323,29 @@ import * as P from "./platform.js";
     const planBox = h("div", { class: "planline" });
     const imgSec = h("section");
     function renderImages() {
-      imgSec.replaceChildren(h("h3", { class: "sec-title", text: "Bilder" }));
-      if (isNew) { imgSec.append(h("p", { class: "hint", text: "Spara samplen först, sedan kan du lägga till bilder. Bilderna syns för Carl under Kollektion." })); return; }
+      imgSec.replaceChildren(h("h3", { class: "sec-title", text: "Images" }));
+      if (isNew) { imgSec.append(h("p", { class: "hint", text: "Save the sample first, then you can add images. The images are shown to Carl under Collection." })); return; }
       const cur = current() || s;
       const ids = sampleImages(cur);
-      if (ids.length) imgSec.append(gallery(ids, { onRemove: ro || !assets ? null : async (id) => { if (!confirm("Ta bort bilden för alla?")) return; const left = ids.filter((x) => x !== id); if (await write("samples", cur._id, { bilder: left, andrad: new Date().toISOString() })) { try { await assets.delete(id); } catch (e) {} } } }));
-      else imgSec.append(h("p", { class: "hint", text: "Inga bilder ännu. Ta en bild på samplen när den kommer – helst på byst eller hängare, rak framifrån." }));
-      if (!ro && assets) imgSec.append(imageDrop(async (files) => { imgSec.append(h("p", { class: "hint", id: "imgBusy", text: "Laddar upp " + files.length + " bild(er) …" })); const got = await uploadImages(files); const c2 = current() || cur; if (got.length) await write("samples", c2._id, { bilder: sampleImages(c2).concat(got), andrad: new Date().toISOString(), logg: (c2.logg || []).concat(logEntry(got.length + (got.length === 1 ? " bild tillagd" : " bilder tillagda"))) }); renderImages(); }));
-      else if (!ro && !assets) imgSec.append(h("p", { class: "hint", text: "Bilder kan bara laddas upp av den som har Editor-behörighet på appen." }));
+      if (ids.length) imgSec.append(gallery(ids, { onRemove: ro || !assets ? null : async (id) => { if (!confirm("Remove the image for everyone?")) return; const left = ids.filter((x) => x !== id); if (await write("samples", cur._id, { bilder: left, andrad: new Date().toISOString() })) { try { await assets.delete(id); } catch (e) {} } } }));
+      else imgSec.append(h("p", { class: "hint", text: "No images yet. Take a picture of the sample when it arrives – preferably on a bust or hanger, straight from the front." }));
+      if (!ro && assets) imgSec.append(imageDrop(async (files) => { imgSec.append(h("p", { class: "hint", id: "imgBusy", text: "Uploading " + files.length + " image(s) …" })); const got = await uploadImages(files); const c2 = current() || cur; if (got.length) await write("samples", c2._id, { bilder: sampleImages(c2).concat(got), andrad: new Date().toISOString(), logg: (c2.logg || []).concat(logEntry(got.length + (got.length === 1 ? " image added" : " images added"))) }); renderImages(); }));
+      else if (!ro && !assets) imgSec.append(h("p", { class: "hint", text: "Images can only be uploaded by someone with Editor access to the app." }));
     }
     function renderRemind() {
       const cur = current();
       remind.hidden = true;
       if (!cur) return;
       const bits = [];
-      if (!cur.markt) bits.push(cur.status === "Mottagen" || cur.status === "Problem" ? "Samplen är inte märkt – skriv " + cur._id + " på den och tryck \"Märkt med ID\"." : "Märk samplen med " + cur._id + " så fort den kommer.");
-      if (cur.status === "Mottagen" && (cur.mattGodkanda == null || cur.mattGodkanda === "")) bits.push("Måtten är inte kontrollerade.");
-      if (cur.status === "Mottagen" && !sampleImages(cur).length) bits.push("Ingen bild ännu.");
+      if (!cur.markt) bits.push(cur.status === "Mottagen" || cur.status === "Problem" ? "The sample is not labelled – write " + cur._id + " on it and press \"Labelled with ID\"." : "Label the sample with " + cur._id + " as soon as it arrives.");
+      if (cur.status === "Mottagen" && (cur.mattGodkanda == null || cur.mattGodkanda === "")) bits.push("The measurements have not been checked.");
+      if (cur.status === "Mottagen" && !sampleImages(cur).length) bits.push("No image yet.");
       if (bits.length) { remind.hidden = false; remind.textContent = bits.join(" "); }
     }
     const logUl = h("ul", { class: "log" });
-    const noteIn = inp("f_note", "", { placeholder: "Anteckning, t.ex. Mailat om knapparna" });
+    const noteIn = inp("f_note", "", { placeholder: "Note, e.g. Emailed about the buttons" });
     noteIn.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); addNote(); } });
-    const noteRow = h("div", { class: "add-note" }, noteIn, h("button", { class: "btn small", type: "button", text: "Lägg till", onclick: () => addNote() }));
+    const noteRow = h("div", { class: "add-note" }, noteIn, h("button", { class: "btn small", type: "button", text: "Add", onclick: () => addNote() }));
     const current = () => (isNew ? null : byId(D.samples, s._id));
 
     function renderPlanLine() {
@@ -4127,7 +4353,7 @@ import * as P from "./platform.js";
       if (!x) { planBox.hidden = true; return; }
       planBox.hidden = false;
       const p = plan(x);
-      planBox.replaceChildren(lagePill(p), h("span", { text: x.namn + (p.po ? " · PO senast " + fmtDate(p.po) + " (" + fmtDays(p.poDays) + ")" : p.note ? " · " + p.note : "") }), h("button", { class: "linkish", type: "button", text: "Öppna style", onclick: () => openStyle(x._id) }));
+      planBox.replaceChildren(lagePill(p), h("span", { text: x.namn + (p.po ? " · PO by " + fmtDate(p.po) + " (" + fmtDays(p.poDays) + ")" : p.note ? " · " + p.note : "") }), h("button", { class: "linkish", type: "button", text: "Open style", onclick: () => openStyle(x._id) }));
     }
     function renderQuick() {
       const cur = current();
@@ -4135,19 +4361,19 @@ import * as P from "./platform.js";
       if (!cur || ro) { quick.hidden = true; return; }
       quick.hidden = false;
       const add = (label, fn, primary) => quick.append(h("button", { class: "btn small" + (primary ? " primary" : ""), type: "button", text: label, onclick: fn }));
-      if (isWaiting(cur) || cur.status === "Problem") add("Mottagen idag", () => quickUpdate(cur, { status: "Mottagen", mottagen: todayISO() }, "Markerad mottagen. Ange hängare nedan."), true);
-      if (cur.status === "Beställd") add("Skickad", () => quickUpdate(cur, { status: "Skickad" }, "Markerad skickad"));
+      if (isWaiting(cur) || cur.status === "Problem") add("Received today", () => quickUpdate(cur, { status: "Mottagen", mottagen: todayISO() }, "Marked received. Enter the hanger below."), true);
+      if (cur.status === "Beställd") add("Skickad", () => quickUpdate(cur, { status: "Skickad" }, "Marked shipped"));
       const r = remindDue(cur);
-      if (r) add("Påminnelse " + r + " skickad", () => quickUpdate(cur, r === 1 ? { p1Skickad: todayISO() } : { p2Skickad: todayISO() }, "Påminnelse " + r + " noterad"));
-      if (cur.status === "Mottagen" && beslutNorm(cur.beslut) !== "Godkänd") add("Godkänn", async () => { if (await quickUpdate(cur, { beslut: "Godkänd", utvarderad: true }, "Godkänd")) await approveStyleFrom(cur); }, true);
+      if (r) add("Reminder " + r + " sent", () => quickUpdate(cur, r === 1 ? { p1Skickad: todayISO() } : { p2Skickad: todayISO() }, "Reminder " + r + " noted"));
+      if (cur.status === "Mottagen" && beslutNorm(cur.beslut) !== "Godkänd") add("Approve", async () => { if (await quickUpdate(cur, { beslut: "Godkänd", utvarderad: true }, "Godkänd")) await approveStyleFrom(cur); }, true);
       if (cur.status === "Mottagen" || cur.beslut) add("Ny runda", () => newRound(cur));
-      if (isArchived(cur)) add("Plocka upp igen", () => restoreSample(cur), true);
-      if (["Mottagen", "Problem"].includes(cur.status) && beslutNorm(cur.beslut) !== "Pausad") add("Pausa → arkiv", () => quickUpdate(cur, { beslut: "Pausad", utvarderad: true }, "Pausad – ligger i Arkiv"));
-      if (["Mottagen", "Problem"].includes(cur.status) && beslutNorm(cur.beslut) !== "Kastad") add("Kasta → arkiv", () => quickUpdate(cur, { beslut: "Kastad", utvarderad: true }, "Kastad – ligger i Arkiv"));
-      if (cur.status !== "Problem" && cur.status !== "Mottagen") add("Flagga problem", () => quickUpdate(cur, { status: "Problem" }, "Flaggad som problem"));
-      if (!cur.markt) add("Märkt med ID", () => quickUpdate(cur, { markt: true }, cur._id + " är märkt"), unmarked(cur));
-      if (cur.status === "Mottagen" && (cur.version === "Fotosample" || cur.version === "Produktionssample") && cur.platsTyp !== "Fotohäng") add("Häng på fotohänget", () => quickUpdate(cur, { platsTyp: "Fotohäng" }, "Hänger nu på fotohänget – ange krok nr nedan"));
-      add("Skriv ut etikett", () => openLabels([cur._id]));
+      if (isArchived(cur)) add("Pick up again", () => restoreSample(cur), true);
+      if (["Mottagen", "Problem"].includes(cur.status) && beslutNorm(cur.beslut) !== "Pausad") add("Pause → archive", () => quickUpdate(cur, { beslut: "Pausad", utvarderad: true }, "Paused – in the Archive"));
+      if (["Mottagen", "Problem"].includes(cur.status) && beslutNorm(cur.beslut) !== "Kastad") add("Drop → archive", () => quickUpdate(cur, { beslut: "Kastad", utvarderad: true }, "Dropped – in the Archive"));
+      if (cur.status !== "Problem" && cur.status !== "Mottagen") add("Flag problem", () => openFlag({ typ: "sample", ref: cur._id, titel: cur._id + " " + styleName(cur) + (cur.version ? " · " + cur.version : ""), tab: "samples", after: (text) => { const c2 = byId(D.samples, cur._id) || cur; return write("samples", cur._id, { status: "Problem", andrad: new Date().toISOString(), logg: (c2.logg || []).concat(logEntry("Flagged as a problem: " + text)) }); } }));
+      if (!cur.markt) add("Labelled with ID", () => quickUpdate(cur, { markt: true }, cur._id + " is labelled"), unmarked(cur));
+      if (cur.status === "Mottagen" && (cur.version === "Fotosample" || cur.version === "Produktionssample") && cur.platsTyp !== "Fotohäng") add("Hang on the photo rail", () => quickUpdate(cur, { platsTyp: "Fotohäng" }, "Now on the photo rail – enter the hook no. below"));
+      add("Print label", () => openLabels([cur._id]));
     }
     async function quickUpdate(cur, patch, msg) {
       const changes = describeChanges(cur, patch, S_LABELS);
@@ -4160,20 +4386,20 @@ import * as P from "./platform.js";
       const patch = {};
       if (["Kastad", "Pausad"].includes(beslutNorm(cur.beslut))) { patch.beslut = ""; patch.utvarderad = false; }
       const stx = styleOf(cur);
-      const ok = Object.keys(patch).length ? await quickUpdate(cur, patch, "Upplockad från arkivet") : true;
-      if (ok && stx && ["Pausad", "Kastad"].includes(styleStatusNorm(stx.status))) { await write("styles", stx._id, { status: "Sampling", andrad: new Date().toISOString(), logg: (stx.logg || []).concat(logEntry("Upplockad från arkivet via " + cur._id + " – status Sampling")) }); toast("Samplen och stylen " + stx.namn + " är upplockade från arkivet"); }
+      const ok = Object.keys(patch).length ? await quickUpdate(cur, patch, "Picked up from the archive") : true;
+      if (ok && stx && ["Pausad", "Kastad"].includes(styleStatusNorm(stx.status))) { await write("styles", stx._id, { status: "Sampling", andrad: new Date().toISOString(), logg: (stx.logg || []).concat(logEntry("Picked up from the archive via " + cur._id + " – status Sampling")) }); toast("The sample and the style " + stx.namn + " have been picked up from the archive"); }
     }
     async function newRound(cur) {
       const sl = levNum(cur.leverantor, "sampleLedtid");
       const today = todayISO();
       const nid = await freshId("samples", D.samples, "S", 3);
-      const body = { id: nid, styleId: cur.styleId || null, produkt: styleName(cur), version: nextVersion(cur.version), leverantor: cur.leverantor || "", farg: cur.farg || "", tygId: cur.tygId || null, material: cur.material || "", storlek: cur.storlek || "", prisBelopp: null, prisValuta: cur.prisValuta || null, bestalld: today, ledtid: sl, forvantad: sl != null ? addDays(today, sl) : null, status: "Beställd", mottagen: null, tracking: "", p1Skickad: null, p2Skickad: null, kommentar: cur.andringar ? "Ändringar från " + cur._id + ": " + cur.andringar : "", andringar: "", beslut: "", utvarderad: false, platsTyp: "", hangare: "", platsNotering: "", logg: [logEntry("Ny runda efter " + cur._id + (cur.version ? " (" + cur.version + ")" : ""))], andrad: new Date().toISOString() };
+      const body = { id: nid, styleId: cur.styleId || null, produkt: styleName(cur), version: nextVersion(cur.version), leverantor: cur.leverantor || "", farg: cur.farg || "", tygId: cur.tygId || null, material: cur.material || "", storlek: cur.storlek || "", prisBelopp: null, prisValuta: cur.prisValuta || null, bestalld: today, ledtid: sl, forvantad: sl != null ? addDays(today, sl) : null, status: "Beställd", mottagen: null, tracking: "", p1Skickad: null, p2Skickad: null, kommentar: cur.andringar ? "Changes from " + cur._id + ": " + cur.andringar : "", andringar: "", beslut: "", utvarderad: false, platsTyp: "", hangare: "", platsNotering: "", logg: [logEntry("New round after " + cur._id + (cur.version ? " (" + cur.version + ")" : ""))], andrad: new Date().toISOString() };
       if (!(await create("samples", nid, body))) return;
-      const patch = { logg: (cur.logg || []).concat(logEntry("Ny runda beställd: " + nid)), andrad: new Date().toISOString() };
+      const patch = { logg: (cur.logg || []).concat(logEntry("New round ordered: " + nid)), andrad: new Date().toISOString() };
       if (!cur.beslut) { patch.beslut = "Ny runda"; patch.utvarderad = true; }
       await write("samples", cur._id, patch);
       if (!byId(D.samples, nid)) D.samples.push(Object.assign({}, body, { _id: nid }));
-      toast(nid + " skapad som " + body.version);
+      toast(nid + " created as " + body.version);
       openSample(nid);
     }
     async function addNote() {
@@ -4184,11 +4410,11 @@ import * as P from "./platform.js";
       const btn = $("btnSave"); if (btn) btn.disabled = true;
       try {
         const lev = fLev.value.trim();
-        if (!lev) { toast("Fyll i leverantör."); fLev.focus(); return; }
+        if (!lev) { toast("Fill in supplier."); fLev.focus(); return; }
         let styleId = fStyle.value;
         if (styleId === "__ny") {
           const nm = fNewStyle.value.trim();
-          if (!nm) { toast("Skriv namnet på den nya stylen."); fNewStyle.focus(); return; }
+          if (!nm) { toast("Type the name of the new style."); fNewStyle.focus(); return; }
           styleId = await createStyleQuick(nm, lev);
           if (!styleId) return;
         }
@@ -4206,12 +4432,12 @@ import * as P from "./platform.js";
         const now = new Date().toISOString();
         if (isNew) {
           const nid = await freshId("samples", D.samples, "S", 3);
-          const body = Object.assign({ id: nid, material: "", utvarderad: !!o.beslut, bilder: [], logg: [logEntry("Sample skapad (" + o.status + ")")], andrad: now }, o);
+          const body = Object.assign({ id: nid, material: "", utvarderad: !!o.beslut, bilder: [], logg: [logEntry("Sample created (" + o.status + ")")], andrad: now }, o);
           if (await create("samples", nid, body)) {
             if (!byId(D.samples, nid)) D.samples.push(Object.assign({}, body, { _id: nid }));
-            toast(nid + " sparad – märk samplen med " + nid + " när den kommer");
+            toast(nid + " saved – label the sample with " + nid + " when it arrives");
             if (o.beslut === "Godkänd") await approveStyleFrom(Object.assign({ _id: nid }, o));
-            if (st && isIdea(st)) await write("styles", st._id, { status: "Sampling", andrad: now, logg: (st.logg || []).concat(logEntry("Första sample beställd (" + nid + ") – idén är nu under sampling")) });
+            if (st && isIdea(st)) await write("styles", st._id, { status: "Sampling", andrad: now, logg: (st.logg || []).concat(logEntry("First sample ordered (" + nid + ") – the idea is now in sampling")) });
             openSample(nid);
           }
         } else {
@@ -4219,19 +4445,20 @@ import * as P from "./platform.js";
           const changes = describeChanges(cur, o, S_LABELS);
           if (!changes.length) { closeSheet(); return; }
           const body = Object.assign({}, o, { andrad: now, logg: (cur.logg || []).concat(changes.map(logEntry)) });
-          if (await write("samples", cur._id, body)) { toast("Sparat"); if (o.beslut === "Godkänd" && cur.beslut !== "Godkänd") await approveStyleFrom(Object.assign({}, cur, o)); closeSheet(); }
+          if (await write("samples", cur._id, body)) { toast("Saved"); if (o.beslut === "Godkänd" && cur.beslut !== "Godkänd") await approveStyleFrom(Object.assign({}, cur, o)); closeSheet(); }
         }
       } finally { if (btn) btn.disabled = false; }
     }
 
     const body = [quick, remind, planBox, imgSec, form];
-    if (!isNew) body.push(h("section", null, h("h3", { class: "sec-title", text: "Historik" }), logUl, ro ? null : noteRow));
+    if (!isNew) body.push(h("section", null, h("h3", { class: "sec-title", text: "History" }), logUl, ro ? null : noteRow));
     openSheet({
-      tag: isNew ? "Ny" : s._id,
-      title: isNew ? "Ny sample" : styleName(s) + (s.version ? " · " + s.version : ""),
+      flagRef: isNew ? null : { typ: "sample", ref: s._id, titel: s._id + " " + styleName(s) + (s.version ? " · " + s.version : ""), tab: "samples" },
+      tag: isNew ? "New" : s._id,
+      title: isNew ? "New sample" : styleName(s) + (s.version ? " · " + s.version : ""),
       sub: isNew ? "" : [s.farg, s.leverantor, platsText(s)].filter(Boolean).join(" · "),
       body,
-      foot: footButtons({ onDelete: isNew ? null : async () => { if (await remove("samples", s._id)) { toast("Borttagen"); closeSheet(); } }, canDelete: true, onSave: save }),
+      foot: footButtons({ onDelete: isNew ? null : async () => { if (await remove("samples", s._id)) { toast("Removed"); closeSheet(); } }, canDelete: true, onSave: save }),
       ctx: { refresh: () => { if (!isNew && !current()) { closeSheet(); return; } renderQuick(); renderRemind(); renderPlanLine(); renderImages(); if (!isNew) renderLogInto(logUl, (current() || s).logg); } },
       focus: isNew ? "f_style" : null
     });
@@ -4240,79 +4467,80 @@ import * as P from "./platform.js";
   }
 
   // ---------- style sheet ----------
-  const ST_LABELS = { shopifyBild: "Shopify-bild", ecomBilder: "E-com-bilder", ecomPlatDatum: "E-com-plåtning", kampanjStatus: "Kampanjfoto", kampanjDatum: "Kampanjfoto datum", bildId: "Huvudbild", namn: "Namn", leverantor: "Leverantör", sasong: "Säsong", drop: "Drop", typ: "Typ", kategori: "Kategori", status: "Status", klartSenast: "I lager senast", fotoSenast: "Fotosample senast", kommentar: "Kommentar", farger: "Färger", storlekar: "Storlekar", beskrivning: "Beskrivning", tygId: "Tyg", grund: "Grundstyle", grundId: "Variant av", mattFran: "Mått från", mattlista: "Måttlista", referenser: "Referenser" };
+  const ST_LABELS = { shopifyBild: "Shopify image", ecomBilder: "E-com images", ecomPlatDatum: "E-com shoot", kampanjStatus: "Campaign shoot", kampanjDatum: "Campaign shoot date", bildId: "Main image", namn: "Name", leverantor: "Supplier", sasong: "Season", drop: "Drop", typ: "Typ", kategori: "Category", status: "Status", klartSenast: "In stock by", fotoSenast: "Photo sample by", kommentar: "Comment", farger: "Colours", storlekar: "Sizes", beskrivning: "Description", tygId: "Tyg", grund: "Base style", grundId: "Variant of", mattFran: "Measurements from", mattlista: "Measurement list", referenser: "References" };
   function openStyle(id, preset, opts) {
     const isNew = !id;
     // Bibliotek är Carls flik: bara det som rör plagget. Planering, foto, e-com, EAN, Shopify och inköp sköts i sina flikar.
     const lean = UI.tab === "bibliotek" && !(opts && opts.full);
+    if (designOnly()) { if (id) openDesign(id); return; }
     const st = isNew ? Object.assign({ _id: null, status: "Sampling", typ: "Nyhet", farger: [], storlekar: [], ean: [], bilder: [], logg: [] }, preset || {}) : byId(D.styles, id);
-    if (!st) { toast("Hittar inte " + id + "."); return; }
+    if (!st) { toast("Cannot find " + id + "."); return; }
     const ro = !canWrite || !db;
     const current = () => (isNew ? st : byId(D.styles, st._id) || st);
     const fNamn = inp("f_snamn", st.namn);
-    const fBesk = area("f_sbesk", st.beskrivning, "Vad är det för plagg? Passform, detaljer, känsla, vad som skiljer från tidigare versioner …");
+    const fBesk = area("f_sbesk", st.beskrivning, "What kind of garment is it? Fit, details, feel, what differs from earlier versions …");
     // Samma urval som "Använd mått från": alla styles. Den som väljs blir grundstyle (ingen bock behövs).
-    const grundOpts = [["", "– Ingen, egen style –"]].concat(D.styles.filter((x) => x._id !== st._id && !(st._id && x.grundId === st._id) && (x._id === st.grundId || styleStatusNorm(x.status) !== "Kastad"))
+    const grundOpts = [["", "– None, own style –"]].concat(D.styles.filter((x) => x._id !== st._id && !(st._id && x.grundId === st._id) && (x._id === st.grundId || styleStatusNorm(x.status) !== "Kastad"))
       .sort((a, b) => (isGrund(b) ? 1 : 0) - (isGrund(a) ? 1 : 0) || (a.namn || "").localeCompare(b.namn || "", "sv") || seasonRank(b.sasong) - seasonRank(a.sasong))
-      .map((x) => [x._id, x.namn + (x.sasong ? " · " + x.sasong : "") + (isGrund(x) ? " · grundstyle" : "")]));
+      .map((x) => [x._id, x.namn + (x.sasong ? " · " + x.sasong : "") + (isGrund(x) ? " · base style" : "")]));
     const fGrund = selectEl("f_sgrund", grundOpts, st.grundId || "");
     const fLev = inp("f_slev", st.leverantor, { list: "dlLev", autocomplete: "off" });
-    const fTyg = inp("f_styg", styleTyg(st), { list: "dlTyg", autocomplete: "off", placeholder: "t.ex. Japan Blue inhouse – Westpoint Canvas 223" });
+    const fTyg = inp("f_styg", styleTyg(st), { list: "dlTyg", autocomplete: "off", placeholder: "e.g. Japan Blue inhouse – Westpoint Canvas 223" });
     const fSas = seasonSelect("f_ssasong", st.sasong);
     const fDrop = dropSelect("f_sdrop", st.drop, fSas);
     const fTyp = selectEl("f_styp", STYLE_TYP, st.typ || "Nyhet");
-    const fKat = selectEl("f_skat", [["", "– välj –"]].concat(KATEGORIER), styleKategori(st));
+    const fKat = selectEl("f_skat", [["", "– choose –"]].concat(KATEGORIER), styleKategori(st));
     const fStatus = selectEl("f_sstatus", STYLE_STATUS, styleStatusNorm(st.status));
     const fKlart = inp("f_sklart", st.klartSenast, { type: "date" });
     const fFoto = inp("f_sfoto", st.fotoSenast, { type: "date" });
-    const fEcom = selectEl("f_secom", ECOM_STATUS.map((x) => [x, x || "– inte planerade"]), st.ecomBilder || "");
+    const fEcom = selectEl("f_secom", ECOM_STATUS.map((x) => [x, x || "– not planned"]), st.ecomBilder || "");
     const fEcomD = inp("f_secomd", st.ecomPlatDatum, { type: "date" });
-    const fKamp = selectEl("f_skamp", KAMP_STATUS.map((x) => [x, x || "– ingen kampanj"]), st.kampanjStatus || "");
+    const fKamp = selectEl("f_skamp", KAMP_STATUS.map((x) => [x, x || "– no campaign"]), st.kampanjStatus || "");
     const fKampD = inp("f_skampd", st.kampanjDatum, { type: "date" });
     const fKom = area("f_skom", st.kommentar);
-    const fInk = inp("f_sink", st.inkopspris, { type: "number", min: "0", step: "0.01", inputmode: "decimal", placeholder: "per plagg" });
-    const fInkV = selectEl("f_sinkv", [["", "– valuta –"]].concat(CURS.concat(["SEK"]).map((c) => [c, c])), st.inkopsValuta || ((levByName(st.leverantor) || {}).valuta || ""));
-    const mattOpts = [["", "– Egen måttlista nedan –"]]
+    const fInk = inp("f_sink", st.inkopspris, { type: "number", min: "0", step: "0.01", inputmode: "decimal", placeholder: "per unit" });
+    const fInkV = selectEl("f_sinkv", [["", "– currency –"]].concat(CURS.concat(["SEK"]).map((c) => [c, c])), st.inkopsValuta || ((levByName(st.leverantor) || {}).valuta || ""));
+    const mattOpts = [["", "– Own measurement list below –"]]
       .concat(D.styles.filter((x) => x._id !== st._id && !["Kastad"].includes(styleStatusNorm(x.status))).sort((a, b) => (a.namn || "").localeCompare(b.namn || "", "sv")).map((x) => [x._id, x.namn + (x.sasong ? " · " + x.sasong : "") + " (style)"]))
       .concat(D.samples.filter((x) => x.mattGodkanda === true || x.status === "Mottagen").sort((a, b) => styleName(a).localeCompare(styleName(b), "sv")).map((x) => [x._id, styleName(x) + (x.version ? " · " + x.version : "") + " (" + x._id + ")"]));
     const fMattFran = selectEl("f_smattfran", mattOpts, st.mattFran || "");
-    const fMatt = area("f_smatt", st.mattlista, "En rad per mått, t.ex.\nBröstvidd (M) 56\nÄrmlängd 64\nRygglängd 72");
-    const fRef = area("f_sref", st.referenser, "Referensplagg, länkar, inspiration …");
-    const fShop = inp("f_sshop", shopUrl(st), { placeholder: "https://cdn.shopify.com/… eller produktsidans bild-URL" });
+    const fMatt = area("f_smatt", st.mattlista, "One line per measurement, e.g.\nChest (M) 56\nSleeve length 64\nBack length 72");
+    const fRef = area("f_sref", st.referenser, "Reference garments, links, inspiration …");
+    const fShop = inp("f_sshop", shopUrl(st), { placeholder: "https://cdn.shopify.com/… or the product page's image URL" });
     const dropHint = h("span", { class: "hint" });
-    const syncDropHint = () => { const d = dropOf({ sasong: fSas.value.trim(), drop: fDrop.value.trim() }); dropHint.textContent = fDrop.value.trim() ? (d ? (isISO(d.lansering) ? "Lansering " + fmtDate(d.lansering) + " · i lager senast " + fmtDate(d.klartSenast) : isISO(d.klartSenast) ? "I lager senast " + fmtDate(d.klartSenast) : "Droppen har inget lanseringsdatum i COO än") : "Finns inte som drop i " + (fSas.value.trim() || "säsongen") + " – läggs upp under Kollektion eller COO") : "Valfritt. Välj bara säsong om droppen inte är bestämd."; };
+    const syncDropHint = () => { const d = dropOf({ sasong: fSas.value.trim(), drop: fDrop.value.trim() }); dropHint.textContent = fDrop.value.trim() ? (d ? (isISO(d.lansering) ? "Launch " + fmtDate(d.lansering) + " · in stock by " + fmtDate(d.klartSenast) : isISO(d.klartSenast) ? "In stock by " + fmtDate(d.klartSenast) : "The drop has no launch date under Launches yet") : "Not a drop in " + (fSas.value.trim() || "the season") + " – set it up under Collection or Launches") : "Optional. Choose only a season if the drop is not decided."; };
     const grundHint = h("span", { class: "hint" });
     const hasVariants = () => !isNew && D.styles.some((v) => v.grundId === st._id);
-    const syncGrund = () => { const g = byId(D.styles, fGrund.value); const own = !!st.grund || hasVariants(); grundHint.textContent = g ? "Variant av " + g.namn + ". Ärver namn, kategori och mått därifrån om fälten är tomma." : own ? "Den här stylen är själv grundstyle för andra styles." : "Välj plagget som detta är en variant av – den valda stylen blir grundstyle."; fGrund.disabled = ro || own; if (own) fGrund.value = ""; };
-    fGrund.addEventListener("change", () => { let g = byId(D.styles, fGrund.value); const root = g ? grundOf(g) : null; if (root && root._id !== st._id) { toast(g.namn + (g.sasong ? " " + g.sasong : "") + " är redan en variant av grundstylen " + root.namn + " – kopplar dit i stället."); fGrund.value = root._id; g = root; } if (g) { if (!fNamn.value.trim()) fNamn.value = g.namn; if (!fKat.value && g.kategori) fKat.value = g.kategori; if (!fLev.value.trim() && g.leverantor) fLev.value = g.leverantor; if (!fMattFran.value && fMatt.value.trim() === "") fMattFran.value = g._id; } syncGrund(); });
+    const syncGrund = () => { const g = byId(D.styles, fGrund.value); const own = !!st.grund || hasVariants(); grundHint.textContent = g ? "Variant of " + g.namn + ". Inherits name, category and measurements from it if the fields are empty." : own ? "This style is itself the base style for other styles." : "Choose the garment this is a variant of – the chosen style becomes a base style."; fGrund.disabled = ro || own; if (own) fGrund.value = ""; };
+    fGrund.addEventListener("change", () => { let g = byId(D.styles, fGrund.value); const root = g ? grundOf(g) : null; if (root && root._id !== st._id) { toast(g.namn + (g.sasong ? " " + g.sasong : "") + " is already a variant of the base style " + root.namn + " – linking to that instead."); fGrund.value = root._id; g = root; } if (g) { if (!fNamn.value.trim()) fNamn.value = g.namn; if (!fKat.value && g.kategori) fKat.value = g.kategori; if (!fLev.value.trim() && g.leverantor) fLev.value = g.leverantor; if (!fMattFran.value && fMatt.value.trim() === "") fMattFran.value = g._id; } syncGrund(); });
     const form = h("form", { class: "form", id: "styleForm", autocomplete: "off", onsubmit: (e) => e.preventDefault() },
-      h("h3", { class: "sec-title full", text: "Produkt" }),
-      field("Namn", fNamn, { full: true }),
-      field("Beskrivning", fBesk, { full: true }),
-      h("div", { class: "field full" }, h("label", { for: "f_sgrund", text: "Grundstyle" }), fGrund, grundHint),
-      field("Kategori", fKat, { hint: "Styr storleksskala och budgetruta" }), field("Leverantör", fLev),
-      field("Tyg", fTyg, { full: true, hint: "Skriv fritt eller välj ett tyg som redan finns i Tyglager." }),
-      field("Säsong", fSas), h("div", { class: "field" }, h("label", { for: "f_sdrop", text: "Drop" }), fDrop, dropHint),
-      field("Typ", fTyp, { hint: "Restock och NOOS behöver ingen ny sample" }), field("Status", fStatus, { hint: "Produktidé → Idé under utveckling (hos Alex) → Sampling → Godkänd → PO lagd …" }),
-      h("h3", { class: "sec-title full", text: "Mått" }),
-      field("Använd mått från", fMattFran, { full: true, hint: "Hänvisa till ett plagg vars mått ska användas, eller skriv egen måttlista." }),
-      field("Måttlista", fMatt, { full: true }),
-      h("h3", { class: "sec-title full", text: "Referenser" }),
-      field("Referenser och länkar", fRef, { full: true }),
-      lean ? null : field("Bild från Shopify (URL)", fShop, { full: true, hint: st.shopifyBild ? "Hämtad från " + shopTitle(st) + (st.shopifyBild.handle ? " – atemporubato.com/products/" + st.shopifyBild.handle : "") + ". Används när stylen saknar egna bilder; töm fältet för att ta bort." : "Klistra in bild-URL från Shopify för en placeholder tills egna bilder finns." }),
-      ...(lean ? [] : [h("h3", { class: "sec-title full", text: "Planering" }),
-      field("I lager senast", fKlart, { hint: "Tomt = droppens datum används" }), field("Fotosample senast", fFoto, { hint: "Valfritt" }),
-      h("h3", { class: "sec-title full", text: "Foto och e-com" }),
-      field("E-com-bilder", fEcom, { hint: "Olivers status" }), field("E-com-plåtning, datum", fEcomD),
-      field("Kampanjfoto", fKamp), field("Kampanjfoto, datum", fKampD)]),
-      field("Kommentar", fKom, { full: true }),
-      lean && !isNew ? h("p", { class: "hint full" }, "Planering, foto, e-com, EAN, Shopify och inköp sköts i sina egna flikar. ", h("button", { class: "linkish", type: "button", text: "Visa hela stylen", onclick: () => openStyle(st._id, null, { full: true }) })) : null,
-      canSeeMoney() && !lean ? h("h3", { class: "sec-title full", text: "Inköp" }) : null,
-      canSeeMoney() && !lean ? field("Inköpspris per plagg", fInk, { hint: st.inkopsKalla ? "Källa: " + st.inkopsKalla + (st.inkopsDatum ? " " + fmtDate(st.inkopsDatum) : "") : "I leverantörens valuta – räknas om till SEK med kurserna under Leverantörer" }) : null,
-      canSeeMoney() && !lean ? field("Valuta", fInkV) : null);
+      h("h3", { class: "sec-title full", text: "Product" }),
+      field("Name", fNamn, { full: true }),
+      field("Description", fBesk, { full: true }),
+      h("div", { class: "field full" }, h("label", { for: "f_sgrund", text: "Base style" }), fGrund, grundHint),
+      field("Category", fKat, { hint: "Controls the size scale and budget box" }), field("Supplier", fLev),
+      field("Tyg", fTyg, { full: true, hint: "Type freely or choose a fabric that already exists under Stock." }),
+      field("Season", fSas), h("div", { class: "field" }, h("label", { for: "f_sdrop", text: "Drop" }), fDrop, dropHint),
+      field("Type", fTyp, { hint: "Restock and NOOS do not need a new sample" }), field("Status", fStatus, { hint: "Idea not ready → Ready for design (Conor) → Sample can be ordered (Alex) → Sampling → Approved → PO placed …" }),
+      h("h3", { class: "sec-title full", text: "Measurements" }),
+      field("Use measurements from", fMattFran, { full: true, hint: "Refer to a garment whose measurements should be used, or write your own measurement list." }),
+      field("Measurement list", fMatt, { full: true }),
+      h("h3", { class: "sec-title full", text: "References" }),
+      field("References and links", fRef, { full: true }),
+      lean ? null : field("Image from Shopify (URL)", fShop, { full: true, hint: st.shopifyBild ? "Fetched from " + shopTitle(st) + (st.shopifyBild.handle ? " – atemporubato.com/products/" + st.shopifyBild.handle : "") + ". Used when the style has no images of its own; clear the field to remove." : "Paste an image URL from Shopify as a placeholder until there are own images." }),
+      ...(lean ? [] : [h("h3", { class: "sec-title full", text: "Planning" }),
+      field("In stock by", fKlart, { hint: "Empty = the drop's date is used" }), field("Photo sample by", fFoto, { hint: "Optional" }),
+      h("h3", { class: "sec-title full", text: "Photo and e-com" }),
+      field("E-com images", fEcom, { hint: "Oliver's status" }), field("E-com shoot, date", fEcomD),
+      field("Campaign shoot", fKamp), field("Campaign shoot, date", fKampD)]),
+      field("Comment", fKom, { full: true }),
+      lean && !isNew ? h("p", { class: "hint full" }, "Planning, photo, e-com, EAN, Shopify and purchasing are handled in their own tabs. ", h("button", { class: "linkish", type: "button", text: "Show the whole style", onclick: () => openStyle(st._id, null, { full: true }) })) : null,
+      canSeeMoney() && !lean ? h("h3", { class: "sec-title full", text: "Purchasing" }) : null,
+      canSeeMoney() && !lean ? field("Purchase price per unit", fInk, { hint: st.inkopsKalla ? "Source: " + st.inkopsKalla + (st.inkopsDatum ? " " + fmtDate(st.inkopsDatum) : "") : "In the supplier's currency – converted to SEK with the rates under Suppliers" }) : null,
+      canSeeMoney() && !lean ? field("Currency", fInkV) : null);
     if (ro) lock(form);
     fSas.addEventListener("change", syncDropHint); fDrop.addEventListener("change", syncDropHint); syncDropHint(); syncGrund();
-    const formState = () => ({ _id: st._id, namn: fNamn.value.trim(), beskrivning: fBesk.value.trim(), grund: !!st.grund, grundId: st.grund ? "" : fGrund.value, leverantor: fLev.value.trim(), sasong: fSas.value.trim(), drop: fDrop.value.trim(), typ: fTyp.value, kategori: fKat.value, status: fStatus.value, mattFran: fMattFran.value, mattlista: fMatt.value.trim(), referenser: fRef.value.trim(), shopifyBild: fShop.value.trim() ? (st.shopifyBild && st.shopifyBild.url === fShop.value.trim() ? st.shopifyBild : { url: fShop.value.trim(), titel: "", handle: "", likhet: "manuell", t: new Date().toISOString() }) : null, ecomBilder: fEcom.value, ecomPlatDatum: fEcomD.value || null, kampanjStatus: fKamp.value, kampanjDatum: fKampD.value || null, klartSenast: fKlart.value || null, fotoSenast: fFoto.value || null, kommentar: fKom.value.trim(), inkopspris: canSeeMoney() ? num(fInk.value) : st.inkopspris ?? null, inkopsValuta: canSeeMoney() ? fInkV.value : st.inkopsValuta || "", inkopsKalla: canSeeMoney() && num(fInk.value) !== num(st.inkopspris) ? (num(fInk.value) == null ? "" : myName || "manuellt") : st.inkopsKalla || "", inkopsDatum: canSeeMoney() && num(fInk.value) !== num(st.inkopspris) ? (num(fInk.value) == null ? "" : todayISO()) : st.inkopsDatum || "" });
+    const formState = () => ({ _id: st._id, namn: fNamn.value.trim(), beskrivning: fBesk.value.trim(), grund: !!st.grund, grundId: st.grund ? "" : fGrund.value, leverantor: fLev.value.trim(), sasong: fSas.value.trim(), drop: fDrop.value.trim(), typ: fTyp.value, kategori: fKat.value, status: fStatus.value, mattFran: fMattFran.value, mattlista: fMatt.value.trim(), referenser: fRef.value.trim(), shopifyBild: fShop.value.trim() ? (st.shopifyBild && st.shopifyBild.url === fShop.value.trim() ? st.shopifyBild : { url: fShop.value.trim(), titel: "", handle: "", likhet: "manuell", t: new Date().toISOString() }) : null, ecomBilder: fEcom.value, ecomPlatDatum: fEcomD.value || null, kampanjStatus: fKamp.value, kampanjDatum: fKampD.value || null, klartSenast: fKlart.value || null, fotoSenast: fFoto.value || null, kommentar: fKom.value.trim(), inkopspris: canSeeMoney() ? num(fInk.value) : st.inkopspris ?? null, inkopsValuta: canSeeMoney() ? fInkV.value : st.inkopsValuta || "", inkopsKalla: canSeeMoney() && num(fInk.value) !== num(st.inkopspris) ? (num(fInk.value) == null ? "" : myName || "manual") : st.inkopsKalla || "", inkopsDatum: canSeeMoney() && num(fInk.value) !== num(st.inkopspris) ? (num(fInk.value) == null ? "" : todayISO()) : st.inkopsDatum || "" });
 
     const prodSec = h("section");
     function renderPris() {
@@ -4320,9 +4548,9 @@ import * as P from "./platform.js";
       const cur = current(); const info = gm1Info(cur); const shop = shopifyOf(cur._id);
       if (!info && !shop.length) return null;
       const kv = (k, v) => h("div", { class: "kv" }, h("span", { class: "k", text: k }), h("span", { class: "v big" }, v));
-      return h("div", null, h("h3", { class: "sec-title", text: "Pris och marginal" }),
-        h("div", { class: "kvs" }, kv("Pris inkl. moms", info ? fmtSEK(info.pris) + (cur.ecomPrisKalla ? " (" + cur.ecomPrisKalla + ")" : "") : "–"), kv("Netto exkl. moms", info ? fmtSEK(info.netto) : "–"), kv("Kostnad", info && info.kostnad != null ? fmtSEK(info.kostnad) + (info.valuta !== "SEK" ? " (" + fmtCur(info.kostnadValuta, info.valuta) + ")" : "") : "–"), kv("GM1 idag", info && info.kostnad != null ? h("span", { class: "pill " + gmClass(info.gm), text: fmtPct(info.gm, 1) }) : "kostnad saknas"), kv("GM1 om " + (info ? info.valuta : "valutan") + " +" + stressPct() + " % mot SEK", info && info.kostnad != null && info.valuta !== "SEK" ? h("span", { class: "pill " + gmClass(info.gmStress), text: fmtPct(info.gmStress, 1) }) : "–")),
-        shop.length ? h("p", { class: "hint", text: "I Shopify: " + shop.map((p) => p.titel + " " + fmtSEK(p.pris)).join(" · ") }) : null);
+      return h("div", null, h("h3", { class: "sec-title", text: "Price and margin" }),
+        h("div", { class: "kvs" }, kv("Price incl. VAT", info ? fmtSEK(info.pris) + (cur.ecomPrisKalla ? " (" + cur.ecomPrisKalla + ")" : "") : "–"), kv("Net excl. VAT", info ? fmtSEK(info.netto) : "–"), kv("Cost", info && info.kostnad != null ? fmtSEK(info.kostnad) + (info.valuta !== "SEK" ? " (" + fmtCur(info.kostnadValuta, info.valuta) + ")" : "") : "–"), kv("GM1 today", info && info.kostnad != null ? h("span", { class: "pill " + gmClass(info.gm), text: fmtPct(info.gm, 1) }) : "cost missing"), kv("GM1 if " + (info ? info.valuta : "the currency") + " +" + stressPct() + " % against SEK", info && info.kostnad != null && info.valuta !== "SEK" ? h("span", { class: "pill " + gmClass(info.gmStress), text: fmtPct(info.gmStress, 1) }) : "–")),
+        shop.length ? h("p", { class: "hint", text: "In Shopify: " + shop.map((p) => p.titel + " " + fmtSEK(p.pris)).join(" · ") }) : null);
     }
     function renderProd() {
       prodSec.replaceChildren();
@@ -4334,31 +4562,31 @@ import * as P from "./platform.js";
         const cost = pl.reduce((a, x) => a + (lineCost(x.r) || 0), 0);
         const perColor = {}; for (const x of pl) { const k = x.r.farg || "TBA"; perColor[k] = (perColor[k] || 0) + (num(x.r.antal) || 0); }
         const kv = (k, v) => h("div", { class: "kv" }, h("span", { class: "k", text: k }), h("span", { class: "v big", text: v }));
-        prodSec.append(h("h3", { class: "sec-title", text: "Produktion" }),
-          h("div", { class: "kvs" }, kv("Antal totalt", String(units)), kv("Per färg", Object.entries(perColor).map(([k, v]) => k + " " + v).join(", ") || "–"), kv("Snitt/enhet", units ? fmtSEK(cost / units) : "–"), kv("Inköpsvärde", fmtSEK(cost))),
-          h("div", { class: "vscroll" }, h("table", { class: "prodrows" }, h("thead", null, h("tr", null, ["PO", "Färg", "Antal", "Tyg/enhet", "Styckpris", "Kostnad", "Status", "ETA lager"].map((x) => h("th", { text: x })))),
+        prodSec.append(h("h3", { class: "sec-title", text: "Production" }),
+          h("div", { class: "kvs" }, kv("Total quantity", String(units)), kv("Per colour", Object.entries(perColor).map(([k, v]) => k + " " + v).join(", ") || "–"), kv("Average/unit", units ? fmtSEK(cost / units) : "–"), kv("Purchase value", fmtSEK(cost))),
+          h("div", { class: "vscroll" }, h("table", { class: "prodrows" }, h("thead", null, h("tr", null, ["PO", "Colour", "Quantity", "Fabric/unit", "Unit price", "Cost", "Status", "ETA warehouse"].map((x) => h("th", { text: x })))),
             h("tbody", null, pl.map((x) => { const tr = h("tr", { style: "cursor:pointer", onclick: () => openPo(x.po._id) }, h("td", { class: "mono", text: x.po.nr || x.po._id }), h("td", { text: x.r.farg || "TBA" }), h("td", { class: "num", text: x.r.antal == null ? "?" : String(x.r.antal) }), h("td", { class: "num", text: num(x.r.tygkostnad) != null ? fmtSEK(x.r.tygkostnad) : "–" }), h("td", { class: "num", text: num(x.r.styckpris) != null ? fmtSEK(x.r.styckpris) : "–" }), h("td", { class: "num", text: fmtSEK(lineCost(x.r)) }), h("td", null, poStatusPill(x.po)), h("td", { class: "mono", text: poEta(x.po) ? fmtDate(poEta(x.po)) : "" })); return tr; })))),
-          h("p", { class: "hint", text: "Klicka på en rad för att öppna PO:n. Kostnad = antal × (styckpris + tygkostnad)." }));
+          h("p", { class: "hint", text: "Click a row to open the PO. Cost = quantity × (unit price + fabric cost)." }));
         return;
       }
       const rows = Array.isArray(st.produktion) ? st.produktion : [];
       if (!rows.length) return;
-      prodSec.append(h("h3", { class: "sec-title", text: "Produktion" + (st.produktionUppdaterad ? " · från Masterplaner " + fmtDate(st.produktionUppdaterad) : "") }),
-        h("div", { class: "vscroll", style: "margin-top:0" }, h("table", { class: "prodrows" }, h("thead", null, h("tr", null, ["PO", "Färg", "Antal", "Status", "ETA lager"].map((x) => h("th", { text: x })))),
+      prodSec.append(h("h3", { class: "sec-title", text: "Production" + (st.produktionUppdaterad ? " · from Masterplaner " + fmtDate(st.produktionUppdaterad) : "") }),
+        h("div", { class: "vscroll", style: "margin-top:0" }, h("table", { class: "prodrows" }, h("thead", null, h("tr", null, ["PO", "Colour", "Quantity", "Status", "ETA warehouse"].map((x) => h("th", { text: x })))),
           h("tbody", null, rows.map((r) => h("tr", null, h("td", { class: "mono", text: r.po || "" }), h("td", { text: r.farg || "" }), h("td", { class: "mono", text: r.antal == null ? "" : String(r.antal) }), h("td", { text: r.status || "" }), h("td", { class: "mono", text: isISO(r.eta) ? fmtDate(r.eta) : (r.eta || "") })))))));
     }
 
     const planSec = h("section");
     function renderPlan() {
       const cur = formState(); const p = plan(cur);
-      planSec.replaceChildren(h("h3", { class: "sec-title", text: "Tidsplan" }), h("div", { class: "plan-head" }, lagePill(p), h("span", { class: "plan-note", text: p.note || "" })));
+      planSec.replaceChildren(h("h3", { class: "sec-title", text: "Timeline" }), h("div", { class: "plan-head" }, lagePill(p), h("span", { class: "plan-note", text: p.note || "" })));
       if (["klar", "skip", "paus"].includes(p.lage) || !p.po) return;
       const rows = [
-        ["I lager senast" + (p.deadlineFrom === "drop" ? " (från " + cur.sasong + " " + cur.drop + ")" : ""), p.deadline, false, true],
-        ["Frakt " + p.frakt + " d → klart hos leverantör", p.ex, false, true],
-        ["Produktion " + p.prod + " d" + (p.buff ? " + buffert " + p.buff + " d" : "") + " → PO senast", p.po, true, true],
-        ["Utvärdering " + p.utv + " d → sample inne senast", p.inne, false, (cur.typ || "Nyhet") === "Nyhet"],
-        [p.sl != null ? "Sample-ledtid " + p.sl + " d → sample beställd senast" : "Sample-ledtid saknas för leverantören", p.best, false, (cur.typ || "Nyhet") === "Nyhet"]
+        ["In stock by" + (p.deadlineFrom === "drop" ? " (from " + cur.sasong + " " + cur.drop + ")" : ""), p.deadline, false, true],
+        ["Freight " + p.frakt + " d → ready at the supplier", p.ex, false, true],
+        ["Production " + p.prod + " d" + (p.buff ? " + buffer " + p.buff + " d" : "") + " → PO by", p.po, true, true],
+        ["Evaluation " + p.utv + " d → sample in by", p.inne, false, (cur.typ || "Nyhet") === "Nyhet"],
+        [p.sl != null ? "Sample lead time " + p.sl + " d → sample ordered by" : "Sample lead time missing for the supplier", p.best, false, (cur.typ || "Nyhet") === "Nyhet"]
       ];
       const box = h("div", { class: "plan" });
       for (const [label, date, key, show] of rows) {
@@ -4370,15 +4598,15 @@ import * as P from "./platform.js";
       if (isISO(cur.fotoSenast) && st._id) {
         const fotos = samplesOfStyle(st._id).filter((x) => x.version === "Fotosample");
         const ok = fotos.some((x) => x.status === "Mottagen" || (expected(x) && expected(x) <= cur.fotoSenast));
-        planSec.append(h("p", { class: ok ? "okline" : "warnline", text: ok ? "Fotosample hinner till " + fmtDate(cur.fotoSenast) + "." : "Ingen fotosample hinner till " + fmtDate(cur.fotoSenast) + "." }));
+        planSec.append(h("p", { class: ok ? "okline" : "warnline", text: ok ? "A photo sample will be in time for " + fmtDate(cur.fotoSenast) + "." : "No photo sample will be in time for " + fmtDate(cur.fotoSenast) + "." }));
       }
     }
     [fLev, fKlart, fStatus, fTyp, fFoto, fSas, fDrop].forEach((x) => x.addEventListener("change", () => { renderPlan(); renderEanTable(); }));
     fKlart.addEventListener("input", renderPlan);
 
     const pendingImgs = isNew ? [] : null;
-    const ownImgs = bilderSection({ title: "Bilder och referenser", ro, pending: pendingImgs, current, hero: () => styleImage(current()), onHero: ro ? null : async (bid) => { await write("styles", current()._id, { bildId: bid, bildAuto: false, andrad: new Date().toISOString() }); },
-      empty: "Skisser, referensbilder och foton på plagget. Första bilden blir huvudbild i Kollektion och Bibliotek om inget annat väljs.",
+    const ownImgs = bilderSection({ title: "Images and references", ro, pending: pendingImgs, current, hero: () => styleImage(current()), onHero: ro ? null : async (bid) => { await write("styles", current()._id, { bildId: bid, bildAuto: false, andrad: new Date().toISOString() }); },
+      empty: "Sketches, reference images and photos of the garment. The first image becomes the main image in Collection and Ideas unless another is chosen.",
       save: (ids, logText) => { const cur = current(); return write("styles", cur._id, { bilder: ids, andrad: new Date().toISOString(), logg: (cur.logg || []).concat(logEntry(logText)) }); } });
     const gallerySec = h("section");
     function renderGallery() {
@@ -4388,7 +4616,7 @@ import * as P from "./platform.js";
       const cur = current();
       const ids = uniq(samplesOfStyle(st._id).flatMap(sampleImages));
       if (!ids.length) return;
-      gallerySec.append(h("h3", { class: "sec-title", text: "Bilder från samples (" + ids.length + ")" }));
+      gallerySec.append(h("h3", { class: "sec-title", text: "Images from samples (" + ids.length + ")" }));
       const hero = styleImage(cur);
       gallerySec.append(gallery(ids, { hero, onHero: ro ? null : async (bid) => { await write("styles", cur._id, { bildId: bid, bildAuto: false, andrad: new Date().toISOString() }); } }));
     }
@@ -4398,13 +4626,13 @@ import * as P from "./platform.js";
       if (isNew) return;
       const cur = current();
       const g = grundOf(cur);
-      if (g) { varSec.append(h("div", { class: "ideabanner" }, h("span", null, "Variant av grundstylen ", h("button", { class: "linkish", type: "button", text: g.namn, onclick: () => openStyle(g._id) })), h("span", { class: "sub", text: "· " + variantsOf(g._id).length + (variantsOf(g._id).length === 1 ? " variant totalt" : " varianter totalt") }))); }
+      if (g) { varSec.append(h("div", { class: "ideabanner" }, h("span", null, "Variant of the base style ", h("button", { class: "linkish", type: "button", text: g.namn, onclick: () => openStyle(g._id) })), h("span", { class: "sub", text: "· " + variantsOf(g._id).length + (variantsOf(g._id).length === 1 ? " variant in total" : " variants in total") }))); }
       const vs = variantsOf(cur._id);
-      if (!isGrund(cur)) { if (!ro && !g) varSec.append(h("button", { class: "btn small", type: "button", text: "+ Ny variant av " + cur.namn, title: "Gör " + cur.namn + " till grundstyle och skapar en variant av den", onclick: () => openStyle(null, { grundId: cur._id, namn: cur.namn, kategori: cur.kategori || "", leverantor: cur.leverantor || "", storlekar: (cur.storlekar || []).slice(), mattFran: cur._id, status: "Produktidé", sasong: UI.bibliotek.season || "" }) })); return; }
-      varSec.append(h("h3", { class: "sec-title", text: "Varianter (" + vs.length + ")" }));
+      if (!isGrund(cur)) { if (!ro && !g) varSec.append(h("button", { class: "btn small", type: "button", text: "+ New variant of " + cur.namn, title: "Makes " + cur.namn + " a base style and creates a variant of it", onclick: () => openStyle(null, { grundId: cur._id, namn: cur.namn, kategori: cur.kategori || "", leverantor: cur.leverantor || "", storlekar: (cur.storlekar || []).slice(), mattFran: cur._id, status: ST_IDE, sasong: UI.bibliotek.season || "" }) })); return; }
+      varSec.append(h("h3", { class: "sec-title", text: "Variants (" + vs.length + ")" }));
       if (vs.length) varSec.append(h("ul", { class: "mini" }, vs.map((v) => h("li", null, h("button", { class: "mini-row", type: "button", onclick: () => openStyle(v._id) }, tag(v._id), h("span", { class: "mini-main" }, h("strong", { text: v.namn }), h("span", { class: "sub", text: [v.sasong, v.drop, styleTyg(v), (v.farger || []).join(", ")].filter(Boolean).join(" · ") })), h("span", { class: "mini-side" }, styleStatusPill(v)))))));
-      else varSec.append(h("p", { class: "hint", text: "Inga varianter ännu. En variant är samma plagg i ny kollektion, nytt tyg eller ny färgställning." }));
-      if (!ro) varSec.append(h("button", { class: "btn small", type: "button", text: "+ Ny variant av " + cur.namn, onclick: () => openStyle(null, { grundId: cur._id, namn: cur.namn, kategori: cur.kategori || "", leverantor: cur.leverantor || "", storlekar: (cur.storlekar || []).slice(), mattFran: cur._id, status: "Produktidé", sasong: UI.bibliotek.season || "" }) }));
+      else varSec.append(h("p", { class: "hint", text: "No variants yet. A variant is the same garment in a new collection, a new fabric or a new colourway." }));
+      if (!ro) varSec.append(h("button", { class: "btn small", type: "button", text: "+ New variant of " + cur.namn, onclick: () => openStyle(null, { grundId: cur._id, namn: cur.namn, kategori: cur.kategori || "", leverantor: cur.leverantor || "", storlekar: (cur.storlekar || []).slice(), mattFran: cur._id, status: ST_IDE, sasong: UI.bibliotek.season || "" }) }));
     }
     const samplesSec = h("section");
     function renderSamples() {
@@ -4413,23 +4641,23 @@ import * as P from "./platform.js";
       const xs = samplesOfStyle(st._id);
       const ul = h("ul", { class: "mini" });
       for (const x of xs) {
-        const e = x.status === "Mottagen" ? (x.mottagen ? "mott. " + fmtDate(x.mottagen) : "mottagen") : expected(x) ? "väntas " + fmtDate(expected(x)) : "TBA";
+        const e = x.status === "Mottagen" ? (x.mottagen ? "rec. " + fmtDate(x.mottagen) : "received") : expected(x) ? "expected " + fmtDate(expected(x)) : "TBA";
         ul.append(h("li", null, h("button", { class: "mini-row", type: "button", onclick: () => openSample(x._id) }, tag(x._id),
           h("span", { class: "mini-main" }, h("strong", { text: x.version || "–" }), h("span", { class: "sub", text: [x.farg, tygName(x), platsText(x)].filter(Boolean).join(" · ") })),
           h("span", { class: "mini-side" }, statusPill(x.status), beslutNorm(x.beslut) ? chip(beslutNorm(x.beslut), "b-" + slug(beslutNorm(x.beslut))) : null, h("span", { class: "sub mono", text: e })))));
       }
-      if (!xs.length) ul.append(h("li", { class: "sub", text: "Inga samples ännu." }));
+      if (!xs.length) ul.append(h("li", { class: "sub", text: "No samples yet." }));
       samplesSec.append(h("h3", { class: "sec-title", text: "Samples (" + xs.length + ")" }), ul);
-      if (!ro) { const last = xs[xs.length - 1]; samplesSec.append(h("button", { class: "btn small", type: "button", text: "+ Ny sample för stylen", onclick: () => openSample(null, { styleId: st._id, leverantor: current().leverantor || "", version: last ? nextVersion(last.version) : "Proto 1", tygId: last ? last.tygId : null }) })); }
+      if (!ro) { const last = xs[xs.length - 1]; samplesSec.append(h("button", { class: "btn small", type: "button", text: "+ New sample for the style", onclick: () => openSample(null, { styleId: st._id, leverantor: current().leverantor || "", version: last ? nextVersion(last.version) : "Proto 1", tygId: last ? last.tygId : null }) })); }
       const tygIds = uniq(xs.map((x) => x.tygId));
-      const tygChips = tygIds.map((id) => { const tt = byId(D.tyger, id); const s = stockText(id); return chip((tt ? tt.namn : id) + (s ? " · eget lager: " + s : "")); });
+      const tygChips = tygIds.map((id) => { const tt = byId(D.tyger, id); const s = stockText(id); return chip((tt ? tt.namn : id) + (s ? " · own stock: " + s : "")); });
       const loose = uniq(xs.filter((x) => !x.tygId).map((x) => x.material)).map((m) => chip(m));
-      if (tygChips.length || loose.length) samplesSec.append(h("div", { class: "chips" }, h("span", { class: "sub", text: "Tyger:" }), tygChips, loose));
+      if (tygChips.length || loose.length) samplesSec.append(h("div", { class: "chips" }, h("span", { class: "sub", text: "Fabrics:" }), tygChips, loose));
     }
 
-    const fFarger = inp("f_sfarger", (st.farger || []).join(", "), { placeholder: "t.ex. Navy, Green" });
-    const fPreset = selectEl("f_spreset", [["", "Välj skala …"]].concat(SIZE_PRESETS.map(([l, v]) => [v, l])), "");
-    const fStorl = inp("f_sstorlekar", (st.storlekar || []).join(", "), { placeholder: "t.ex. S, M, L, XL" });
+    const fFarger = inp("f_sfarger", (st.farger || []).join(", "), { placeholder: "e.g. Navy, Green" });
+    const fPreset = selectEl("f_spreset", [["", "Choose scale …"]].concat(SIZE_PRESETS.map(([l, v]) => [v, l])), "");
+    const fStorl = inp("f_sstorlekar", (st.storlekar || []).join(", "), { placeholder: "e.g. S, M, L, XL" });
     if (ro) [fFarger, fPreset, fStorl].forEach((x) => (x.disabled = true));
     fPreset.addEventListener("change", () => { if (fPreset.value) { fStorl.value = fPreset.value; fPreset.value = ""; renderEanTable(); } });
     fFarger.addEventListener("input", () => renderEanTable());
@@ -4438,8 +4666,8 @@ import * as P from "./platform.js";
     const eanTable = h("div");
     const eanActions = h("div", { class: "ean-actions" });
     const eanSec = h("section");
-    if (isNew) eanSec.append(h("h3", { class: "sec-title", text: "Varianter och EAN" }), h("p", { class: "hint", text: "Spara stylen först." }));
-    else eanSec.append(h("h3", { class: "sec-title", text: "Varianter och EAN" }), h("div", { class: "form" }, field("Färger", fFarger, { full: true, hint: "Separera med komma, som de ska heta i Shopify" }), field("Storleksskala", fPreset), field("Storlekar", fStorl)), eanTable, eanActions);
+    if (isNew) eanSec.append(h("h3", { class: "sec-title", text: "Variants and EAN" }), h("p", { class: "hint", text: "Save the style first." }));
+    else eanSec.append(h("h3", { class: "sec-title", text: "Variants and EAN" }), h("div", { class: "form" }, field("Colours", fFarger, { full: true, hint: "Separate with commas, as they should be named in Shopify" }), field("Size scale", fPreset), field("Sizes", fStorl)), eanTable, eanActions);
     function renderEanTable() {
       if (isNew) return;
       const cur = current();
@@ -4450,25 +4678,25 @@ import * as P from "./platform.js";
       for (const e of existing) if (!vs.some((v) => vkey(v) === vkey(e))) rows.push({ v: e, e, orphan: true });
       const missing = rows.filter((r) => !r.e).length;
       eanTable.replaceChildren();
-      if (!rows.length) eanTable.append(h("p", { class: "hint", text: "Fyll i färger och storlekar så visas varianterna här." }));
+      if (!rows.length) eanTable.append(h("p", { class: "hint", text: "Fill in colours and sizes and the variants are shown here." }));
       else {
-        const tb = h("tbody", null, rows.map((r) => h("tr", { class: r.orphan ? "orphan" : null }, h("td", { text: r.v.farg }), h("td", { text: r.v.storlek }), h("td", { class: "mono" }, r.e ? r.e.ean : h("span", { class: "muted", text: "–" }), r.orphan ? h("span", { class: "sub", text: " (ej längre i listan)" }) : null))));
-        eanTable.append(h("div", { class: "vscroll" }, h("table", { class: "vtable" }, h("thead", null, h("tr", null, h("th", { text: "Färg" }), h("th", { text: "Storlek" }), h("th", { text: "EAN" }))), tb)));
+        const tb = h("tbody", null, rows.map((r) => h("tr", { class: r.orphan ? "orphan" : null }, h("td", { text: r.v.farg }), h("td", { text: r.v.storlek }), h("td", { class: "mono" }, r.e ? r.e.ean : h("span", { class: "muted", text: "–" }), r.orphan ? h("span", { class: "sub", text: " (no longer in the list)" }) : null))));
+        eanTable.append(h("div", { class: "vscroll" }, h("table", { class: "vtable" }, h("thead", null, h("tr", null, h("th", { text: "Colour" }), h("th", { text: "Size" }), h("th", { text: "EAN" }))), tb)));
       }
       eanActions.replaceChildren();
       if (!ro && missing > 0) {
-        if (!EAN_OK_STATUS.includes(fStatus.value)) eanActions.append(h("p", { class: "hint", text: "EAN tilldelas när stylen är Godkänd." }));
-        else eanActions.append(h("button", { class: "btn small primary", type: "button", text: "Tilldela EAN till " + missing + (missing === 1 ? " variant" : " varianter"), onclick: () => confirmAssign(missing) }));
+        if (!EAN_OK_STATUS.includes(fStatus.value)) eanActions.append(h("p", { class: "hint", text: "EAN is assigned when the style is Approved." }));
+        else eanActions.append(h("button", { class: "btn small primary", type: "button", text: "Assign EAN to " + missing + (missing === 1 ? " variant" : " variants"), onclick: () => confirmAssign(missing) }));
       }
-      if (existing.length && downloads) eanActions.append(h("button", { class: "btn small", type: "button", text: "Exportera CSV", onclick: () => exportStyleEan(cur) }));
-      if (existing.length) eanActions.append(h("span", { class: "sub", text: existing.length + " EAN tilldelade" }));
+      if (existing.length && downloads) eanActions.append(h("button", { class: "btn small", type: "button", text: "Export CSV", onclick: () => exportStyleEan(cur) }));
+      if (existing.length) eanActions.append(h("span", { class: "sub", text: existing.length + " EAN assigned" }));
     }
     function confirmAssign(n) {
       const p = D.pool;
-      if (!p) { toast("EAN-serien är inte inställd."); return; }
+      if (!p) { toast("The EAN range is not set up."); return; }
       const pre = String(p.prefix);
       const first = ean13(pre + String(p.nasta).padStart(12 - pre.length, "0"));
-      eanActions.replaceChildren(h("span", { class: "confirm" }, h("span", { text: "Tilldela " + n + " EAN från " + first + "?" }), h("button", { class: "btn small primary", type: "button", text: "Ja, tilldela", onclick: doAssign }), h("button", { class: "btn small", type: "button", text: "Avbryt", onclick: renderEanTable })));
+      eanActions.replaceChildren(h("span", { class: "confirm" }, h("span", { text: "Assign " + n + " EAN from " + first + "?" }), h("button", { class: "btn small primary", type: "button", text: "Yes, assign", onclick: doAssign }), h("button", { class: "btn small", type: "button", text: "Cancel", onclick: renderEanTable })));
     }
     async function doAssign() {
       const cur = current();
@@ -4477,27 +4705,27 @@ import * as P from "./platform.js";
       const have = new Set(existing.map(vkey));
       const missing = variants(farger, storlekar).filter((v) => !have.has(vkey(v)));
       if (!missing.length) { renderEanTable(); return; }
-      eanActions.replaceChildren(h("span", { class: "sub", text: "Tilldelar …" }));
+      eanActions.replaceChildren(h("span", { class: "sub", text: "Assigning …" }));
       let codes;
       try { codes = await allocateEan(missing.length); }
       catch (e) {
         const c = e && e.code;
-        toast(c === "busy" ? "Någon annan tilldelar EAN just nu. Försök igen om några sekunder." : c === "empty" ? "EAN-serien räcker inte till." : c === "nopool" ? "EAN-serien är inte inställd." : "Kunde inte reservera EAN. Försök igen.");
+        toast(c === "busy" ? "Someone else is assigning EAN right now. Try again in a few seconds." : c === "empty" ? "The EAN range is not large enough." : c === "nopool" ? "The EAN range is not set up." : "Could not reserve EAN. Try again.");
         renderEanTable(); return;
       }
       const t = new Date().toISOString();
       const added = missing.map((v, i) => ({ farg: v.farg, storlek: v.storlek, ean: codes[i], t, av: myId }));
       const range = codes[0] + (codes.length > 1 ? "–" + codes[codes.length - 1] : "");
-      const patch = { farger, storlekar, ean: existing.concat(added), logg: (cur.logg || []).concat(logEntry(added.length + " EAN tilldelade (" + range + ")")), andrad: t };
+      const patch = { farger, storlekar, ean: existing.concat(added), logg: (cur.logg || []).concat(logEntry(added.length + " EAN assigned (" + range + ")")), andrad: t };
       if (fStatus.value !== cur.status) patch.status = fStatus.value;
       const ok = await write("styles", cur._id, patch);
       try { await db.collection("eanLogg").doc("L" + Date.now() + Math.random().toString(36).slice(2, 6)).set({ t, av: myId, styleId: cur._id, styleNamn: cur.namn, antal: codes.length, forsta: codes[0], sista: codes[codes.length - 1], sparad: ok }); } catch (e) {}
-      toast(ok ? added.length + " EAN tilldelade" : "EAN " + range + " reserverades men kunde inte sparas på stylen. Notera numren.");
+      toast(ok ? added.length + " EAN assigned" : "EAN " + range + " were reserved but could not be saved on the style. Note the numbers.");
       if (!ok) renderEanTable();
     }
 
     const logUl = h("ul", { class: "log" });
-    const noteIn = inp("f_snote", "", { placeholder: "Anteckning om stylen" });
+    const noteIn = inp("f_snote", "", { placeholder: "Note about the style" });
     // ---- Shopify: produktdata och push (hosted-only, ligger utanför artefaktens datamodell) ----
     const sh = (P.hosted().shopify || {})[st._id] || {};
     const fargRaderOf = () => (P.hosted().farger || {})[st._id] || [];
@@ -4506,34 +4734,34 @@ import * as P from "./platform.js";
     const CARE_LINES = ["Wash at 30° and hang to dry.", "Wash at 30° inside out and hang to dry.", "Hand wash cold and dry flat, or dry clean.", "Dry clean only.", "Do not wash or dry clean. Sponge clean with cold water. Re-wax when needed."];
     const SIZE_CHARTS = ["lot-no-2", "officer-s-chino", "pilot-chino", "cotton-and-linen-slacks", "lot-nr-1-denim", "lot-nr-2-denim", "french-pocket-deck-pant", "french-pocket-trouser", "r-shirt", "roper-shirt", "lightweight-roper-shirt", "work-shirt", "fatigue-shirt", "standard-crew-neck-and-v-neck", "standard-sportsman", "cashman", "camelhair-ridge-crew", "button-through-polo", "mercer-jacket", "fireman-s-jacket", "american-hunting-jacket", "tailored-jackets", "belts", "explorers-roll-neck", "funnel-neck", "geelongora-cable-knit", "cashmere-turtleneck", "cashmere-crew-neck", "5-pkt-trouser", "cortina"];
     const COLOUR_FAMILIES = ["black", "navy", "brown", "ecru", "khaki", "grey", "blue", "beige", "camel", "clay", "olive", "persimmon"];
-    const pTyp = selectEl("f_sh_typ", [["", "Välj …"]].concat(Object.keys(SH.produkttyper || {})), sh.produkttyp || "");
-    const pSys = selectEl("f_sh_sys", [["", "Välj …"], ["alpha", "XS till XXL (01 till 06)"], ["midja", "Midja 30 till 38 (07 till 13)"], ["eu", "44 till 56 (14 till 20)"], ["eu_tailoring", "Tailoring 46 till 54 (21 till 25)"], ["balte", "Bälten 80 till 105 (35 till 40)"], ["one", "One size (99)"]], sh.storlekssystem || "");
-    const pKod = inp("f_sh_kod", sh.stylekod, { placeholder: "sätts automatiskt", disabled: !!sh.stylekod || !canAdmin });
+    const pTyp = selectEl("f_sh_typ", [["", "Choose …"]].concat(Object.keys(SH.produkttyper || {})), sh.produkttyp || "");
+    const pSys = selectEl("f_sh_sys", [["", "Choose …"], ["alpha", "XS to XXL (01 to 06)"], ["midja", "Waist 30 to 38 (07 to 13)"], ["eu", "44 to 56 (14 to 20)"], ["eu_tailoring", "Tailoring 46 to 54 (21 to 25)"], ["balte", "Belts 80 to 105 (35 to 40)"], ["one", "One size (99)"]], sh.storlekssystem || "");
+    const pKod = inp("f_sh_kod", sh.stylekod, { placeholder: "set automatically", disabled: !!sh.stylekod || !canAdmin });
     const pPris = inp("f_sh_pris", sh.rrp_sek, { type: "number", min: "0", step: "1", inputmode: "numeric" });
-    const pHs = inp("f_sh_hs", sh.hs_kod, { placeholder: "t.ex. 6203493520" });
+    const pHs = inp("f_sh_hs", sh.hs_kod, { placeholder: "e.g. 6203493520" });
     const pVikt = inp("f_sh_vikt", sh.vikt_gram, { type: "number", min: "0", step: "10", placeholder: "gram" });
-    const pMat = inp("f_sh_mat", sh.sammansattning, { placeholder: "t.ex. 100% Cotton" });
+    const pMat = inp("f_sh_mat", sh.sammansattning, { placeholder: "e.g. 100% Cotton" });
     const pMatFam = selectEl("f_sh_matfam", [["", "–"], "Cotton", "Wool", "Cashmere", "Camelhair", "Linen", "Silk", "Leather", "Denim"], sh.material_family || "");
     const pCare = inp("f_sh_care", sh.tvattrad, { list: "dlCare", autocomplete: "off" });
-    const pCut = inp("f_sh_cut", sh.cut, { placeholder: "t.ex. Straight, Wide, Relaxed" });
-    const pFit = inp("f_sh_fit", sh.fit_note, { placeholder: "En rad om passformen" });
-    const pModel = inp("f_sh_model", sh.model_note, { placeholder: "t.ex. Model is 186 cm and wears 48" });
+    const pCut = inp("f_sh_cut", sh.cut, { placeholder: "e.g. Straight, Wide, Relaxed" });
+    const pFit = inp("f_sh_fit", sh.fit_note, { placeholder: "One line about the fit" });
+    const pModel = inp("f_sh_model", sh.model_note, { placeholder: "e.g. Model is 186 cm and wears 48" });
     const pMill = inp("f_sh_mill", sh.fabric_mill);
-    const pGsm = inp("f_sh_gsm", sh.fabric_weight, { placeholder: "t.ex. 320" });
-    const pOrigin = inp("f_sh_origin", sh.fabric_origin, { placeholder: "Var tyget vävs" });
-    const pConstr = inp("f_sh_constr", sh.construction, { placeholder: "t.ex. half canvassed" });
+    const pGsm = inp("f_sh_gsm", sh.fabric_weight, { placeholder: "e.g. 320" });
+    const pOrigin = inp("f_sh_origin", sh.fabric_origin, { placeholder: "Where the fabric is woven" });
+    const pConstr = inp("f_sh_constr", sh.construction, { placeholder: "e.g. half canvassed" });
     const pFeat = inp("f_sh_feat", sh.features);
-    const pChart = inp("f_sh_chart", sh.size_chart, { list: "dlSizeChart", autocomplete: "off", placeholder: "handle, t.ex. pilot-chino" });
-    const pDesc = area("f_sh_desc", sh.description_en, "Kalles format: en till två meningar, vad det är plus snitt och tyg, sedan hur det bärs.");
+    const pChart = inp("f_sh_chart", sh.size_chart, { list: "dlSizeChart", autocomplete: "off", placeholder: "handle, e.g. pilot-chino" });
+    const pDesc = area("f_sh_desc", sh.description_en, "Kalle's format: one or two sentences, what it is plus cut and fabric, then how it is worn.");
     if (!$("dlCare")) document.body.append(h("datalist", { id: "dlCare" }, CARE_LINES.map((c) => h("option", { value: c }))), h("datalist", { id: "dlSizeChart" }, SIZE_CHARTS.map((c) => h("option", { value: c }))));
     const shopForm = h("div", { class: "form" },
-      field("Produkttyp", pTyp), field("Storlekssystem (SKU)", pSys, { hint: "Avgör storlekskoden i SKU" }), field("Stylekod", pKod, { hint: "Löpnummer i SKU, t.ex. 1079" }),
-      field("Pris (RRP, SEK)", pPris), field("HS-kod", pHs), field("Vikt", pVikt),
-      field("Material (sammansättning)", pMat), field("Material family", pMatFam), field("Skötselråd", pCare, { hint: "Välj en av de sex standardraderna" }),
+      field("Product type", pTyp), field("Size system (SKU)", pSys, { hint: "Decides the size code in the SKU" }), field("Style code", pKod, { hint: "Serial number in the SKU, e.g. 1079" }),
+      field("Price (RRP, SEK)", pPris), field("HS code", pHs), field("Weight", pVikt),
+      field("Material (composition)", pMat), field("Material family", pMatFam), field("Care instructions", pCare, { hint: "Choose one of the six standard lines" }),
       field("Cut", pCut), field("Fit note", pFit), field("Model note", pModel),
       field("Fabric mill", pMill), field("Fabric weight (gsm)", pGsm), field("Fabric origin", pOrigin),
-      field("Construction", pConstr), field("Features", pFeat), field("Storlekstabell", pChart),
-      field("Beskrivning (engelska)", pDesc, { full: true }));
+      field("Construction", pConstr), field("Features", pFeat), field("Size table", pChart),
+      field("Description (English)", pDesc, { full: true }));
     shopForm.classList.add("three");
     const shopState = () => ({ produkttyp: pTyp.value || null, storlekssystem: pSys.value || null, stylekod: pKod.value.trim() || null, rrp_sek: num(pPris.value), hs_kod: pHs.value.trim() || null, vikt_gram: num(pVikt.value), sammansattning: pMat.value.trim() || null, material_family: pMatFam.value || null, tvattrad: pCare.value.trim() || null, cut: pCut.value.trim() || null, fit_note: pFit.value.trim() || null, model_note: pModel.value.trim() || null, fabric_mill: pMill.value.trim() || null, fabric_weight: pGsm.value.trim() || null, fabric_origin: pOrigin.value.trim() || null, construction: pConstr.value.trim() || null, features: pFeat.value.trim() || null, size_chart: pChart.value.trim() || null, description_en: pDesc.value.trim() || null });
     if (ro) lock(shopForm);
@@ -4545,43 +4773,43 @@ import * as P from "./platform.js";
     async function callShopify(action, farg) {
       const { data: { session } } = await P.supabase.auth.getSession();
       const res = await fetch("/api/shopify", { method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer " + (session ? session.access_token : "") }, body: JSON.stringify({ action, style_id: st._id, farg }) });
-      let j; try { j = await res.json(); } catch (e) { j = { error: "Servern svarade inte som väntat (" + res.status + ")." }; }
+      let j; try { j = await res.json(); } catch (e) { j = { error: "The server did not respond as expected (" + res.status + ")." }; }
       return j;
     }
     function renderResult(farg, j) {
-      resultBox.replaceChildren(h("h4", { class: "sec-title", text: (j.update ? "Uppdatering" : "Ny produkt") + ": " + (j.title || farg) }));
+      resultBox.replaceChildren(h("h4", { class: "sec-title", text: (j.update ? "Update" : "New product") + ": " + (j.title || farg) }));
       if (j.error && !j.errors) resultBox.append(h("p", { class: "warnline bad", text: j.error }));
       if (j.errors && j.errors.length) resultBox.append(h("ul", { class: "shop-errors" }, j.errors.map((e) => h("li", { text: e }))));
       if (j.warnings && j.warnings.length) resultBox.append(h("ul", { class: "shop-warnings" }, j.warnings.map((e) => h("li", { text: e }))));
-      if (j.variants) resultBox.append(h("div", { class: "vscroll" }, h("table", { class: "vtable" }, h("thead", null, h("tr", null, h("th", { text: "Storlek" }), h("th", { text: "SKU" }), h("th", { text: "EAN" }), h("th", { text: "Pris" }))), h("tbody", null, j.variants.map((v) => h("tr", null, h("td", { text: v.size }), h("td", { class: "mono", text: v.sku }), h("td", { class: "mono", text: v.ean || "–" }), h("td", { class: "mono", text: v.price != null ? String(v.price) : "–" })))))));
-      if (j.tags) resultBox.append(h("p", { class: "sub", text: "Taggar: " + j.tags.join(", ") }));
-      if (j.metafields) resultBox.append(h("details", null, h("summary", { class: "sub", text: j.metafields.length + " metafält" }), h("ul", { class: "shop-mf" }, j.metafields.map((m) => h("li", { class: "mono", text: m })))));
-      if (j.admin_url) resultBox.append(h("p", { class: "okline" }, "Skapad som utkast i Shopify. ", h("a", { href: j.admin_url, target: "_blank", rel: "noopener", text: "Öppna i Shopify-admin" })));
-      else if (j.errors && !j.errors.length && !ro) resultBox.append(h("button", { class: "btn small primary", type: "button", text: j.update ? "Uppdatera i Shopify" : "Skapa utkast i Shopify", onclick: async (e) => { e.target.disabled = true; e.target.textContent = "Skickar …"; await saveShopFields(); const r = await callShopify("create", farg); renderResult(farg, r); if (r.admin_url) toast("Skapad i Shopify"); } }));
+      if (j.variants) resultBox.append(h("div", { class: "vscroll" }, h("table", { class: "vtable" }, h("thead", null, h("tr", null, h("th", { text: "Size" }), h("th", { text: "SKU" }), h("th", { text: "EAN" }), h("th", { text: "Price" }))), h("tbody", null, j.variants.map((v) => h("tr", null, h("td", { text: v.size }), h("td", { class: "mono", text: v.sku }), h("td", { class: "mono", text: v.ean || "–" }), h("td", { class: "mono", text: v.price != null ? String(v.price) : "–" })))))));
+      if (j.tags) resultBox.append(h("p", { class: "sub", text: "Tags: " + j.tags.join(", ") }));
+      if (j.metafields) resultBox.append(h("details", null, h("summary", { class: "sub", text: j.metafields.length + " metafields" }), h("ul", { class: "shop-mf" }, j.metafields.map((m) => h("li", { class: "mono", text: m })))));
+      if (j.admin_url) resultBox.append(h("p", { class: "okline" }, "Created as a draft in Shopify. ", h("a", { href: j.admin_url, target: "_blank", rel: "noopener", text: "Open in Shopify admin" })));
+      else if (j.errors && !j.errors.length && !ro) resultBox.append(h("button", { class: "btn small primary", type: "button", text: j.update ? "Update in Shopify" : "Create draft in Shopify", onclick: async (e) => { e.target.disabled = true; e.target.textContent = "Sending …"; await saveShopFields(); const r = await callShopify("create", farg); renderResult(farg, r); if (r.admin_url) toast("Created in Shopify"); } }));
     }
     async function saveShopFields() {
       if (isNew || ro) return;
       const { error: e1 } = await P.supabase.from("shopify_styles").upsert(Object.assign({ style_id: st._id }, shopState()));
-      if (e1) toast("Kunde inte spara Shopify-fälten: " + e1.message);
+      if (e1) toast("Could not save the Shopify fields: " + e1.message);
       const rows = Object.entries(fargState).map(([farg, f]) => ({ style_id: st._id, farg, swatch: f.swatch.value && f.swatch.value !== "#888888" ? f.swatch.value : null, colour_family: f.fam.value || null, titel: f.titel.value.trim() || null }));
-      if (rows.length) { const { error } = await P.supabase.from("style_farger").upsert(rows, { onConflict: "style_id,farg" }); if (error) toast("Kunde inte spara färgraderna: " + error.message); }
+      if (rows.length) { const { error } = await P.supabase.from("style_farger").upsert(rows, { onConflict: "style_id,farg" }); if (error) toast("Could not save the colour rows: " + error.message); }
     }
     function renderFarger() {
       const cur = current();
       const farger = parseList(fFarger.value);
       const rader = fargRaderOf();
-      fargSec.replaceChildren(h("h4", { class: "sec-title", text: "Färger i Shopify" }));
-      if (!farger.length) { fargSec.append(h("p", { class: "hint", text: "Fyll i färger på stylen först." })); return; }
+      fargSec.replaceChildren(h("h4", { class: "sec-title", text: "Colours in Shopify" }));
+      if (!farger.length) { fargSec.append(h("p", { class: "hint", text: "Fill in colours on the style first." })); return; }
       for (const farg of farger) {
         const r = rader.find((x) => x.farg.toLowerCase() === farg.toLowerCase()) || {};
-        const f = fargState[farg] || (fargState[farg] = { swatch: inp("f_sw_" + slug(farg), r.swatch || "#888888", { type: "color" }), fam: selectEl("f_cf_" + slug(farg), [["", "Färgfamilj …"]].concat(COLOUR_FAMILIES.map((c) => [c, c.charAt(0).toUpperCase() + c.slice(1)])), r.colour_family || ""), titel: inp("f_ti_" + slug(farg), r.titel || "", { placeholder: cur.namn + " in " + farg }) });
+        const f = fargState[farg] || (fargState[farg] = { swatch: inp("f_sw_" + slug(farg), r.swatch || "#888888", { type: "color" }), fam: selectEl("f_cf_" + slug(farg), [["", "Colour family …"]].concat(COLOUR_FAMILIES.map((c) => [c, c.charAt(0).toUpperCase() + c.slice(1)])), r.colour_family || ""), titel: inp("f_ti_" + slug(farg), r.titel || "", { placeholder: cur.namn + " in " + farg }) });
         if (ro) [f.swatch, f.fam, f.titel].forEach((x) => (x.disabled = true));
-        const status = r.shopify_product_id ? h("a", { class: "chip b-godkand", href: "https://admin.shopify.com/store/" + "atemporubato" + "/products/" + r.shopify_product_id, target: "_blank", rel: "noopener", text: (r.shopify_status || "I Shopify") + " · " + (r.shopify_handle || r.shopify_product_id) }) : chip("Ej i Shopify");
-        fargSec.append(h("div", { class: "farg-rad" }, h("strong", { text: farg }), f.swatch, f.fam, f.titel, status, ro || isNew ? null : h("button", { class: "btn small", type: "button", text: "Förhandsgranska", onclick: async (e) => { e.target.disabled = true; await saveShopFields(); const j = await callShopify("preview", farg); e.target.disabled = false; renderResult(farg, j); } })));
+        const status = r.shopify_product_id ? h("a", { class: "chip b-godkand", href: "https://admin.shopify.com/store/" + "atemporubato" + "/products/" + r.shopify_product_id, target: "_blank", rel: "noopener", text: (r.shopify_status || "In Shopify") + " · " + (r.shopify_handle || r.shopify_product_id) }) : chip("Not in Shopify");
+        fargSec.append(h("div", { class: "farg-rad" }, h("strong", { text: farg }), f.swatch, f.fam, f.titel, status, ro || isNew ? null : h("button", { class: "btn small", type: "button", text: "Preview", onclick: async (e) => { e.target.disabled = true; await saveShopFields(); const j = await callShopify("preview", farg); e.target.disabled = false; renderResult(farg, j); } })));
       }
     }
     fFarger.addEventListener("change", renderFarger);
-    const shopSec = h("section", { class: "shop-sec" }, h("h3", { class: "sec-title", text: "Shopify" }), isNew ? h("p", { class: "hint", text: "Spara stylen först." }) : shopForm, isNew ? null : fargSec, isNew ? null : resultBox);
+    const shopSec = h("section", { class: "shop-sec" }, h("h3", { class: "sec-title", text: "Shopify" }), isNew ? h("p", { class: "hint", text: "Save the style first." }) : shopForm, isNew ? null : fargSec, isNew ? null : resultBox);
     if (!isNew) renderFarger();
 
     const addNote = async () => { const t = noteIn.value.trim(); const cur = current(); if (!t || isNew) return; if (await write("styles", cur._id, { logg: (cur.logg || []).concat(logEntry(t)), andrad: new Date().toISOString() })) noteIn.value = ""; };
@@ -4598,19 +4826,19 @@ import * as P from "./platform.js";
       const btn = $("btnSave"); if (btn) btn.disabled = true;
       try {
         const o = await collect();
-        if (!o.namn) { toast("Ge stylen ett namn."); fNamn.focus(); return null; }
+        if (!o.namn) { toast("Give the style a name."); fNamn.focus(); return null; }
         const now = new Date().toISOString();
         if (isNew) {
           const nid = await freshId("styles", D.styles, "ST-", 3);
-          const body = Object.assign({ id: nid, ean: [], bilder: pendingImgs.slice(), logg: [logEntry(IDEA_STATUS.includes(o.status) ? "Produktidé skapad" : "Style skapad")], andrad: now }, o);
-          if (await create("styles", nid, body)) { if (!byId(D.styles, nid)) D.styles.push(Object.assign({}, body, { _id: nid })); toast(nid + " sparad"); if (after) return after(nid); openStyle(nid); return nid; }
+          const body = Object.assign({ id: nid, ean: [], bilder: pendingImgs.slice(), logg: [logEntry(IDEA_STATUS.includes(o.status) ? "Idea created" : "Style created")], andrad: now }, o);
+          if (await create("styles", nid, body)) { if (!byId(D.styles, nid)) D.styles.push(Object.assign({}, body, { _id: nid })); toast(nid + " saved"); if (after) return after(nid); openStyle(nid); return nid; }
           return null;
         }
         const cur = current();
-        const changes = describeChanges(cur, o, ST_LABELS);
+        const changes = describeChanges(Object.assign({}, cur, { status: styleStatusNorm(cur.status) }), o, ST_LABELS);
         await saveShopFields();
         if (!changes.length) { if (after) return after(cur._id); closeSheet(); return cur._id; }
-        if (await write("styles", cur._id, Object.assign({}, o, { andrad: now, logg: (cur.logg || []).concat(changes.map(logEntry)) }))) { if (after) return after(cur._id); toast("Sparat"); closeSheet(); return cur._id; }
+        if (await write("styles", cur._id, Object.assign({}, o, { andrad: now, logg: (cur.logg || []).concat(changes.map(logEntry)) }))) { if (after) return after(cur._id); toast("Saved"); closeSheet(); return cur._id; }
         return null;
       } finally { if (btn) btn.disabled = false; }
     }
@@ -4618,7 +4846,15 @@ import * as P from "./platform.js";
       await save(async (sid) => {
         const cur = byId(D.styles, sid) || current();
         const now = new Date().toISOString();
-        if (await write("styles", sid, { status: "Idé under utveckling", overlamnad: { till: "Alex", t: now, av: myId }, andrad: now, logg: (cur.logg || []).concat(logEntry("Skickad till Alex för att utvecklas till sample")) })) { toast("Idén ligger nu hos Alex under Samples › Idéer att sampla"); closeSheet(); }
+        if (await write("styles", sid, { status: ST_KANBEST, overlamnad: { till: "Alex", t: now, av: myId }, andrad: now, logg: (cur.logg || []).concat(logEntry("Sent straight to sampling – sample can be ordered")) })) { toast("Now with Alex under Samples › Sample can be ordered"); closeSheet(); }
+        return sid;
+      });
+    }
+    async function sendToDesign() {
+      await save(async (sid) => {
+        const cur = byId(D.styles, sid) || current();
+        const now = new Date().toISOString();
+        if (await write("styles", sid, { status: ST_DESIGN, overlamnad: { till: "Conor", t: now, av: myId }, andrad: now, logg: (cur.logg || []).concat(logEntry("Sent to Conor for design")) })) { toast("The idea is now with Conor under Design"); closeSheet(); }
         return sid;
       });
     }
@@ -4630,17 +4866,20 @@ import * as P from "./platform.js";
     const nVariants = isNew ? 0 : variantsOf(st._id).length;
     const body = [varSec, form, ownImgs, planSec, gallerySec, prodSec, samplesSec, eanSec, shopSec];
     if (lean) body.splice(0, body.length, ...body.filter((x, i) => i < 3 || x === gallerySec || x === samplesSec));
-    if (!isNew) body.push(h("section", null, h("h3", { class: "sec-title", text: "Historik" }), logUl, ro ? null : h("div", { class: "add-note" }, noteIn, h("button", { class: "btn small", type: "button", text: "Lägg till", onclick: addNote }))));
-    const foot = footButtons({ onDelete: isNew ? null : async () => { if (await remove("styles", st._id)) { toast("Borttagen"); closeSheet(); } }, canDelete: !nSamples && !(st.ean || []).length && !nVariants, blockText: "Stylen har samples, EAN eller varianter kopplade", onSave: () => save() });
+    if (!isNew && designSummary(st)) body.splice(Math.min(3, body.length), 0, designSummary(st));
+    if (!isNew) body.push(h("section", null, h("h3", { class: "sec-title", text: "History" }), logUl, ro ? null : h("div", { class: "add-note" }, noteIn, h("button", { class: "btn small", type: "button", text: "Add", onclick: addNote }))));
+    const foot = footButtons({ onDelete: isNew ? null : async () => { if (await remove("styles", st._id)) { toast("Removed"); closeSheet(); } }, canDelete: !nSamples && !(st.ean || []).length && !nVariants, blockText: "The style has samples, EAN or variants linked", onSave: () => save() });
     if (!ro) {
       const s0 = styleStatusNorm(st.status);
-      if (s0 === "Produktidé") foot[1].insertBefore(h("button", { class: "btn", type: "button", id: "btnAlex", text: "Spara och skicka till Alex", onclick: sendToAlex }), foot[1].lastChild);
-      if (s0 === "Idé under utveckling") foot[1].insertBefore(h("button", { class: "btn", type: "button", id: "btnSampla", text: "Beställ sample", onclick: orderSample }), foot[1].lastChild);
+      if (s0 === ST_IDE) foot[1].insertBefore(h("button", { class: "btn", type: "button", id: "btnDesign", text: "Send to design (Conor)", title: "The idea is ready to be designed. Conor sees it under Design.", onclick: sendToDesign }), foot[1].lastChild);
+      if (s0 === ST_IDE || s0 === ST_DESIGN) foot[1].insertBefore(h("button", { class: "btn", type: "button", id: "btnAlex", text: "Straight to sampling (Alex)", title: "Skips design. Alex can order a sample straight away.", onclick: sendToAlex }), foot[1].lastChild);
+      if (s0 === ST_KANBEST) foot[1].insertBefore(h("button", { class: "btn", type: "button", id: "btnSampla", text: "Order sample", onclick: orderSample }), foot[1].lastChild);
     }
     openSheet({
-      tag: isNew ? (IDEA_STATUS.includes(st.status) ? "Ny idé" : "Ny") : st._id,
-      title: isNew ? (IDEA_STATUS.includes(st.status) ? (st.grundId ? "Ny variant" : "Ny produktidé") : "Ny style") : st.namn,
-      sub: isNew ? (st.grundId && byId(D.styles, st.grundId) ? "Variant av " + byId(D.styles, st.grundId).namn : "") : [isGrund(st) ? "Grundstyle" : "", st.leverantor, st.sasong, st.drop].filter(Boolean).join(" · "),
+      flagRef: isNew ? null : { typ: "style", ref: st._id, titel: st.namn + (st.sasong ? " · " + st.sasong : ""), tab: ["bibliotek", "kollektion", "produktion", "foto", "ecom"].includes(UI.tab) ? UI.tab : "bibliotek" },
+      tag: isNew ? (IDEA_STATUS.includes(st.status) ? "New idea" : "New") : st._id,
+      title: isNew ? (IDEA_STATUS.includes(st.status) ? (st.grundId ? "New variant" : "New idea") : "New style") : st.namn,
+      sub: isNew ? (st.grundId && byId(D.styles, st.grundId) ? "Variant of " + byId(D.styles, st.grundId).namn : "") : [isGrund(st) ? "Base style" : "", st.leverantor, st.sasong, st.drop].filter(Boolean).join(" · "),
       body,
       foot,
       ctx: { refresh: () => { if (!isNew && !byId(D.styles, st._id)) { closeSheet(); return; } renderVariants(); renderPlan(); renderGallery(); renderProd(); renderSamples(); renderEanTable(); if (!isNew) { renderFarger(); renderLogInto(logUl, current().logg); } } },
@@ -4652,96 +4891,98 @@ import * as P from "./platform.js";
 
   // ---------- fabric sheet ----------
   function openTyg(id) {
+    if (designOnly()) return;
     const isNew = !id;
     const t = isNew ? { _id: null, status: "" } : byId(D.tyger, id);
-    if (!t) { toast("Hittar inte " + id + "."); return; }
+    if (!t) { toast("Cannot find " + id + "."); return; }
     const ro = !canWrite || !db;
-    const fNamn = inp("f_tnamn", t.namn, { placeholder: "t.ex. Japan Blue inhouse – Westpoint Canvas 223" });
+    const fNamn = inp("f_tnamn", t.namn, { placeholder: "e.g. Japan Blue inhouse – Westpoint Canvas 223" });
     const fLev = inp("f_tlev", t.leverantor, { list: "dlLev", autocomplete: "off" });
     const fStatus = selectEl("f_tstatus", [["", "–"]].concat(TYG_STATUS), t.status || "");
     const fAter = inp("f_tater", t.aterDatum, { type: "date" });
-    const fKom = area("f_tkom", t.kommentar, "T.ex. vilka färger som är slut");
-    const form = h("form", { class: "form", autocomplete: "off", onsubmit: (e) => e.preventDefault() }, field("Namn", fNamn, { full: true }), field("Leverantör / väveri", fLev), field("Status", fStatus), field("Åter i lager", fAter, { hint: "Om tyget är slut" }), h("div"), field("Kommentar", fKom, { full: true }));
+    const fKom = area("f_tkom", t.kommentar, "E.g. which colours are sold out");
+    const form = h("form", { class: "form", autocomplete: "off", onsubmit: (e) => e.preventDefault() }, field("Name", fNamn, { full: true }), field("Supplier / mill", fLev), field("Status", fStatus), field("Back in stock", fAter, { hint: "If the fabric is sold out" }), h("div"), field("Comment", fKom, { full: true }));
     if (ro) lock(form);
     const used = h("section");
     const stock = h("section");
     const pendingImgs = isNew ? [] : null;
-    const imgSec = bilderSection({ title: "Tygbilder", ro, pending: pendingImgs, current: () => byId(D.tyger, t._id) || t, empty: "Fota tygprovet så att alla ser vilket tyg det är.", save: (ids) => write("tyger", t._id, { bilder: ids, andrad: new Date().toISOString() }) });
+    const imgSec = bilderSection({ title: "Fabric images", ro, pending: pendingImgs, current: () => byId(D.tyger, t._id) || t, empty: "Photograph the swatch so everyone can see which fabric it is.", save: (ids) => write("tyger", t._id, { bilder: ids, andrad: new Date().toISOString() }) });
     const renderUsed = () => {
       imgSec.render();
       const xs = isNew ? [] : D.samples.filter((s) => s.tygId === t._id).sort((a, b) => a._id.localeCompare(b._id));
       const sts = isNew ? [] : D.styles.filter((s) => s.tygId === t._id);
-      used.replaceChildren(h("h3", { class: "sec-title", text: "Använt i (" + (xs.length + sts.length) + ")" }),
+      used.replaceChildren(h("h3", { class: "sec-title", text: "Used in (" + (xs.length + sts.length) + ")" }),
         sts.length ? h("ul", { class: "mini" }, sts.map((x) => h("li", null, h("button", { class: "mini-row", type: "button", onclick: () => openStyle(x._id) }, tag(x._id), h("span", { class: "mini-main" }, h("strong", { text: x.namn }), h("span", { class: "sub", text: [x.sasong, x.leverantor].filter(Boolean).join(" · ") })), h("span", { class: "mini-side" }, styleStatusPill(x)))))) : null,
         xs.length ? h("ul", { class: "mini" }, xs.map((x) => h("li", null, h("button", { class: "mini-row", type: "button", onclick: () => openSample(x._id) }, tag(x._id), h("span", { class: "mini-main" }, h("strong", { text: styleName(x) }), h("span", { class: "sub", text: [x.version, x.farg].filter(Boolean).join(" · ") })), h("span", { class: "mini-side" }, statusPill(x.status)))))) : null,
-        !xs.length && !sts.length ? h("p", { class: "hint", text: "Inga styles eller samples använder tyget ännu." }) : null);
+        !xs.length && !sts.length ? h("p", { class: "hint", text: "No styles or samples use the fabric yet." }) : null);
       const lots = isNew ? [] : lotsOf(t._id).sort((a, b) => (a.status === "Förbrukad") - (b.status === "Förbrukad") || a._id.localeCompare(b._id));
-      stock.replaceChildren(h("h3", { class: "sec-title", text: "Eget lager" + (lots.length ? " · " + (stockText(t._id) || "allt förbrukat") : "") }),
+      stock.replaceChildren(h("h3", { class: "sec-title", text: "Eget lager" + (lots.length ? " · " + (stockText(t._id) || "all used up") : "") }),
         lots.length ? h("ul", { class: "mini" }, lots.map((x) => h("li", null, h("button", { class: "mini-row", type: "button", onclick: () => openLager(x._id) }, tag(x._id),
-          h("span", { class: "mini-main" }, h("strong", { text: x.plats || "Utan plats" }), h("span", { class: "sub", text: [x.farg, reservedName(x) ? "reserverad: " + reservedName(x) : ""].filter(Boolean).join(" · ") })),
-          h("span", { class: "mini-side" }, h("span", { class: "pill ls-" + slug(x.status || "x"), text: x.status || "–" }), h("span", { class: "sub mono", text: num(x.meter) != null ? "ca " + fmtM(x.meter) + " m" : "meter saknas" })))))) : h("p", { class: "hint", text: isNew ? "Spara tyget först." : "Inget eget lager registrerat för tyget." }),
-        !isNew && !ro ? h("button", { class: "btn small", type: "button", text: "+ Nytt parti av tyget", onclick: () => openLager(null, { tygId: t._id, tygNamn: t.namn }) }) : null);
+          h("span", { class: "mini-main" }, h("strong", { text: x.plats || "No location" }), h("span", { class: "sub", text: [x.farg, reservedName(x) ? "reserved: " + reservedName(x) : ""].filter(Boolean).join(" · ") })),
+          h("span", { class: "mini-side" }, h("span", { class: "pill ls-" + slug(x.status || "x"), text: x.status || "–" }), h("span", { class: "sub mono", text: num(x.meter) != null ? "approx. " + fmtM(x.meter) + " m" : "metres missing" })))))) : h("p", { class: "hint", text: isNew ? "Save the fabric first." : "No own stock registered for the fabric." }),
+        !isNew && !ro ? h("button", { class: "btn small", type: "button", text: "+ New batch of the fabric", onclick: () => openLager(null, { tygId: t._id, tygNamn: t.namn }) }) : null);
     };
     renderUsed();
     async function save() {
       const o = { namn: fNamn.value.trim(), leverantor: fLev.value.trim(), status: fStatus.value, aterDatum: fAter.value || null, kommentar: fKom.value.trim() };
-      if (!o.namn) { toast("Ge tyget ett namn."); fNamn.focus(); return; }
-      if (D.tyger.some((x) => x._id !== t._id && norm(x.namn) === norm(o.namn))) { toast("Det finns redan ett tyg med det namnet."); return; }
+      if (!o.namn) { toast("Give the fabric a name."); fNamn.focus(); return; }
+      if (D.tyger.some((x) => x._id !== t._id && norm(x.namn) === norm(o.namn))) { toast("There is already a fabric with that name."); return; }
       const now = new Date().toISOString();
-      if (isNew) { const nid = await freshId("tyger", D.tyger, "T-", 3); if (await create("tyger", nid, Object.assign({ id: nid, bilder: pendingImgs.slice(), andrad: now }, o))) { toast(nid + " sparat"); closeSheet(); } }
-      else if (await write("tyger", t._id, Object.assign({ andrad: now }, o))) { toast("Sparat"); closeSheet(); }
+      if (isNew) { const nid = await freshId("fabrics", D.tyger, "T-", 3); if (await create("tyger", nid, Object.assign({ id: nid, bilder: pendingImgs.slice(), andrad: now }, o))) { toast(nid + " saved"); closeSheet(); } }
+      else if (await write("tyger", t._id, Object.assign({ andrad: now }, o))) { toast("Saved"); closeSheet(); }
     }
     const inUse = !isNew && (D.samples.some((s) => s.tygId === t._id) || lotsOf(t._id).length > 0 || D.styles.some((s) => s.tygId === t._id));
-    openSheet({ tag: isNew ? "Nytt" : t._id, title: isNew ? "Nytt tyg" : t.namn, sub: isNew ? "" : t.leverantor || "", body: [form, imgSec, stock, used], foot: footButtons({ onDelete: isNew ? null : async () => { if (await remove("tyger", t._id)) { toast("Borttaget"); closeSheet(); } }, canDelete: !inUse, blockText: "Tyget används av samples eller har lager", onSave: save }), ctx: { refresh: renderUsed }, focus: isNew ? "f_tnamn" : null });
+    openSheet({ tag: isNew ? "New" : t._id, title: isNew ? "New fabric" : t.namn, sub: isNew ? "" : t.leverantor || "", body: [form, imgSec, stock, used], foot: footButtons({ onDelete: isNew ? null : async () => { if (await remove("fabrics", t._id)) { toast("Removed"); closeSheet(); } }, canDelete: !inUse, blockText: "The fabric is used by samples or has stock", onSave: save }), ctx: { refresh: renderUsed }, focus: isNew ? "f_tnamn" : null });
   }
 
   // ---------- fabric lot sheet ----------
-  const L_LABELS = { tygId: "Tyg", farg: "Färg", plats: "Plats", status: "Status", inkoptMeter: "Inköpt (m)", meter: "Kvar (m)", bredd: "Bredd (cm)", prisPerMeter: "Pris per meter", prisValuta: "Valuta", inkopt: "Inköpt", reserveradFor: "Reserverad för", kommentar: "Kommentar", typ: "Typ", tygNamn: "Artikel", storlek: "Storlek", inkoptAntal: "Inköpt (st)", antal: "Kvar (st)", prisPerSt: "Pris per st" };
+  const L_LABELS = { tygId: "Tyg", farg: "Colour", plats: "Location", status: "Status", inkoptMeter: "Purchased (m)", meter: "Left (m)", bredd: "Width (cm)", prisPerMeter: "Price per metre", prisValuta: "Currency", inkopt: "Purchased", reserveradFor: "Reserved for", kommentar: "Comment", typ: "Typ", tygNamn: "Item", storlek: "Size", inkoptAntal: "Purchased (pcs)", antal: "Left (pcs)", prisPerSt: "Price per pc" };
   function openLager(id, preset) {
+    if (designOnly()) return;
     const isNew = !id;
     const l = isNew ? Object.assign({ _id: null, status: "I lager", plats: "", logg: [] }, preset || {}) : byId(D.lager, id);
-    if (!l) { toast("Hittar inte " + id + "."); return; }
+    if (!l) { toast("Cannot find " + id + "."); return; }
     const ro = !canWrite || !db;
     const current = () => (isNew ? l : byId(D.lager, l._id) || l);
     const initTyg = tygOf(l) ? tygOf(l).namn : (l.tygNamn || "");
-    const fTyg = inp("f_ltyg", initTyg, { list: "dlTyg", autocomplete: "off", placeholder: "t.ex. Olmetex – C993950" });
-    const fFarg = inp("f_lfarg", l.farg, { placeholder: "t.ex. col 1780 (Navy)" });
-    const fPlats = inp("f_lplats", l.plats, { list: "dlPlats", autocomplete: "off", placeholder: "Leverantör eller " + EGET_LAGER });
+    const fTyg = inp("f_ltyg", initTyg, { list: "dlTyg", autocomplete: "off", placeholder: "e.g. Olmetex – C993950" });
+    const fFarg = inp("f_lfarg", l.farg, { placeholder: "e.g. col 1780 (Navy)" });
+    const fPlats = inp("f_lplats", l.plats, { list: "dlPlats", autocomplete: "off", placeholder: "Supplier or " + EGET_LAGER });
     const fStatus = selectEl("f_lstatus", LAGER_STATUS, l.status || "I lager");
     const fInk = inp("f_link", l.inkoptMeter, { type: "number", min: "0", step: "0.5", inputmode: "decimal" });
-    const fKvar = inp("f_lkvar", l.meter, { type: "number", min: "0", step: "0.5", inputmode: "decimal", placeholder: "ungefär" });
+    const fKvar = inp("f_lkvar", l.meter, { type: "number", min: "0", step: "0.5", inputmode: "decimal", placeholder: "approximately" });
     const fBredd = inp("f_lbredd", l.bredd, { type: "number", min: "0", step: "1", inputmode: "numeric" });
     const fPris = inp("f_lpris", l.prisPerMeter, { type: "number", min: "0", step: "0.01", inputmode: "decimal" });
     const fVal = selectEl("f_lval", [["", "–"], "SEK", "EUR", "JPY", "GBP", "USD"], l.prisValuta || "");
     const fInkDate = inp("f_linkopt", l.inkopt, { type: "date" });
-    const fTyp = selectEl("f_ltyp", [["tyg", "Tyg (meter)"], ["trims", "Trims (antal)"]], isTrims(l) ? "trims" : "tyg");
-    const fStorlek = inp("f_lstorlek", l.storlek, { placeholder: "t.ex. 32L" });
+    const fTyp = selectEl("f_ltyp", [["tyg", "Fabric (metres)"], ["trims", "Trims (quantity)"]], isTrims(l) ? "trims" : "tyg");
+    const fStorlek = inp("f_lstorlek", l.storlek, { placeholder: "e.g. 32L" });
     const fInkSt = inp("f_linkst", l.inkoptAntal, { type: "number", min: "0", step: "1", inputmode: "numeric" });
     const fKvarSt = inp("f_lkvarst", l.antal, { type: "number", min: "0", step: "1", inputmode: "numeric", placeholder: "antal" });
     const fPrisSt = inp("f_lprisst", l.prisPerSt, { type: "number", min: "0", step: "0.0001", inputmode: "decimal" });
     fInkSt.addEventListener("change", () => { if (isNew && !fKvarSt.value && fInkSt.value) fKvarSt.value = fInkSt.value; });
-    const styleOpts = [["", "– Ingen –"]].concat(D.styles.filter((s) => isActiveStyle(s) || s._id === l.reserveradFor).sort((a, b) => (a.namn || "").localeCompare(b.namn || "", "sv")).map((s) => [s._id, s.namn + (s.sasong ? " · " + s.sasong : "")]));
+    const styleOpts = [["", "– None –"]].concat(D.styles.filter((s) => isActiveStyle(s) || s._id === l.reserveradFor).sort((a, b) => (a.namn || "").localeCompare(b.namn || "", "sv")).map((s) => [s._id, s.namn + (s.sasong ? " · " + s.sasong : "")]));
     const fRes = selectEl("f_lres", styleOpts, l.reserveradFor || "");
-    const fKom = area("f_lkom", l.kommentar, "T.ex. vad partiet är tänkt till, eller varifrån metertalet kommer");
+    const fKom = area("f_lkom", l.kommentar, "E.g. what the batch is intended for, or where the metre figure comes from");
     fInk.addEventListener("change", () => { if (isNew && !fKvar.value && fInk.value) fKvar.value = fInk.value; });
-    const fArt = field("Tyg", fTyg, { full: true, hint: "Skriv fritt eller välj ett tyg som redan finns." });
-    const fsTyg = [h("h3", { class: "sec-title full", text: "Meter" }), field("Inköpt (m)", fInk), field("Kvar (m, ca)", fKvar, { hint: "Tomt = vet inte ännu" }), field("Bredd (cm)", fBredd), field("Pris per meter", fPris)];
-    const fsTrims = [h("h3", { class: "sec-title full", text: "Antal" }), field("Storlek", fStorlek), field("Inköpt (st)", fInkSt), field("Kvar (st)", fKvarSt, { hint: "Tomt = vet inte ännu" }), field("Pris per st", fPrisSt)];
+    const fArt = field("Tyg", fTyg, { full: true, hint: "Type freely or choose a fabric that already exists." });
+    const fsTyg = [h("h3", { class: "sec-title full", text: "Metres" }), field("Purchased (m)", fInk), field("Left (m, approx.)", fKvar, { hint: "Empty = not known yet" }), field("Width (cm)", fBredd), field("Price per metre", fPris)];
+    const fsTrims = [h("h3", { class: "sec-title full", text: "Quantity" }), field("Size", fStorlek), field("Purchased (pcs)", fInkSt), field("Left (pcs)", fKvarSt, { hint: "Empty = not known yet" }), field("Price per pc", fPrisSt)];
     const form = h("form", { class: "form", id: "lagerForm", autocomplete: "off", onsubmit: (e) => e.preventDefault() },
-      field("Typ", fTyp), field("Status", fStatus),
+      field("Type", fTyp), field("Status", fStatus),
       fArt,
-      field("Färg / kulör", fFarg), field("Ligger hos", fPlats),
-      field("Reserverad för", fRes), field("Inköpt datum", fInkDate),
+      field("Colour / shade", fFarg), field("Located at", fPlats),
+      field("Reserved for", fRes), field("Purchase date", fInkDate),
       ...fsTyg, ...fsTrims,
-      field("Valuta", fVal),
-      field("Kommentar", fKom, { full: true }));
+      field("Currency", fVal),
+      field("Comment", fKom, { full: true }));
     const syncTyp = () => {
       const t = fTyp.value === "trims";
       fsTyg.forEach((e) => (e.hidden = t));
       fsTrims.forEach((e) => (e.hidden = !t));
-      const lab = fArt.querySelector("label"); if (lab) lab.textContent = t ? "Artikel" : "Tyg";
-      const hint = fArt.querySelector(".hint"); if (hint) hint.textContent = t ? "Leverantör + artikel, t.ex. Fenili 11072 Corno 4F (knapp)." : "Skriv fritt eller välj ett tyg som redan finns.";
-      fTyg.placeholder = t ? "t.ex. Fenili 11072 Corno 4F" : "t.ex. Olmetex – C993950";
+      const lab = fArt.querySelector("label"); if (lab) lab.textContent = t ? "Item" : "Tyg";
+      const hint = fArt.querySelector(".hint"); if (hint) hint.textContent = t ? "Supplier + item, e.g. Fenili 11072 Corno 4F (button)." : "Type freely or choose a fabric that already exists.";
+      fTyg.placeholder = t ? "e.g. Fenili 11072 Corno 4F" : "e.g. Olmetex – C993950";
       if (t) fTyg.removeAttribute("list"); else fTyg.setAttribute("list", "dlTyg");
     };
     fTyp.addEventListener("change", syncTyp); syncTyp();
@@ -4749,7 +4990,7 @@ import * as P from "./platform.js";
 
     const quick = h("div", { class: "quick" });
     const logUl = h("ul", { class: "log" });
-    const noteIn = inp("f_lnote", "", { placeholder: "Anteckning, t.ex. Roberto räknade 12 m" });
+    const noteIn = inp("f_lnote", "", { placeholder: "Note, e.g. Roberto counted 12 m" });
     noteIn.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); addNote(); } });
     async function addNote() {
       const t = noteIn.value.trim(); const cur = current(); if (!t || isNew) return;
@@ -4761,23 +5002,23 @@ import * as P from "./platform.js";
       if (isNew || ro) { quick.hidden = true; return; }
       quick.hidden = false;
       const add = (label, fn, primary) => quick.append(h("button", { class: "btn small" + (primary ? " primary" : ""), type: "button", text: label, onclick: fn }));
-      if (cur.status === "I lager") add(isTrims(cur) ? "Justera antal" : "Justera meter", () => adjustMeters(cur), true);
-      if (cur.status === "Beställd") add("Levererat", () => quickUpdate(cur, { status: "I lager" }, "Markerat som i lager"), true);
-      if (cur.status !== "Förbrukad") add("Förbrukat", () => quickUpdate(cur, Object.assign({ status: "Förbrukad", raknad: todayISO() }, isTrims(cur) ? { antal: 0 } : { meter: 0 }), "Markerat som förbrukat"));
-      if (cur.tygId && byId(D.tyger, cur.tygId)) add("Öppna tyg", () => openTyg(cur.tygId));
+      if (cur.status === "I lager") add(isTrims(cur) ? "Adjust quantity" : "Adjust metres", () => adjustMeters(cur), true);
+      if (cur.status === "Beställd") add("Delivered", () => quickUpdate(cur, { status: "I lager" }, "Marked as in stock"), true);
+      if (cur.status !== "Förbrukad") add("Used up", () => quickUpdate(cur, Object.assign({ status: "Förbrukad", raknad: todayISO() }, isTrims(cur) ? { antal: 0 } : { meter: 0 }), "Marked as used up"));
+      if (cur.tygId && byId(D.tyger, cur.tygId)) add("Open fabric", () => openTyg(cur.tygId));
     }
     function adjustMeters(cur) {
       const trm = isTrims(cur), key = trm ? "antal" : "meter", fmtU = (n) => (trm ? fmtSt(n) : fmtM(n) + " m");
-      const i = inp("f_ladj", cur[key], { type: "number", min: "0", step: trm ? "1" : "0.5", inputmode: trm ? "numeric" : "decimal", "aria-label": trm ? "Nytt antal" : "Nya meter" });
-      const row = h("div", { class: "admin-row" }, h("span", { text: trm ? "Kvar nu (st):" : "Kvar nu (m):" }), i,
-        h("button", { class: "btn small primary", type: "button", text: "Spara", onclick: async () => {
-          const n = num(i.value); if (n == null || n < 0) { toast(trm ? "Ange ett antal." : "Ange ett metertal."); return; }
+      const i = inp("f_ladj", cur[key], { type: "number", min: "0", step: trm ? "1" : "0.5", inputmode: trm ? "numeric" : "decimal", "aria-label": trm ? "New quantity" : "New metres" });
+      const row = h("div", { class: "admin-row" }, h("span", { text: trm ? "Left now (pcs):" : "Left now (m):" }), i,
+        h("button", { class: "btn small primary", type: "button", text: "Save", onclick: async () => {
+          const n = num(i.value); if (n == null || n < 0) { toast(trm ? "Enter a quantity." : "Enter a metre figure."); return; }
           const before = num(cur[key]);
           const patch = { [key]: n, raknad: todayISO() };
-          const body = Object.assign({}, patch, { andrad: new Date().toISOString(), logg: (cur.logg || []).concat(logEntry("Kvar: " + (before == null ? "okänt" : fmtU(before)) + " → " + fmtU(n))) });
-          if (await write("tyglager", cur._id, body)) { toast(trm ? "Antal uppdaterat" : "Meter uppdaterade"); (trm ? fKvarSt : fKvar).value = n; renderQuick(); }
+          const body = Object.assign({}, patch, { andrad: new Date().toISOString(), logg: (cur.logg || []).concat(logEntry("Left: " + (before == null ? "unknown" : fmtU(before)) + " → " + fmtU(n))) });
+          if (await write("tyglager", cur._id, body)) { toast(trm ? "Quantity updated" : "Metres updated"); (trm ? fKvarSt : fKvar).value = n; renderQuick(); }
         } }),
-        h("button", { class: "btn small", type: "button", text: "Avbryt", onclick: renderQuick }));
+        h("button", { class: "btn small", type: "button", text: "Cancel", onclick: renderQuick }));
       quick.replaceChildren(row); i.focus(); i.select();
     }
     async function quickUpdate(cur, patch, msg) {
@@ -4791,8 +5032,8 @@ import * as P from "./platform.js";
       const btn = $("btnSave"); if (btn) btn.disabled = true;
       try {
         const name = fTyg.value.trim(), plats = fPlats.value.trim(), trims = fTyp.value === "trims";
-        if (!name) { toast(trims ? "Skriv vilken artikel det gäller." : "Skriv vilket tyg det gäller."); fTyg.focus(); return; }
-        if (!plats) { toast(trims ? "Skriv var artikeln ligger." : "Skriv var tyget ligger."); fPlats.focus(); return; }
+        if (!name) { toast(trims ? "Write which item it is." : "Write which fabric it is."); fTyg.focus(); return; }
+        if (!plats) { toast(trims ? "Write where the item is." : "Write where the fabric is."); fPlats.focus(); return; }
         let o;
         if (trims) {
           o = { typ: "trims", tygId: null, tygNamn: name, farg: fFarg.value.trim(), storlek: fStorlek.value.trim(), plats, status: fStatus.value, inkoptAntal: num(fInkSt.value), antal: num(fKvarSt.value), prisPerSt: num(fPrisSt.value), prisValuta: fVal.value || null, inkopt: fInkDate.value || null, reserveradFor: fRes.value || null, kommentar: fKom.value.trim() };
@@ -4806,26 +5047,26 @@ import * as P from "./platform.js";
         const now = new Date().toISOString();
         if (isNew) {
           const nid = await freshId("tyglager", D.lager, "TL-", 3);
-          const body = Object.assign({ id: nid, raknad: q0 != null ? todayISO() : null, logg: [logEntry("Parti skapat (" + (trims ? "trims, " : "") + o.status + (q0 != null ? ", " + fmtQty(o, q0) : "") + ")")], andrad: now }, o);
-          if (await create("tyglager", nid, body)) { if (!byId(D.lager, nid)) D.lager.push(Object.assign({}, body, { _id: nid })); toast(nid + " sparat"); closeSheet(); }
+          const body = Object.assign({ id: nid, raknad: q0 != null ? todayISO() : null, logg: [logEntry("Batch created (" + (trims ? "trims, " : "") + o.status + (q0 != null ? ", " + fmtQty(o, q0) : "") + ")")], andrad: now }, o);
+          if (await create("tyglager", nid, body)) { if (!byId(D.lager, nid)) D.lager.push(Object.assign({}, body, { _id: nid })); toast(nid + " saved"); closeSheet(); }
         } else {
           const cur = current();
           const changes = describeChanges(cur, o, L_LABELS);
           if (!changes.length) { closeSheet(); return; }
           const body = Object.assign({}, o, { andrad: now, logg: (cur.logg || []).concat(changes.map(logEntry)) });
           if (num(cur[trims ? "antal" : "meter"]) !== q0) body.raknad = todayISO();
-          if (await write("tyglager", cur._id, body)) { toast("Sparat"); closeSheet(); }
+          if (await write("tyglager", cur._id, body)) { toast("Saved"); closeSheet(); }
         }
       } finally { if (btn) btn.disabled = false; }
     }
     const body = [quick, form];
-    if (!isNew) body.push(h("section", null, h("h3", { class: "sec-title", text: "Historik" }), logUl, ro ? null : h("div", { class: "add-note" }, noteIn, h("button", { class: "btn small", type: "button", text: "Lägg till", onclick: addNote }))));
+    if (!isNew) body.push(h("section", null, h("h3", { class: "sec-title", text: "History" }), logUl, ro ? null : h("div", { class: "add-note" }, noteIn, h("button", { class: "btn small", type: "button", text: "Add", onclick: addNote }))));
     openSheet({
-      tag: isNew ? "Nytt" : l._id,
-      title: isNew ? "Nytt parti" : lotName(l) + (l.farg ? " · " + l.farg : "") + (isTrims(l) && l.storlek ? " · " + l.storlek : ""),
-      sub: isNew ? "" : [isTrims(l) ? "Trims" : "Tyg", l.plats, lotQty(l) != null ? fmtQty(l, lotQty(l)) + " kvar" : (isTrims(l) ? "antal saknas" : "meter saknas"), l.status].filter(Boolean).join(" · "),
+      tag: isNew ? "New" : l._id,
+      title: isNew ? "New batch" : lotName(l) + (l.farg ? " · " + l.farg : "") + (isTrims(l) && l.storlek ? " · " + l.storlek : ""),
+      sub: isNew ? "" : [isTrims(l) ? "Trims" : "Tyg", l.plats, lotQty(l) != null ? fmtQty(l, lotQty(l)) + " left" : (isTrims(l) ? "quantity missing" : "metres missing"), l.status].filter(Boolean).join(" · "),
       body,
-      foot: footButtons({ onDelete: isNew ? null : async () => { if (await remove("tyglager", l._id)) { toast("Borttaget"); closeSheet(); } }, canDelete: true, onSave: save }),
+      foot: footButtons({ onDelete: isNew ? null : async () => { if (await remove("tyglager", l._id)) { toast("Removed"); closeSheet(); } }, canDelete: true, onSave: save }),
       ctx: { refresh: () => { if (!isNew && !byId(D.lager, l._id)) { closeSheet(); return; } renderQuick(); if (!isNew) renderLogInto(logUl, current().logg); } },
       focus: isNew ? (preset && preset.tygId ? "f_lplats" : "f_ltyg") : null
     });
@@ -4835,13 +5076,14 @@ import * as P from "./platform.js";
 
   // ---------- supplier sheet ----------
   function openLev(id) {
+    if (designOnly()) return;
     const isNew = !id;
     const l = isNew ? { _id: null, typ: "Producent", villkor: [] } : byId(D.lev, id);
-    if (!l) { toast("Hittar inte leverantören."); return; }
+    if (!l) { toast("Cannot find the supplier."); return; }
     const ro = !canWrite || !db;
     const fNamn = inp("f_lnamn", l.namn);
     if (!isNew) fNamn.disabled = true;
-    const fKod = inp("f_lkod", l.kod, { placeholder: "t.ex. JPB" });
+    const fKod = inp("f_lkod", l.kod, { placeholder: "e.g. JPB" });
     const fTyp = selectEl("f_ltyp", LEV_TYP, l.typ || "Producent");
     const fSl = inp("f_lsample", l.sampleLedtid, { type: "number", min: "0", step: "1" });
     const fProd = inp("f_lprod", l.produktionstid, { type: "number", min: "0", step: "1" });
@@ -4849,10 +5091,10 @@ import * as P from "./platform.js";
     const fBuff = inp("f_lbuff", l.buffert, { type: "number", min: "0", step: "1" });
     const fVal = selectEl("f_lvaluta", [["", "–"], "SEK", "EUR", "JPY", "GBP", "USD"], l.valuta || "");
     const fVs = selectEl("f_lvs", VILLKOR_STATUS, l.villkorStatus || (Array.isArray(l.villkor) && l.villkor.length ? "Bekräftade" : "Okända"));
-    const fVt = inp("f_lvt", l.villkorText, { placeholder: "Som leverantören skrev det, t.ex. 30 % on production, 70 % on delivery" });
+    const fVt = inp("f_lvt", l.villkorText, { placeholder: "As the supplier wrote it, e.g. 30 % on production, 70 % on delivery" });
     const fRab = inp("f_lrab", l.rabatt, { type: "number", min: "0", step: "0.5", placeholder: "%" });
-    const fRabT = inp("f_lrabt", l.rabattText, { placeholder: "t.ex. vid betalning på produktion" });
-    const fKontakt = inp("f_lkontakt", l.kontakt, { placeholder: "Namn och e-post" });
+    const fRabT = inp("f_lrabt", l.rabattText, { placeholder: "e.g. on payment at production" });
+    const fKontakt = inp("f_lkontakt", l.kontakt, { placeholder: "Name and email" });
     const fKom = area("f_lkom", l.kommentar);
     const a = isNew ? null : actualLead(l.namn);
     // villkorsrader
@@ -4864,68 +5106,68 @@ import * as P from "./platform.js";
       rows.forEach((r, i) => {
         const fA = inp("v_a_" + i, r.andel, { type: "number", min: "0", max: "100", step: "1", placeholder: "%" });
         const fV = selectEl("v_v_" + i, VILLKOR_VID, r.vid || "leverans");
-        const fD = inp("v_d_" + i, r.dagar, { type: "number", min: "0", step: "1", placeholder: "dagar" });
+        const fD = inp("v_d_" + i, r.dagar, { type: "number", min: "0", step: "1", placeholder: "days" });
         [fA, fV, fD].forEach((x) => { x.disabled = ro; x.addEventListener("change", () => { r.andel = num(fA.value); r.vid = fV.value; r.dagar = num(fD.value) || 0; syncSum(); }); });
-        rowsEl.append(h("div", { class: "line" }, h("div", { class: "row two" }, field("Andel %", fA), field("Betalas", fV), field("+ dagar", fD)), ro ? null : h("div", { class: "foot" }, h("button", { class: "btn small", type: "button", text: "Ta bort", onclick: () => { rows.splice(i, 1); renderRows(); } }))));
+        rowsEl.append(h("div", { class: "line" }, h("div", { class: "row two" }, field("Share %", fA), field("Paid", fV), field("+ days", fD)), ro ? null : h("div", { class: "foot" }, h("button", { class: "btn small", type: "button", text: "Remove", onclick: () => { rows.splice(i, 1); renderRows(); } }))));
       });
-      if (!ro) rowsEl.append(h("div", { class: "quick" }, h("button", { class: "btn small", type: "button", text: "+ Delbetalning", onclick: () => { rows.push({ andel: rows.length ? Math.max(0, 100 - rows.reduce((s0, x) => s0 + (num(x.andel) || 0), 0)) : 100, vid: rows.length ? "leverans" : "produktion", dagar: 0 }); renderRows(); } }),
-        h("button", { class: "btn small", type: "button", text: "30 dagar netto", onclick: () => { rows.length = 0; rows.push({ andel: 100, vid: "faktura", dagar: 30 }); renderRows(); } }),
-        h("button", { class: "btn small", type: "button", text: "60 dagar netto", onclick: () => { rows.length = 0; rows.push({ andel: 100, vid: "faktura", dagar: 60 }); renderRows(); } }),
+      if (!ro) rowsEl.append(h("div", { class: "quick" }, h("button", { class: "btn small", type: "button", text: "+ Part payment", onclick: () => { rows.push({ andel: rows.length ? Math.max(0, 100 - rows.reduce((s0, x) => s0 + (num(x.andel) || 0), 0)) : 100, vid: rows.length ? "leverans" : "produktion", dagar: 0 }); renderRows(); } }),
+        h("button", { class: "btn small", type: "button", text: "30 days net", onclick: () => { rows.length = 0; rows.push({ andel: 100, vid: "faktura", dagar: 30 }); renderRows(); } }),
+        h("button", { class: "btn small", type: "button", text: "60 days net", onclick: () => { rows.length = 0; rows.push({ andel: 100, vid: "faktura", dagar: 60 }); renderRows(); } }),
         h("button", { class: "btn small", type: "button", text: "30 / 70", onclick: () => { rows.length = 0; rows.push({ andel: 30, vid: "produktion", dagar: 0 }, { andel: 70, vid: "leverans", dagar: 0 }); renderRows(); } }),
         h("button", { class: "btn small", type: "button", text: "50 / 50", onclick: () => { rows.length = 0; rows.push({ andel: 50, vid: "produktion", dagar: 0 }, { andel: 50, vid: "leverans", dagar: 0 }); renderRows(); } })));
       syncSum();
     }
-    function syncSum() { const sum = rows.reduce((s0, x) => s0 + (num(x.andel) || 0), 0); sumEl.textContent = rows.length ? "Summa " + sum + " %" + (sum !== 100 ? " – ska bli 100 %" : "") : "Inga villkor inlagda – schemat antar 100 % vid leverans."; sumEl.className = rows.length && sum !== 100 ? "late-text" : "sub"; }
+    function syncSum() { const sum = rows.reduce((s0, x) => s0 + (num(x.andel) || 0), 0); sumEl.textContent = rows.length ? "Sum " + sum + " %" + (sum !== 100 ? " – should be 100 %" : "") : "No terms entered – the schedule assumes 100 % on delivery."; sumEl.className = rows.length && sum !== 100 ? "late-text" : "sub"; }
     renderRows();
     const form = h("form", { class: "form", autocomplete: "off", onsubmit: (e) => e.preventDefault() },
-      h("h3", { class: "sec-title full", text: "Leverantör" }),
-      field("Namn", fNamn, { hint: isNew ? "Skriv som det står på samples och POs" : "Namnet kopplar ihop samples, styles och POs" }), field("Kod", fKod),
-      field("Typ", fTyp, { hint: "Producent syr plagg; Tyg och Trim är material" }), field("Valuta", fVal, { hint: "Valutan ni betalar i" }),
-      field("Kontakt", fKontakt, { full: true }),
-      h("h3", { class: "sec-title full", text: "Ledtider" }),
-      field("Sample-ledtid (dagar)", fSl, { hint: a ? "Faktiskt snitt " + a.avg + " d (" + a.n + " samples)" : "Från beställning till mottagen sample" }),
-      field("Produktionstid (dagar)", fProd, { hint: "Från PO till klart hos leverantör" }),
-      field("Frakt (dagar)", fFrakt, { hint: "Tomt = standard " + (num(D.settings.standardFrakt) ?? 7) + " d" }),
-      field("Buffert (dagar)", fBuff, { hint: "Extra marginal om leverantören brukar bli sen" }),
-      h("h3", { class: "sec-title full", text: "Betalningsvillkor" }),
-      field("Status", fVs), field("Rabatt %", fRab),
-      field("Villkor i klartext", fVt, { full: true }),
-      field("Rabatten gäller", fRabT, { full: true }),
-      h("div", { class: "full" }, h("div", { class: "plan-head" }, h("span", { class: "sec-title", style: "margin:0;border:0;padding:0", text: "Delbetalningar" }), sumEl), rowsEl),
-      field("Kommentar", fKom, { full: true }));
+      h("h3", { class: "sec-title full", text: "Supplier" }),
+      field("Name", fNamn, { hint: isNew ? "Write it as it appears on samples and POs" : "The name links samples, styles and POs together" }), field("Code", fKod),
+      field("Type", fTyp, { hint: "A manufacturer sews garments; Fabric and Trim are materials" }), field("Currency", fVal, { hint: "The currency you pay in" }),
+      field("Contact", fKontakt, { full: true }),
+      h("h3", { class: "sec-title full", text: "Lead times" }),
+      field("Sample lead time (days)", fSl, { hint: a ? "Actual average " + a.avg + " d (" + a.n + " samples)" : "From order to received sample" }),
+      field("Production time (days)", fProd, { hint: "From PO to ready at the supplier" }),
+      field("Freight (days)", fFrakt, { hint: "Empty = standard " + (num(D.settings.standardFrakt) ?? 7) + " d" }),
+      field("Buffer (days)", fBuff, { hint: "Extra margin if the supplier tends to be late" }),
+      h("h3", { class: "sec-title full", text: "Payment terms" }),
+      field("Status", fVs), field("Discount %", fRab),
+      field("Terms in plain text", fVt, { full: true }),
+      field("The discount applies", fRabT, { full: true }),
+      h("div", { class: "full" }, h("div", { class: "plan-head" }, h("span", { class: "sec-title", style: "margin:0;border:0;padding:0", text: "Part payments" }), sumEl), rowsEl),
+      field("Comment", fKom, { full: true }));
     if (ro) lock(form);
     async function save() {
       const o = { namn: fNamn.value.trim(), kod: fKod.value.trim(), typ: fTyp.value, sampleLedtid: num(fSl.value), produktionstid: num(fProd.value), frakt: num(fFrakt.value), buffert: num(fBuff.value) ?? 0, valuta: fVal.value, kontakt: fKontakt.value.trim(), kommentar: fKom.value.trim(), villkor: rows.filter((r) => num(r.andel)).map((r) => ({ andel: num(r.andel), vid: r.vid || "leverans", dagar: num(r.dagar) || 0 })), villkorStatus: fVs.value, villkorText: fVt.value.trim(), rabatt: num(fRab.value), rabattText: fRabT.value.trim(), andrad: new Date().toISOString() };
-      if (!o.namn) { toast("Fyll i namnet."); return; }
+      if (!o.namn) { toast("Fill in the name."); return; }
       const sum = o.villkor.reduce((s0, x) => s0 + x.andel, 0);
-      if (o.villkor.length && sum !== 100) { toast("Delbetalningarna ska summera till 100 % (nu " + sum + " %)."); return; }
+      if (o.villkor.length && sum !== 100) { toast("The part payments must add up to 100 % (now " + sum + " %)."); return; }
       if (isNew) {
         const nid = slug(o.namn) || "lev-" + Date.now();
-        if (byId(D.lev, nid) || levByName(o.namn)) { toast("Leverantören finns redan."); return; }
-        if (await create("leverantorer", nid, o)) { toast("Sparad"); closeSheet(); }
-      } else { delete o.namn; if (await write("leverantorer", l._id, o)) { toast("Sparat"); closeSheet(); } }
+        if (byId(D.lev, nid) || levByName(o.namn)) { toast("The supplier already exists."); return; }
+        if (await create("leverantorer", nid, o)) { toast("Saved"); closeSheet(); }
+      } else { delete o.namn; if (await write("leverantorer", l._id, o)) { toast("Saved"); closeSheet(); } }
     }
     const poSec = h("section");
     if (!isNew) {
       const pos = D.po.filter((p) => norm(p.leverantor) === norm(l.namn) && !PO_DRAFT.includes(poStatusNorm(p.status))).sort((a2, b2) => String(b2.orderDatum || "").localeCompare(String(a2.orderDatum || "")));
-      poSec.append(h("h3", { class: "sec-title", text: "POs och betalningar (" + pos.length + ")" }));
-      if (!pos.length) poSec.append(h("p", { class: "hint", text: "Inga lagda POs." }));
-      else poSec.append(h("ul", { class: "mini" }, pos.map((p) => { const pl = paymentPlan(p); const unpaid = pl.filter((x) => !x.betald); return h("li", null, h("button", { class: "mini-row", type: "button", onclick: () => openPo(p._id) }, h("span", { class: "tag", text: p.nr || p._id }), h("span", { class: "mini-main" }, h("strong", { text: [p.sasong, p.drop].filter(Boolean).join(" ") + " · " + fmtSEK(poTotal(p)) }), h("span", { class: "sub", text: pl.length ? pl.map((x) => x.typ + " " + fmtTkr(x.belopp) + (x.datum ? " " + fmtDate(x.datum) : "") + (x.betald ? (x.antagenBetald ? " ✔ (antaget)" : " ✔") : "")).join(" · ") : "ingen betalningsplan" })), h("span", { class: "mini-side" }, poStatusPill(p), unpaid.length ? h("span", { class: "sub mono", text: "obetalt " + fmtTkr(unpaid.reduce((s0, x) => s0 + x.belopp, 0)) }) : null))); })));
+      poSec.append(h("h3", { class: "sec-title", text: "POs and payments (" + pos.length + ")" }));
+      if (!pos.length) poSec.append(h("p", { class: "hint", text: "No placed POs." }));
+      else poSec.append(h("ul", { class: "mini" }, pos.map((p) => { const pl = paymentPlan(p); const unpaid = pl.filter((x) => !x.betald); return h("li", null, h("button", { class: "mini-row", type: "button", onclick: () => openPo(p._id) }, h("span", { class: "tag", text: p.nr || p._id }), h("span", { class: "mini-main" }, h("strong", { text: [p.sasong, p.drop].filter(Boolean).join(" ") + " · " + fmtSEK(poTotal(p)) }), h("span", { class: "sub", text: pl.length ? pl.map((x) => x.typ + " " + fmtTkr(x.belopp) + (x.datum ? " " + fmtDate(x.datum) : "") + (x.betald ? (x.antagenBetald ? " ✔ (assumed)" : " ✔") : "")).join(" · ") : "no payment plan" })), h("span", { class: "mini-side" }, poStatusPill(p), unpaid.length ? h("span", { class: "sub mono", text: "unpaid " + fmtTkr(unpaid.reduce((s0, x) => s0 + x.belopp, 0)) }) : null))); })));
     }
     const inUse = !isNew && (D.samples.some((s0) => norm(s0.leverantor) === norm(l.namn)) || D.styles.some((s0) => norm(s0.leverantor) === norm(l.namn)) || D.po.some((p) => norm(p.leverantor) === norm(l.namn)));
-    openSheet({ tag: isNew ? "Ny" : l.kod || (l.typ || ""), title: isNew ? "Ny leverantör" : l.namn, sub: isNew ? "" : [l.typ || "Producent", l.valuta, termsText(l)].filter(Boolean).join(" · "), body: [form, poSec], foot: footButtons({ onDelete: isNew ? null : async () => { if (await remove("leverantorer", l._id)) { toast("Borttagen"); closeSheet(); } }, canDelete: !inUse, blockText: "Leverantören används av samples, styles eller POs", onSave: save }), focus: isNew ? "f_lnamn" : null });
+    openSheet({ tag: isNew ? "New" : l.kod || (l.typ || ""), title: isNew ? "New supplier" : l.namn, sub: isNew ? "" : [l.typ || "Producent", l.valuta, termsText(l)].filter(Boolean).join(" · "), body: [form, poSec], foot: footButtons({ onDelete: isNew ? null : async () => { if (await remove("leverantorer", l._id)) { toast("Removed"); closeSheet(); } }, canDelete: !inUse, blockText: "The supplier is used by samples, styles or POs", onSave: save }), focus: isNew ? "f_lnamn" : null });
   }
 
   // ---------- exports ----------
   async function saveFile(filename, data) {
-    if (!downloads) { toast("Nedladdning är inte tillgänglig här."); return false; }
+    if (!downloads) { toast("Download is not available here."); return false; }
     try { await downloads.save({ filename, data }); return true; }
     catch (e) {
       const c = e && e.code;
       if (c === "declined") return false;
-      if (c === "rate_limited") toast("En nedladdning väntar redan på svar.");
-      else if (["unavailable", "not_granted", "capability_disabled", "capability_removed"].includes(c)) toast("Nedladdning är inte tillgänglig här.");
-      else toast("Nedladdningen misslyckades.");
+      if (c === "rate_limited") toast("A download is already waiting for a response.");
+      else if (["unavailable", "not_granted", "capability_disabled", "capability_removed"].includes(c)) toast("Download is not available here.");
+      else toast("The download failed.");
       return false;
     }
   }
@@ -4936,20 +5178,20 @@ import * as P from "./platform.js";
   const safeName = (s) => String(s || "").normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^A-Za-z0-9]+/g, "_").replace(/^_|_$/g, "") || "export";
   function exportSamples() {
     const rows = D.samples.slice().sort((a, b) => a._id.localeCompare(b._id)).map((s) => { const e = expected(s); const st = styleOf(s); return [s._id, styleName(s), s.version, s.leverantor, s.farg, tygName(s), s.storlek, s.prisBelopp, s.prisValuta, s.bestalld, s.ledtid, e || "TBA", s.status, s.mottagen, platsText(s), s.platsNotering, beslutNorm(s.beslut), st ? styleStatusNorm(st.status) : "", s.andringar, s.tracking, s.p1Skickad, s.p2Skickad, seasonOf(s), st ? st.drop || "" : "", s.kommentar]; });
-    saveFile("Rubato_Samples_" + todayISO() + ".csv", csv(["Sample-ID", "Style", "Version", "Leverantör", "Färg", "Tyg", "Storlek", "Pris", "Valuta", "Beställd", "Ledtid (dgr)", "Förväntad leverans", "Status", "Mottagen", "Plats", "Platsnotering", "Beslut", "Style-status", "Ändringar", "Tracking", "P1 skickad", "P2 skickad", "Säsong", "Drop", "Kommentar"], rows));
+    saveFile("Rubato_Samples_" + todayISO() + ".csv", csv(["Sample ID", "Style", "Version", "Supplier", "Colour", "Tyg", "Size", "Price", "Currency", "Beställd", "Lead time (days)", "Expected delivery", "Status", "Mottagen", "Location", "Location note", "Decision", "Style status", "Changes", "Tracking", "R1 sent", "R2 sent", "Season", "Drop", "Comment"], rows));
   }
   function exportLager() {
-    const rows = D.lager.slice().sort((a, b) => (a.plats || "").localeCompare(b.plats || "", "sv") || a._id.localeCompare(b._id)).map((l) => [l._id, isTrims(l) ? "Trims" : "Tyg", lotName(l), l.farg, l.storlek, l.plats, l.status, isTrims(l) ? "st" : "m", isTrims(l) ? l.inkoptAntal : l.inkoptMeter, isTrims(l) ? l.antal : l.meter, l.bredd, isTrims(l) ? l.prisPerSt : l.prisPerMeter, l.prisValuta, l.inkopt, reservedName(l), l.raknad, l.kommentar]);
-    saveFile("Rubato_Lager_" + todayISO() + ".csv", csv(["Parti-ID", "Typ", "Artikel", "Färg", "Storlek", "Ligger hos", "Status", "Enhet", "Inköpt", "Kvar", "Bredd (cm)", "Pris per enhet", "Valuta", "Inköpt datum", "Reserverad för", "Senast räknad", "Kommentar"], rows));
+    const rows = D.lager.slice().sort((a, b) => (a.plats || "").localeCompare(b.plats || "", "sv") || a._id.localeCompare(b._id)).map((l) => [l._id, isTrims(l) ? "Trims" : "Tyg", lotName(l), l.farg, l.storlek, l.plats, l.status, isTrims(l) ? "pcs" : "m", isTrims(l) ? l.inkoptAntal : l.inkoptMeter, isTrims(l) ? l.antal : l.meter, l.bredd, isTrims(l) ? l.prisPerSt : l.prisPerMeter, l.prisValuta, l.inkopt, reservedName(l), l.raknad, l.kommentar]);
+    saveFile("Rubato_Lager_" + todayISO() + ".csv", csv(["Batch ID", "Type", "Item", "Colour", "Size", "Located at", "Status", "Unit", "Purchased", "Left", "Width (cm)", "Price per unit", "Currency", "Purchase date", "Reserved for", "Last counted", "Comment"], rows));
   }
   function exportStyleEan(st) {
-    saveFile("EAN_" + safeName(st.namn) + ".csv", csv(["Produkt", "Färg", "Storlek", "EAN"], (st.ean || []).map((e) => [st.namn, e.farg, e.storlek, e.ean])));
+    saveFile("EAN_" + safeName(st.namn) + ".csv", csv(["Product", "Colour", "Size", "EAN"], (st.ean || []).map((e) => [st.namn, e.farg, e.storlek, e.ean])));
   }
   function exportAllEan() {
     const rows = [];
     for (const s of D.styles) for (const e of s.ean || []) rows.push([s.namn, s._id, s.leverantor, e.farg, e.storlek, e.ean, e.t ? String(e.t).slice(0, 10) : ""]);
     rows.sort((a, b) => String(a[5]).localeCompare(String(b[5])));
-    saveFile("Rubato_EAN_" + todayISO() + ".csv", csv(["Produkt", "Style-ID", "Leverantör", "Färg", "Storlek", "EAN", "Tilldelad"], rows));
+    saveFile("Rubato_EAN_" + todayISO() + ".csv", csv(["Product", "Style ID", "Supplier", "Colour", "Size", "EAN", "Assigned"], rows));
   }
 
   // ---------- labels (A4, 3 x 8, 70 x 37 mm, QR to the sample) ----------
@@ -4981,7 +5223,7 @@ import * as P from "./platform.js";
   // </label-fn>
   function loadScript(src) { return new Promise((res, rej) => { const sc = document.createElement("script"); sc.src = src; sc.async = true; sc.onload = () => res(); sc.onerror = () => rej(new Error("load")); document.head.appendChild(sc); }); }
   async function loadLibs() { if (!(window.jspdf && window.jspdf.jsPDF)) await loadScript(LIB_PDF); if (typeof window.qrcode !== "function") await loadScript(LIB_QR); }
-  const labelItem = (s) => ({ id: s._id, title: styleName(s), lines: [[s.version, s.farg].filter(Boolean).join(" · "), tygName(s), [s.leverantor, platsText(s)].filter(Boolean).join(" · "), s.mottagen ? "Mottagen " + fmtDate(s.mottagen) : s.bestalld ? "Beställd " + fmtDate(s.bestalld) : ""] });
+  const labelItem = (s) => ({ id: s._id, title: styleName(s), lines: [[s.version, s.farg].filter(Boolean).join(" · "), tygName(s), [s.leverantor, platsText(s)].filter(Boolean).join(" · "), s.mottagen ? "Received " + fmtDate(s.mottagen) : s.bestalld ? "Ordered " + fmtDate(s.bestalld) : ""] });
   let lblIds = [];
   const unprinted = () => D.samples.filter((s) => s.status === "Mottagen" && !s.etikett).map((s) => s._id);
   function openLabels(ids) {
@@ -4994,10 +5236,10 @@ import * as P from "./platform.js";
   }
   function renderLabelDlg() {
     const n = lblIds.length, start = Number($("lblStart").value || 1);
-    $("lblWhat").textContent = n ? n + (n === 1 ? " etikett: " : " etiketter: ") + lblIds.slice().sort().slice(0, 14).join(", ") + (n > 14 ? " …" : "") : "Inga samples valda. Välj i listan eller ta alla mottagna utan etikett.";
+    $("lblWhat").textContent = n ? n + (n === 1 ? " label: " : " labels: ") + lblIds.slice().sort().slice(0, 14).join(", ") + (n > 14 ? " …" : "") : "No samples selected. Choose in the list or take all received without a label.";
     $("lblGrid").replaceChildren(...Array.from({ length: 24 }, (_, i) => h("span", { class: i + 1 < start ? "skip" : i + 1 < start + n ? "use" : null })));
     const pages = Math.max(1, Math.ceil((start - 1 + n) / 24));
-    $("lblGo").textContent = pages > 1 ? "Ladda ner PDF (" + pages + " ark)" : "Ladda ner PDF";
+    $("lblGo").textContent = pages > 1 ? "Download PDF (" + pages + " sheets)" : "Download PDF";
     $("lblGo").disabled = !n || !downloads;
   }
   function closeLabels() { $("lblScrim").hidden = true; $("lblDlg").hidden = true; }
@@ -5006,18 +5248,18 @@ import * as P from "./platform.js";
   $("lblCancel").addEventListener("click", closeLabels);
   $("lblScrim").addEventListener("click", closeLabels);
   $("lblGo").addEventListener("click", async () => {
-    const btn = $("lblGo"); btn.disabled = true; btn.textContent = "Skapar PDF …";
+    const btn = $("lblGo"); btn.disabled = true; btn.textContent = "Creating PDF …";
     try {
       await loadLibs();
       const items = lblIds.map((id) => byId(D.samples, id)).filter(Boolean).sort((a, b) => a._id.localeCompare(b._id)).map(labelItem);
       const doc = drawLabels(window.jspdf.jsPDF, window.qrcode, items, Number($("lblStart").value || 1), APP_URL);
       const ok = await saveFile("Rubato_sample-etiketter_" + todayISO() + ".pdf", doc.output("blob"));
       if (ok) {
-        toast("Etikett-PDF klar");
+        toast("Label PDF ready");
         if (canWrite) { const today = todayISO(); for (const id of lblIds.slice()) { const s = byId(D.samples, id); if (s && s.etikett !== today) await write("samples", id, { etikett: today }); } }
         selected.clear(); closeLabels(); scheduleRefresh();
       }
-    } catch (e) { toast(e && e.message === "load" ? "Kunde inte ladda PDF-verktyget. Kontrollera nätet och försök igen." : "Kunde inte skapa PDF:en."); }
+    } catch (e) { toast(e && e.message === "load" ? "Could not load the PDF tool. Check the network and try again." : "Could not create the PDF."); }
     finally { renderLabelDlg(); }
   });
 
@@ -5051,15 +5293,15 @@ import * as P from "./platform.js";
   // ---------- boot ----------
   function showLogin() { $("login").hidden = false; $("loginBtn").addEventListener("click", () => { $("loginBtn").disabled = true; P.signIn(); }); }
   function showUnavailable() {
-    banner("Appen kräver att du är inloggad i Claude och har fått sidan delad med dig.");
-    loaded.add("samples"); loaded.add("styles"); loaded.add("tyger"); loaded.add("lager"); loaded.add("drops"); loaded.add("po"); loaded.add("ref"); loaded.add("pool");
+    banner("The app requires you to be signed in to Claude and to have had the page shared with you.");
+    loaded.add("samples"); loaded.add("styles"); loaded.add("fabrics"); loaded.add("lager"); loaded.add("drops"); loaded.add("po"); loaded.add("ref"); loaded.add("pool");
     VIEWS[UI.tab].update();
   }
-  function subError() { banner("Tappade kontakten med databasen. Ladda om sidan."); }
+  function subError() { banner("Lost contact with the database. Reload the page."); }
   switchTab(initialTab());
   (async () => {
     let me = null;
-    try { me = await P.start(); } catch (e) { console.error(e); banner("Kunde inte läsa databasen: " + (e.message || e)); }
+    try { me = await P.start(); } catch (e) { console.error(e); banner("Could not read the database: " + (e.message || e)); }
     if (!me) { showLogin(); return; }
     $("login").hidden = true;
     db = P.db; user = P.user; downloads = P.downloads; assets = P.assets;
@@ -5089,7 +5331,7 @@ import * as P from "./platform.js";
       if (key === "po" || key === "styles") derivePo();
       loaded.add(key); scheduleRefresh(); openFromHash(); if (after) after();
     }, subError);
-    sub("samples", "samples"); sub("styles", "styles", null, () => { probeExternalImages(); renderDiag(); }); sub("tyger", "tyger"); sub("tyglager", "lager"); sub("leverantorer", "lev"); sub("drops", "drops"); sub("po", "po", (p) => !ME.leverantor || norm(p.leverantor) === norm(ME.leverantor)); sub("budget", "budget"); sub("refplagg", "ref"); sub("handelser", "handelser"); sub("shopifypriser", "shopify");
+    sub("samples", "samples"); sub("styles", "styles", null, () => { probeExternalImages(); renderDiag(); }); sub("tyger", "tyger"); sub("tyglager", "lager"); sub("leverantorer", "lev"); sub("drops", "drops"); sub("po", "po", (p) => !ME.leverantor || norm(p.leverantor) === norm(ME.leverantor)); sub("budget", "budget"); sub("refplagg", "ref"); sub("handelser", "handelser"); sub("flaggor", "flaggor"); sub("shopifypriser", "shopify");
     db.doc("ean/pool").onSnapshot((snap) => { D.pool = snap.exists ? snap.data() : null; loaded.add("pool"); scheduleRefresh(); }, subError);
     db.doc("installningar/app").onSnapshot((snap) => { if (snap.exists) Object.assign(D.settings, snap.data()); deriveDrops(); scheduleRefresh(); }, subError);
     db.collection("eanLogg").orderBy("t", "desc").limit(50).onSnapshot((snap) => { D.logg = snap.docs.map((doc) => Object.assign({}, doc.data(), { _id: doc.id })); scheduleRefresh(); }, subError);

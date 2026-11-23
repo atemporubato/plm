@@ -52,11 +52,11 @@ js = rep(js, '"Du har läsbehörighet. Be Elliot om Contributor-behörighet för
 js = rep(js, '    const addNote = async () => { const t = noteIn.value.trim(); const cur = current(); if (!t || isNew) return; if (await write("styles", cur._id,', hosted("style-shopify.js") + '\n    const addNote = async () => { const t = noteIn.value.trim(); const cur = current(); if (!t || isNew) return; if (await write("styles", cur._id,');
 js = rep(js, '    const body = [varSec, form, ownImgs, planSec, gallerySec, prodSec, samplesSec, eanSec];', '    const body = [varSec, form, ownImgs, planSec, gallerySec, prodSec, samplesSec, eanSec, shopSec];');
 js = rep(js, 'renderVariants(); renderPlan(); renderGallery(); renderProd(); renderSamples(); renderEanTable(); if (!isNew) renderLogInto(logUl, current().logg); }', 'renderVariants(); renderPlan(); renderGallery(); renderProd(); renderSamples(); renderEanTable(); if (!isNew) { renderFarger(); renderLogInto(logUl, current().logg); } }');
-js = rep(js, '        const changes = describeChanges(cur, o, ST_LABELS);\n        if (!changes.length) {', '        const changes = describeChanges(cur, o, ST_LABELS);\n        await saveShopFields();\n        if (!changes.length) {');
-js = rep(js, '  // ---------- tabs ----------', hosted("shopify-tab.js") + '  // ---------- tabs ----------');
+js = rep(js, '        const changes = describeChanges(Object.assign({}, cur, { status: styleStatusNorm(cur.status) }), o, ST_LABELS);\n        if (!changes.length) {', '        const changes = describeChanges(Object.assign({}, cur, { status: styleStatusNorm(cur.status) }), o, ST_LABELS);\n        await saveShopFields();\n        if (!changes.length) {');
+js = rep(js, '  // ---------- tabs ----------', hosted("shopify-tab.js") + hosted("flagga.js") + '  // ---------- tabs ----------');
 js = rep(js, 'ecom: EcomView, coo: CooView, tyglager: LagerView', 'ecom: EcomView, shopify: ShopifyView, coo: CooView, tyglager: LagerView');
 js = rep(js, '    ecom: { view: null, season: "", q: "", touched: false },\n', '    ecom: { view: null, season: "", q: "", touched: false },\n    shopify: { view: null, status: "ej", q: "", lev: "", season: "", alla: false },\n');
-js = rep(js, '["ecom", "E-com"], ["coo", "COO"]', '["ecom", "E-com"], ["shopify", "Shopify"], ["coo", "COO"]');
+js = rep(js, '["ecom", "E-com"], ["coo", "Lanseringar"]', '["ecom", "E-com"], ["shopify", "Shopify"], ["coo", "Lanseringar"]');
 js = rep(js, 'const NEW_TABS = ["coo"];', 'const NEW_TABS = ["coo", "shopify"];');
 js = rep(js, '    set("c_ean",', '    set("c_shopify", shopRows().filter((r) => !r.pushed && !r.saknar.length).length);\n    set("c_ean",');
 
@@ -106,3 +106,10 @@ ${login}${markup}
 writeFileSync(join(ROOT, "web", "index.html"), html);
 writeFileSync(join(ROOT, "web", "app.js"), js);
 console.log("Byggt web/index.html (" + html.length + " tecken) och web/app.js (" + js.length + " tecken).");
+
+// ---- engelska: källan är på svenska, appen som publiceras är på engelska (tools/i18n.mjs + tools/en.json) ----
+// --sv hoppar över steget. Saknas en översättning stoppas bygget, så att ingen svensk text slinker med.
+if (!process.argv.includes("--sv")) {
+  const { execFileSync } = await import("node:child_process");
+  execFileSync(process.execPath, [join(ROOT, "tools", "i18n.mjs"), "apply", join(ROOT, "web", "app.js"), join(ROOT, "web", "index.html"), "--strict"], { stdio: "inherit" });
+}

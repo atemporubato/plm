@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="sv">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -118,8 +118,8 @@ tr.mx-open > td { background: var(--paper); padding: 12px 16px; }
 <div class="login" id="login" hidden>
   <div class="login-card">
     <h1>Rubato <em>PLM</em></h1>
-    <p>Samples, kollektion, produktion, foto och EAN. Logga in med ditt Rubato-konto.</p>
-    <button class="btn primary" id="loginBtn" type="button">Logga in med Microsoft</button>
+    <p>Samples, collection, production, photo and EAN. Sign in with your Rubato account.</p>
+    <button class="btn primary" id="loginBtn" type="button">Sign in with Microsoft</button>
   </div>
 </div>
 </head><body>
@@ -191,6 +191,15 @@ header.top { display: flex; flex-wrap: wrap; align-items: flex-end; justify-cont
 .srch-line b { font-weight: 400; color: var(--ink); font-variant-numeric: tabular-nums; }
 .chip.b-arkiv { background: var(--paper); border-style: dashed; color: var(--muted); }
 @media (max-width: 760px) { .hdr-right { justify-items: stretch; width: 100%; } .gsearch { width: 100%; } .actions { justify-content: flex-start; } }
+.areas { display: flex; gap: 34px; align-items: flex-end; margin: 4px 0 12px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+.area { border: 0; background: none; padding: 0 0 10px; cursor: pointer; text-align: left; border-bottom: 2px solid transparent; margin-bottom: -1px; color: var(--muted); }
+.area b { display: block; font-family: var(--f-label); font-weight: 400; font-size: 13px; letter-spacing: .16em; text-transform: uppercase; }
+.area span { font-family: var(--f-ui); font-size: 13px; }
+.area[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--ink); }
+.tabs.flow .tab { position: relative; padding-right: 30px; }
+.tabs.flow .tab:not(.last)::after { content: "→"; position: absolute; right: 6px; top: 9px; font-family: var(--f-ui); font-size: 14px; letter-spacing: 0; color: var(--muted); }
+.tab .nr { font-family: var(--f-ui); font-size: 12px; letter-spacing: 0; color: var(--muted); }
+.tab .nr:empty { display: none; }
 .tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--ink); overflow-x: auto; scrollbar-width: none; }
 .tab { border: 0; background: transparent; padding: 10px 14px 8px; font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; white-space: nowrap; display: inline-flex; flex-direction: column; gap: 3px; align-items: flex-start; }
 .tab .tn { display: inline-flex; gap: 8px; align-items: baseline; }
@@ -463,6 +472,21 @@ table.ledger { width: 100%; border-collapse: collapse; min-width: 960px; }
 .gvar { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 10px; align-items: center; padding: 6px 8px; border: 1px solid var(--line); background: var(--paper); cursor: pointer; text-align: left; color: inherit; font: inherit; }
 .gvar:hover { border-color: var(--ink); }
 .gvar .sub { white-space: nowrap; }
+.flagbox { border: 1px solid var(--late); background: var(--late-soft); }
+.flagbox .card-head { background: transparent; }
+.flagrow { display: grid; grid-template-columns: auto 1fr auto; gap: 12px; align-items: start; padding: 10px 16px; border-top: 1px solid var(--line); }
+.flagrow .ft { font-size: 15px; } .flagrow .ft b { font-weight: 600; } .flagrow .fm { font-size: 13px; color: var(--muted); margin-top: 2px; }
+.flagrow .fa { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; align-items: center; }
+.flagnote { border: 1px solid var(--late); background: var(--late-soft); padding: 10px 14px; font-size: 14px; }
+.flagnote b { font-weight: 600; }
+.tab .tn[data-flags]:not([data-flags=""])::after { content: "⚑ " attr(data-flags); color: var(--late); font-family: var(--f-ui); font-size: 12px; letter-spacing: 0; }
+.area b[data-flags]:not([data-flags=""])::after { content: "  ⚑ " attr(data-flags); color: var(--late); font-family: var(--f-ui); font-size: 12px; letter-spacing: 0; }
+.checks { display: flex; gap: 14px; flex-wrap: wrap; } .checks label { display: inline-flex; gap: 6px; align-items: center; font-size: 15px; }
+.brief { display: grid; gap: 0; border-top: 1px solid var(--line); }
+.brief-row { display: grid; grid-template-columns: 170px 1fr; gap: 12px; padding: 9px 0; border-bottom: 1px solid var(--line); }
+.brief-row .k { font-family: var(--f-label); font-size: 10px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); padding-top: 3px; }
+.brief-row .v { white-space: pre-wrap; overflow-wrap: anywhere; }
+@media (max-width: 640px) { .brief-row { grid-template-columns: 1fr; gap: 2px; } .flagrow { grid-template-columns: 1fr; } }
 .inbox { border: 1px solid var(--ink); background: var(--indigo-soft); }
 .inbox .card-head { background: transparent; }
 .ideabanner { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; padding: 10px 14px; background: var(--indigo-soft); font-size: 14px; }
@@ -527,7 +551,7 @@ table.ledger { width: 100%; border-collapse: collapse; min-width: 960px; }
 .people .hits button { border: 0; border-bottom: 1px solid var(--line); background: transparent; text-align: left; padding: 8px 12px; cursor: pointer; display: flex; gap: 10px; align-items: center; font: inherit; color: inherit; }
 .people .hits button:hover { background: var(--indigo-soft); }
 .avatar { width: 26px; height: 26px; border-radius: 50%; object-fit: cover; flex: 0 0 auto; }
-.tab.me .who::after { content: " · du"; }
+.tab.me .who::after { content: " · you"; }
 .chip.b-pausad { background: var(--warn-soft); border-color: transparent; color: var(--warn); }
 .chip.b-kastad { color: var(--muted); text-decoration: line-through; }
 .hanger { display: inline-block; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; padding: 2px 8px; border-radius: 0; background: var(--indigo-soft); color: var(--indigo); white-space: nowrap; }
@@ -694,30 +718,37 @@ table.vtable { width: 100%; border-collapse: collapse; font-size: 13.5px; }
   <header class="top">
     <div class="brand">
       <div class="mark"><svg class="symbol" viewBox="0 0 2000 2000" aria-hidden="true"><path d="M1230,1474.34c-10.93-25.07-24-45.45-39.14-60.77-25.12-25.5-55.39-38.43-90-38.43-36.59,0-68.3,13.59-94.29,40.4-78.39,80.86-73.78,264.08-73.55,271.87l1.09,35.19h566.75l23.68-.32,3.88-31.91a656.59,656.59,0,0,0,2.71-101.37c-4-77.47-22.29-135-54.19-171-24.86-28-58.19-42.87-96.42-42.87-47.11,0-86.68,16.85-117.61,50.12C1250.41,1438.72,1239.37,1455.17,1230,1474.34Zm-223.82,175.31c2-41.43,11.23-140.93,52.6-183.57,12.11-12.49,25.49-18.3,42.12-18.3,14.8,0,26.93,5.33,38.18,16.73,41.57,42.17,51.94,145.15,54.41,185.14Zm310-174.94c16.83-18.11,37.89-26.93,64.42-26.93,17.78,0,30.75,5.67,42,18.39,31.4,35.36,39.32,116.41,36.24,183.48H1266.49C1267.26,1615.53,1273.36,1520.69,1316.15,1474.71Z"/><path d="M1000,0C448.59,0,0,448.59,0,1000S448.59,2000,1000,2000s1000-448.59,1000-1000S1551.41,0,1000,0Zm0,72.63c192.85,0,376.74,58.45,533.56,169.27H466.44C623.26,131.08,807.15,72.63,1000,72.63ZM1606.62,314.5V604.14c0,159.47-129.75,289.21-289.21,289.21s-289.19-129.74-289.19-289.21V314.5ZM72.63,1000c0-260.1,110.55-509.74,303.43-685.49H955.6V423.09L540.91,719.2V546H730V473.43H279.16V546H468.29v225L74.14,1052.5C73.13,1034.88,72.63,1017.29,72.63,1000Zm1689.06,528.32c-173.82,249.9-458.56,399.06-761.69,399.06a934.94,934.94,0,0,1-136-10.12V1228.31h478.68l430.81,281.91ZM864,1155V915.06l366.6,239.9Zm500.92.25V1155h-.39L830.87,805.73l-18.45,8.51-21.73,12.32V1903c-369.57-85.66-652.78-391.74-708.07-767.35L468.29,860.31V1058h72.62V808.42L955.6,512.34v91.8C955.6,803.67,1117.91,966,1317.41,966s361.83-162.31,361.83-361.84V369.34C1839.41,541.62,1927.37,764.7,1927.37,1000a923.94,923.94,0,0,1-115.85,447.43Z"/><path d="M609.1,1458.66a109.07,109.07,0,0,1-218.13,0v-341H318.36v341c0,100.2,81.5,181.68,181.68,181.68s181.67-81.48,181.67-181.68v-341H609.1Z"/></svg><span class="wordtext show">Rubato</span></div>
-      <h1>Samples <em>&amp; produktion</em></h1>
-      <p>Idéer, styles, samples, kollektion, produktion, foto, tyger och EAN för produktutvecklingen. Tidsplanen räknas baklänges från leverantörens produktionstid.</p>
+      <h1 id="brandH">Samples <em>&amp; production</em></h1>
+      <p id="brandP">The product's path: idea, design, sample, collection, order, photo and launch. Every step has an owner.</p>
     </div>
     <div class="hdr-right">
       <div class="actions" id="actions"></div>
-      <form class="gsearch" id="gsearch" role="search"><input type="search" id="gq" placeholder="Sök i allt: style, tyg, färg, PO, sample-ID …" aria-label="Sök i hela appen" autocomplete="off"></form>
+      <form class="gsearch" id="gsearch" role="search"><input type="search" id="gq" placeholder="Search everything: style, fabric, colour, PO, sample ID …" aria-label="Search the whole app" autocomplete="off"></form>
     </div>
   </header>
-  <nav class="tabs" role="tablist" aria-label="Vyer" id="tabs">
-    <button class="tab" role="tab" type="button" data-tab="bibliotek"><span class="tn">Bibliotek <span class="c" id="c_bibliotek"></span></span><span class="who">Carl / alla</span></button>
-    <button class="tab" role="tab" type="button" data-tab="samples"><span class="tn">Samples <span class="c" id="c_samples"></span></span><span class="who">Alex</span></button>
-    <button class="tab" role="tab" type="button" data-tab="ref"><span class="tn">Ref-plagg <span class="c" id="c_ref"></span></span><span class="who">Alex</span></button>
-    <button class="tab" role="tab" type="button" data-tab="kollektion"><span class="tn">Kollektion <span class="c" id="c_kollektion"></span></span><span class="who">Carl</span></button>
-    <button class="tab" role="tab" type="button" data-tab="produktion"><span class="tn">Produktion <span class="c" id="c_produktion"></span></span><span class="who">Elliot</span></button>
-    <button class="tab" role="tab" type="button" data-tab="foto"><span class="tn">Foto <span class="c" id="c_foto"></span></span><span class="who">Oliver</span></button>
-    <button class="tab" role="tab" type="button" data-tab="ecom"><span class="tn">E-com <span class="c" id="c_ecom"></span></span><span class="who">Jakob</span></button>
+  <nav class="areas" id="areas" aria-label="Areas">
+    <button class="area" type="button" data-area="produkt"><b>Product</b><span>PLM – from idea to store</span></button>
+    <button class="area" type="button" data-area="planering"><b>Planning</b><span>Launches and payments</span></button>
+    <button class="area" type="button" data-area="register"><b>Reference</b><span>Stock, references and settings</span></button>
+  </nav>
+  <nav class="tabs" role="tablist" aria-label="Views" id="tabs">
+    <button class="tab" role="tab" type="button" data-tab="bibliotek"><span class="tn"><span class="nr"></span>Ideas <span class="c" id="c_bibliotek"></span></span><span class="who">Carl</span></button>
+    <button class="tab" role="tab" type="button" data-tab="design"><span class="tn"><span class="nr"></span>Design <span class="c" id="c_design"></span></span><span class="who">Conor</span></button>
+    <button class="tab" role="tab" type="button" data-tab="samples"><span class="tn"><span class="nr"></span>Samples <span class="c" id="c_samples"></span></span><span class="who">Alex</span></button>
+    <button class="tab" role="tab" type="button" data-tab="kollektion"><span class="tn"><span class="nr"></span>Collection <span class="c" id="c_kollektion"></span></span><span class="who">Carl</span></button>
+    <button class="tab" role="tab" type="button" data-tab="produktion"><span class="tn"><span class="nr"></span>Production <span class="c" id="c_produktion"></span></span><span class="who">Elliot</span></button>
+    <button class="tab" role="tab" type="button" data-tab="foto"><span class="tn"><span class="nr"></span>Photo <span class="c" id="c_foto"></span></span><span class="who">Oliver</span></button>
+    <button class="tab" role="tab" type="button" data-tab="ecom"><span class="tn"><span class="nr"></span>E-com <span class="c" id="c_ecom"></span></span><span class="who">Jakob</span></button>
     <button class="tab" role="tab" type="button" data-tab="shopify"><span class="tn">Shopify <span class="c" id="c_shopify"></span></span><span class="who">Jakob</span></button>
-    <button class="tab" role="tab" type="button" data-tab="coo"><span class="tn">COO <span class="c" id="c_coo"></span></span><span class="who">Jakob</span></button>
-    <button class="tab" role="tab" type="button" data-tab="tyglager"><span class="tn">Lager <span class="c" id="c_tyglager"></span></span><span class="who">Alex</span></button>
-    <button class="tab" role="tab" type="button" data-tab="leverantorer"><span class="tn">Leverantörer <span class="c" id="c_leverantorer"></span></span><span class="who">Jakob / Elliot</span></button>
-    <button class="tab" role="tab" type="button" data-tab="ean"><span class="tn">EAN <span class="c" id="c_ean"></span></span><span class="who">Jakob / Elliot</span></button>
-    <button class="tab" role="tab" type="button" data-tab="anvandare" hidden><span class="tn">Användare <span class="c" id="c_anvandare"></span></span><span class="who">Elliot</span></button>
+    <button class="tab" role="tab" type="button" data-tab="coo"><span class="tn"><span class="nr"></span>Launches <span class="c" id="c_coo"></span></span><span class="who">Jakob</span></button>
+    <button class="tab" role="tab" type="button" data-tab="leverantorer"><span class="tn"><span class="nr"></span>Suppliers <span class="c" id="c_leverantorer"></span></span><span class="who">Jakob / Elliot</span></button>
+    <button class="tab" role="tab" type="button" data-tab="tyglager"><span class="tn"><span class="nr"></span>Stock <span class="c" id="c_tyglager"></span></span><span class="who">Alex</span></button>
+    <button class="tab" role="tab" type="button" data-tab="ref"><span class="tn"><span class="nr"></span>Ref garments <span class="c" id="c_ref"></span></span><span class="who">Alex</span></button>
+    <button class="tab" role="tab" type="button" data-tab="ean"><span class="tn"><span class="nr"></span>EAN <span class="c" id="c_ean"></span></span><span class="who">Jakob / Elliot</span></button>
+    <button class="tab" role="tab" type="button" data-tab="anvandare" hidden><span class="tn"><span class="nr"></span>Users <span class="c" id="c_anvandare"></span></span><span class="who">Elliot</span></button>
   </nav>
   <div id="banner" class="banner" hidden></div>
+  <div id="flagbox" hidden></div>
   <div id="diag" class="banner" hidden></div>
   <main id="view"></main>
 </div>
@@ -726,7 +757,7 @@ table.vtable { width: 100%; border-collapse: collapse; font-size: 13.5px; }
 <aside class="sheet" id="sheet" hidden role="dialog" aria-modal="true" aria-labelledby="sheetTitle">
   <div class="sheet-head">
     <div class="sheet-headings"><span class="tag" id="sheetTag"></span><h2 id="sheetTitle"></h2><div class="sub" id="sheetSub"></div></div>
-    <button class="btn small" id="sheetClose" type="button">Stäng</button>
+    <button class="btn small" id="sheetClose" type="button">Close</button>
   </div>
   <div class="sheet-body" id="sheetBody"></div>
   <div class="sheet-foot" id="sheetFoot"></div>
@@ -734,18 +765,18 @@ table.vtable { width: 100%; border-collapse: collapse; font-size: 13.5px; }
 
 <div class="scrim top" id="lblScrim" hidden></div>
 <div class="modal" id="lblDlg" hidden role="dialog" aria-modal="true" aria-labelledby="lblTitle">
-  <h3 id="lblTitle">Skriv ut etiketter</h3>
+  <h3 id="lblTitle">Print labels</h3>
   <p class="sub" id="lblWhat"></p>
   <div class="lbl-row">
-    <div class="field"><label for="lblStart">Börja på etikett nr</label><select id="lblStart"></select><span class="hint">Hoppa över etiketter som redan är använda på arket.</span></div>
+    <div class="field"><label for="lblStart">Start at label no.</label><select id="lblStart"></select><span class="hint">Skip labels that have already been used on the sheet.</span></div>
     <div class="grid24" id="lblGrid" aria-hidden="true"></div>
   </div>
-  <p class="hint">A4 med 3 × 8 etiketter à 70 × 37 mm. QR-koden öppnar samplen i appen.</p>
+  <p class="hint">A4 with 3 × 8 labels, 70 × 37 mm each. The QR code opens the sample in the app.</p>
   <div class="modal-foot">
-    <button class="btn small" id="lblAll" type="button">Alla mottagna utan etikett</button>
+    <button class="btn small" id="lblAll" type="button">All received without a label</button>
     <span class="spacer"></span>
-    <button class="btn" id="lblCancel" type="button">Avbryt</button>
-    <button class="btn primary" id="lblGo" type="button">Ladda ner PDF</button>
+    <button class="btn" id="lblCancel" type="button">Cancel</button>
+    <button class="btn primary" id="lblGo" type="button">Download PDF</button>
   </div>
 </div>
 

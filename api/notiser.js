@@ -8,8 +8,8 @@
 const { compute, renderMail, personKey, NAMN } = require("./_lib/notiser");
 
 const BASE = process.env.PLM_URL || "https://plm.atemporubato.com";
-const COLLS = ["samples", "styles", "po", "drops", "leverantorer", "handelser"];
-const env = (k) => { const v = process.env[k]; if (!v) throw new Error("Saknar miljövariabel " + k); return v; };
+const COLLS = ["samples", "styles", "po", "drops", "leverantorer", "handelser", "flaggor"];
+const env = (k) => { const v = process.env[k]; if (!v) throw new Error("Missing environment variable " + k); return v; };
 
 async function sb(path, opts = {}) {
   const { headers: extra, ...rest } = opts;
@@ -52,7 +52,7 @@ async function graphToken() {
   const body = new URLSearchParams({ client_id: env("MS_CLIENT_ID"), client_secret: env("MS_CLIENT_SECRET"), scope: "https://graph.microsoft.com/.default", grant_type: "client_credentials" });
   const res = await fetch("https://login.microsoftonline.com/" + env("MS_TENANT_ID") + "/oauth2/v2.0/token", { method: "POST", body });
   const j = await res.json();
-  if (!j.access_token) throw new Error("Microsoft-inloggningen misslyckades: " + (j.error_description || j.error || "okänt").slice(0, 200));
+  if (!j.access_token) throw new Error("Microsoft sign-in failed: " + (j.error_description || j.error || "unknown").slice(0, 200));
   return j.access_token;
 }
 async function sendMail(token, to, subject, html) {
@@ -72,7 +72,7 @@ module.exports = async (req, res) => {
 
     /* --- förhandsvisning för admin --- */
     if (q.preview) {
-      if (!(await verifyAdmin(req))) return res.status(401).json({ error: "Bara admin" });
+      if (!(await verifyAdmin(req))) return res.status(401).json({ error: "Admin only" });
       const { docs, state, settings, persons } = await load();
       const out = compute({ state, docs, settings, persons, now });
       const key = String(q.preview).toLowerCase();
@@ -80,21 +80,21 @@ module.exports = async (req, res) => {
       const items = out.perPerson[key] || [];
       const { html } = renderMail({ name: NAMN[key] || key, items, base: BASE });
       res.setHeader("Content-Type", "text/html; charset=utf-8");
-      return res.status(200).send(items.length ? html : "<p style='font-family:sans-serif'>Inga notiser för " + key + " just nu.</p>");
+      return res.status(200).send(items.length ? html : "<p style='font-family:sans-serif'>No notices for " + key + " right now.</p>");
     }
 
     /* --- cron --- */
-    if ((req.headers.authorization || "") !== "Bearer " + env("CRON_SECRET")) return res.status(401).json({ error: "Nej" });
+    if ((req.headers.authorization || "") !== "Bearer " + env("CRON_SECRET")) return res.status(401).json({ error: "Unauthorized" });
     const sthlm = stockholm(now);
     const { docs, state, settings, persons } = await load();
     if (!q.force) {
-      if (sthlm.hour < 10) return res.status(200).json({ ok: true, skip: "före 10" });
-      if (state && state.lastSent === sthlm.date) return res.status(200).json({ ok: true, skip: "redan skickat idag" });
+      if (sthlm.hour < 10) return res.status(200).json({ ok: true, skip: "before 10:00" });
+      if (state && state.lastSent === sthlm.date) return res.status(200).json({ ok: true, skip: "already sent today" });
     }
     const out = compute({ state, docs, settings, persons, now });
     // första gången: bara baslinje, inget skickas; tidsbaserade påminnelser kommer nästa dag
     if (!state) { await saveState(Object.assign(out.state, { sent: {}, lastSent: sthlm.date })); return res.status(200).json({ ok: true, baslinje: true }); }
-    if (!mailReady()) return res.status(200).json({ ok: true, skickat: 0, info: "Microsoft-nycklar saknas – inget skickat, inget sparat", skulle: Object.fromEntries(Object.entries(out.perPerson).map(([k, v]) => [k, v.length])) });
+    if (!mailReady()) return res.status(200).json({ ok: true, skickat: 0, info: "Microsoft keys missing – nothing sent, nothing saved", skulle: Object.fromEntries(Object.entries(out.perPerson).map(([k, v]) => [k, v.length])) });
 
     const token = await graphToken();
     const test = process.env.NOTISER_TEST_TILL || "";

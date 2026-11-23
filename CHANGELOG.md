@@ -6,6 +6,20 @@ och importeras med `node tools/import-dokument.js`, och main går live på plm.a
 
 Versionsnumrering: små ändringar ger punktversion (v9.1, v9.2 …). Nytt heltal (v10) bara vid stora ändringar.
 
+## v10 (2026-11-23)
+
+Ny navigering, nytt idéflöde med Design-flik, flaggor och hela systemet på engelska. Ingen dataimport och ingen schemaändring: inga fält tas bort eller skrivs om.
+- Tre områden: Produkt (PLM-flödet, numrerat: Idéer → Design → Samples → Kollektion → Produktion → Foto → E-com), Planering (Lanseringar, Leverantörer) och Register (Lager, Ref-plagg, Shopify, Användare). Bibliotek heter Idéer och COO heter Lanseringar; länkarna (#coo, #bibliotek …) är oförändrade.
+- Idéflödet: status "Idé ej redo för design" → "Idé redo att designa" (Conor) → "Sample kan beställas" (Alex) → Sampling. Carl väljer på idén: "Skicka till design" eller "Direkt till sampling". Äldre status läses som de nya ("Produktidé" = ej redo, "Idé under utveckling" = sample kan beställas) och skrivs om först när stylen sparas nästa gång.
+- Design-flik för Conor: lista "Att designa" och "Designade", och ett nedskalat ark med brief från Carl (beskrivning, kategori, säsong, tyg, storlekar, mått, referenser, bilder), uppladdning av design, länk och kommentar, samt "Design klar – skicka till sampling". Designen sparas på stylen (fältet design) och visas för Carl och Alex.
+- Ny roll "Extern designer" (formgivare): ser bara Design-fliken; sök, övriga flikar och ark är dolda i appen. OBS: det är en spärr i gränssnittet, inte i databasen (Elliots val 23 nov).
+- Flaggor (collection "flaggor"): knappen "⚑ Flagga" på sample, style, PO, drop och händelse. Kommentar krävs, den som flaggar väljer mottagare (flikens ägare förvald). Flaggan ligger i en ruta överst i fliken tills någon markerar den som löst. "Flagga problem" på en sample använder samma dialog och sätter status Problem.
+- Direktmejl för flaggor: `api/flagga.js` skickar via Microsoft Graph direkt när flaggan skapas (samma miljövariabler som notismejlet). Går det inte att skicka kommer flaggan med i mejlet kl. 10.
+- Försenad leverans: en PO vars ETA lager ligger efter droppens "I lager senast" får etiketten "Problem · försenad", syns i Flaggat-rutan i Produktion och ger notis till alla i mejlet kl. 10. Räknas fram, sparas inte, och försvinner när ETA ändras eller PO:n är inlevererad.
+- Notismejlet: nya rader för idé till Conor, sample kan beställas (Alex), design klar (Carl), flaggor och lösta flaggor. Conor får notiser men räknas inte in i "alla". Mejlen är på engelska.
+- Engelska: källan (artifact/vN.html, tools/hosted) är fortfarande på svenska. `tools/i18n.mjs` byter text till engelska enligt `tools/en.json` som sista steg i `tools/build.mjs` (hoppa över med --sv; bygget stoppas om en text saknar översättning). Värden som sparas i databasen (status, kategori, plats …) byts aldrig, de visas bara på engelska. Sandlådan byggs med `node tools/i18n.mjs artifact artifact/vN.html ut.html`.
+- Roller sparas med flikVersion 3 så att Design-fliken läggs till för roller som sparats tidigare.
+
 ## v9.3 (2026-11-19)
 
 Drop och säsong sätts på ett ställe och gäller överallt. Ingen dataimport och ingen schemaändring: inga fält tas bort eller skrivs om, allt nedan räknas fram vid visning.

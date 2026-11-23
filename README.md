@@ -15,6 +15,8 @@ Princip: artefakten är kod, appen är data. Elliot utvecklar koden i Claude-art
 
 - `web/` appen. `index.html` och `app.js` är byggda (ändra inte för hand), `platform.js` datalagret, `config.js` publik nyckel.
 - `api/shopify.js` serverless-funktion för Shopify-push (Vercel). Miljövariabler: SHOPIFY_STORE, SHOPIFY_CLIENT_ID, SHOPIFY_CLIENT_SECRET, SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, SUPABASE_SECRET_KEY.
+- `api/flagga.js` direktmejl när någon flaggar något i appen (samma Microsoft-nycklar som notismejlet).
+- Språk: källan är på svenska, appen byggs på engelska. `node tools/build.mjs artifact/vN.html` kör `tools/i18n.mjs` sist och översätter enligt `tools/en.json`; `--sv` ger svensk bygge. Kräver `npm install` (acorn).
 - `api/notiser.js` dagligt notismejl kl. 10 (Vercel cron). Miljövariabler: MS_TENANT_ID, MS_CLIENT_ID, MS_CLIENT_SECRET, MAIL_FROM, CRON_SECRET, valfri NOTISER_TEST_TILL. Admin kan förhandsvisa: /api/notiser?preview=jakob&token=<Supabase-token>.
 - `artifact/` Elliots versioner.
 - `tools/` build.mjs, hosted/ (Shopify-sektion, Shopify-flik, CSS), db.mjs (kör SQL), import-dokument.js, import-ean.mjs, data/.

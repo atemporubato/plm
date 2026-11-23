@@ -22,7 +22,7 @@
         if (!sh.produkttyp) saknar.push("produkttyp");
         if (!sh.storlekssystem) saknar.push("storlekssystem");
         else if (sys && (st.storlekar || []).some((s) => sys[s] == null)) saknar.push("storlekskod");
-        if (!(sh.rrp_sek > 0)) saknar.push("pris");
+        if (!(sh.rrp_sek > 0)) saknar.push("RRP");
         if (!sh.hs_kod) saknar.push("HS-kod");
         if (!lev || !lev.land) saknar.push("ursprungsland");
         if (!sh.description_en) saknar.push("beskrivning");
