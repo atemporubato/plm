@@ -2258,7 +2258,7 @@ import * as P from "./platform.js";
       const allImgs = styleAllImages(s);
       const g = grundOf(s);
       const b = h("button", { class: "pcard", type: "button", onclick: () => openStyle(s._id) },
-        h("div", { class: "pimg" }, img ? h("img", { src: imgUrl(img), alt: s.namn, loading: "lazy", onerror: (e) => { const el = e.target; if (/^https?:/.test(el.src)) el.replaceWith(h("span", { class: "noimg", text: "The image from Shopify could not be shown – press \"Fetch Shopify images\"" })); } }) : emptyTile(s, xs), styleStatusPill(s), h("span", { class: "typtag t-" + slug(s.typ || "Nyhet"), text: typLabel(s) }), (() => { const rest = allImgs.filter((x) => x !== img); if (!rest.length) return null; const visa = rest.slice(0, 3); return h("span", { class: "pthumbs" }, rest.length > visa.length ? h("span", { class: "more", text: "+" + (rest.length - visa.length) }) : null, visa.slice().reverse().map((x) => h("img", { src: imgUrl(x), alt: "", loading: "lazy", onerror: (e) => e.target.remove() }))); })(), g ? h("span", { class: "grundtag", text: "Variant of " + g.namn }) : imageSource(s) ? h("span", { class: "grundtag", text: imageSource(s) === "Shopify" ? (s.shopifyBild && s.shopifyBild.likhet === "liknande" ? "Similar · Shopify" : "Shopify") : imageSource(s) }) : null),
+        h("div", { class: "pimg" }, img ? h("img", { src: imgUrl(img), alt: s.namn, loading: "lazy", onerror: (e) => { const el = e.target; if (/^https?:/.test(el.src)) el.replaceWith(h("span", { class: "noimg", text: "The image from Shopify could not be shown – press \"Fetch Shopify images\"" })); } }) : emptyTile(s, xs), styleStatusPill(s), h("span", { class: "typtag t-" + slug(s.typ || "Nyhet"), text: typLabel(s) }), (() => { const fb = s.fargBilder && typeof s.fargBilder === "object" ? uniq(Object.values(s.fargBilder)) : []; const rest = (fb.length ? fb : allImgs.filter((x) => !(x === shopUrl(s) && docImages(s).length))).filter((x) => x !== img); if (!rest.length) return null; const visa = rest.slice(0, 3); return h("span", { class: "pthumbs" }, rest.length > visa.length ? h("span", { class: "more", text: "+" + (rest.length - visa.length) }) : null, visa.slice().reverse().map((x) => h("img", { src: imgUrl(x), alt: "", loading: "lazy", onerror: (e) => e.target.remove() }))); })(), g ? h("span", { class: "grundtag", text: "Variant of " + g.namn }) : imageSource(s) ? h("span", { class: "grundtag", text: imageSource(s) === "Shopify" ? (s.shopifyBild && s.shopifyBild.likhet === "liknande" ? "Similar · Shopify" : "Shopify") : imageSource(s) }) : null),
         h("div", { class: "pbody" }, h("span", { class: "pname", text: s.namn }), h("span", { class: "psub", text: [s.leverantor, styleKategori(s), styleTyg(s)].filter(Boolean).join(" · ") }),
           (s.farger || []).length ? h("span", { class: "psub", text: s.farger.join(", ") }) : null,
           h("span", { class: "psub", text: units ? units + " units" : last ? (last.version || "") + " · " + (last.status || "") : "" }),
@@ -3523,7 +3523,7 @@ import * as P from "./platform.js";
   async function hostedNotifyMention(coll, id, t) {
     const { data: { session } } = await P.supabase.auth.getSession();
     const res = await fetch("/api/omnamn", { method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer " + (session ? session.access_token : "") }, body: JSON.stringify({ coll, id, t }) });
-    if (!res.ok) return null;
+    if (!res.ok) { let info = "HTTP " + res.status; try { info = (await res.json()).error || info; } catch (e) {} return { skickat: 0, info }; }
     return res.json();
   }
   // ---------- SHOPIFY-BILD: hämtas direkt, annars via servern (bara hostad) ----------
@@ -3544,9 +3544,12 @@ import * as P from "./platform.js";
   let autoShopifyKor = false;
   async function hostedAutoShopify() {
     if (autoShopifyKor || !canWrite || !db || !assets || designOnly() || ME.leverantor) return;
-    let provat = {}; try { provat = JSON.parse(localStorage.getItem("plmAutoShopify2") || "{}"); } catch (e) {}
+    let provat = {}; try { provat = JSON.parse(localStorage.getItem("plmAutoShopify3") || "{}"); } catch (e) {}
     const nu = Date.now(), vecka = 7 * 864e5;
-    const todo = D.styles.filter((s) => ["NOOS", "Restock"].includes(s.typ) && s.namn && !s.shopifyBild && !s.bildId && !docImages(s).length && !(provat[s._id] && nu - provat[s._id] < vecka)).slice(0, 40);
+    // Utan bild, eller flera färger där den enda bilden är en automatisk (Shopify-kopia eller färgöversikt) – då hämtas en bild per färg.
+    const tom = (s) => !s.shopifyBild && !s.bildId && !docImages(s).length;
+    const baraAuto = (s) => (s.farger || []).length > 1 && !s.fargBilder && docImages(s).length <= 1 && (!!s.bildAuto || !!s.shopifyBild);
+    const todo = D.styles.filter((s) => ["NOOS", "Restock"].includes(s.typ) && s.namn && (tom(s) || baraAuto(s)) && !(provat[s._id] && nu - provat[s._id] < vecka)).slice(0, 40);
     if (!todo.length) return;
     autoShopifyKor = true;
     let hits = 0, antal = 0;
@@ -3560,9 +3563,10 @@ import * as P from "./platform.js";
           const svar = await res.json();
           const hit = svar.hit;
           const cur = byId(D.styles, s._id) || s;
-          if (cur.shopifyBild || cur.bildId || docImages(cur).length) continue;
+          if (!(tom(cur) || baraAuto(cur))) continue;
           // En bild per färg (t.ex. Lot 2 i Indigo, Black, Ecru): alla hämtas in, första blir huvudbild och övriga visas som miniatyrer.
           const per = Array.isArray(svar.perFarg) ? svar.perFarg.slice(0, 8) : [];
+          if (!tom(cur) && per.length < 2) continue;
           if (per.length > 1 || (per.length === 1 && !hit)) {
             const ids = [], fargBilder = {};
             for (const x of per) {
@@ -3582,7 +3586,7 @@ import * as P from "./platform.js";
           if (await write("styles", s._id, { shopifyBild: { url: hit.url, titel: hit.titel, handle: hit.handle, likhet: "samma", auto: true }, andrad: new Date().toISOString(), logg: (cur.logg || []).concat(logEntry("Shopify image linked automatically: " + hit.titel)) })) { Object.assign(cur, { shopifyBild: { url: hit.url, titel: hit.titel, handle: hit.handle, likhet: "samma", auto: true } }); hits++; }
         } catch (e) { delete provat[s._id]; }
       }
-      try { localStorage.setItem("plmAutoShopify2", JSON.stringify(provat)); } catch (e) {}
+      try { localStorage.setItem("plmAutoShopify3", JSON.stringify(provat)); } catch (e) {}
       if (antal) toast(antal + " " + "Shopify images fetched");
       if (hits) await importShopifyImages();
     } finally { autoShopifyKor = false; }
@@ -4397,7 +4401,7 @@ import * as P from "./platform.js";
     if (till.length) {
       const names = till.map(personName).join(", ");
       const res = await notifyMention(coll, cur._id, e.t);
-      toast(res && res.skickat ? "Comment saved – email sent to " + names : "Comment saved – " + names + " will get it in the 10:00 email");
+      toast((res && res.skickat ? "Comment saved – email sent to " + names : "Comment saved – " + names + " will get it in the 10:00 email") + (res && res.info ? " (" + res.info + ")" : ""));
     }
     return true;
   }

@@ -88,15 +88,17 @@ module.exports = async (req, res) => {
     const item = { key: "M:" + mark, block: "gora", tag: "@", text: from + " tagged you on " + ref, sub: "“" + short(line.text) + "”", link, linkText: "Open" };
     const token = await graphToken();
     const test = process.env.NOTISER_TEST_TILL || "";
-    const sent = [], failed = [];
+    const sent = [], failed = [], missing = [];
     for (const k of till) {
-      const p = people.find((x) => x.key === k); if (!p) continue;
+      const p = people.find((x) => x.key === k); if (!p) { missing.push(NAMN[k] || k); continue; }
       const { html } = renderMail({ name: NAMN[k] || k, items: [item], base: BASE, intro: from + " tagged you in a comment in PLM just now.", heading: "Tagged", reason: "Sent because someone tagged you in a comment." });
       const subject = (test ? "[TEST → " + (NAMN[k] || k) + "] " : "") + "PLM: " + from + " tagged you on " + short(ref, 80);
       try { await sendMail(token, test || p.email, subject, html); sent.push(k); } catch (e) { failed.push(k + ": " + e.message); }
     }
     if (sent.length) await sb("dokument", { method: "POST", headers: { Prefer: "resolution=ignore-duplicates,return=minimal" }, body: JSON.stringify({ collection: "_notiser", id: mark, data: { t: new Date().toISOString(), till: sent } }) });
-    return res.status(200).json({ ok: true, skickat: sent.length, till: sent, fel: failed });
+    // info is shown to the person who wrote the comment, so a mail that did not go out says why.
+    const info = [missing.length ? "no PLM user found for " + missing.join(", ") : "", failed.length ? "mail failed: " + failed.join("; ").slice(0, 200) : "", sent.length && test ? "test mode – sent to " + test : ""].filter(Boolean).join(" · ");
+    return res.status(200).json({ ok: true, skickat: sent.length, till: sent, fel: failed, info: info || undefined });
   } catch (e) {
     console.error(e);
     return res.status(500).json({ error: e.message });

@@ -18,6 +18,6 @@
   async function hostedNotifyMention(coll, id, t) {
     const { data: { session } } = await P.supabase.auth.getSession();
     const res = await fetch("/api/omnamn", { method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer " + (session ? session.access_token : "") }, body: JSON.stringify({ coll, id, t }) });
-    if (!res.ok) return null;
+    if (!res.ok) { let info = "HTTP " + res.status; try { info = (await res.json()).error || info; } catch (e) {} return { skickat: 0, info }; }
     return res.json();
   }

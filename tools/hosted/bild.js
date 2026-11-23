@@ -16,9 +16,12 @@
   let autoShopifyKor = false;
   async function hostedAutoShopify() {
     if (autoShopifyKor || !canWrite || !db || !assets || designOnly() || ME.leverantor) return;
-    let provat = {}; try { provat = JSON.parse(localStorage.getItem("plmAutoShopify2") || "{}"); } catch (e) {}
+    let provat = {}; try { provat = JSON.parse(localStorage.getItem("plmAutoShopify3") || "{}"); } catch (e) {}
     const nu = Date.now(), vecka = 7 * 864e5;
-    const todo = D.styles.filter((s) => ["NOOS", "Restock"].includes(s.typ) && s.namn && !s.shopifyBild && !s.bildId && !docImages(s).length && !(provat[s._id] && nu - provat[s._id] < vecka)).slice(0, 40);
+    // Utan bild, eller flera färger där den enda bilden är en automatisk (Shopify-kopia eller färgöversikt) – då hämtas en bild per färg.
+    const tom = (s) => !s.shopifyBild && !s.bildId && !docImages(s).length;
+    const baraAuto = (s) => (s.farger || []).length > 1 && !s.fargBilder && docImages(s).length <= 1 && (!!s.bildAuto || !!s.shopifyBild);
+    const todo = D.styles.filter((s) => ["NOOS", "Restock"].includes(s.typ) && s.namn && (tom(s) || baraAuto(s)) && !(provat[s._id] && nu - provat[s._id] < vecka)).slice(0, 40);
     if (!todo.length) return;
     autoShopifyKor = true;
     let hits = 0, antal = 0;
@@ -32,9 +35,10 @@
           const svar = await res.json();
           const hit = svar.hit;
           const cur = byId(D.styles, s._id) || s;
-          if (cur.shopifyBild || cur.bildId || docImages(cur).length) continue;
+          if (!(tom(cur) || baraAuto(cur))) continue;
           // En bild per färg (t.ex. Lot 2 i Indigo, Black, Ecru): alla hämtas in, första blir huvudbild och övriga visas som miniatyrer.
           const per = Array.isArray(svar.perFarg) ? svar.perFarg.slice(0, 8) : [];
+          if (!tom(cur) && per.length < 2) continue;
           if (per.length > 1 || (per.length === 1 && !hit)) {
             const ids = [], fargBilder = {};
             for (const x of per) {
@@ -54,7 +58,7 @@
           if (await write("styles", s._id, { shopifyBild: { url: hit.url, titel: hit.titel, handle: hit.handle, likhet: "samma", auto: true }, andrad: new Date().toISOString(), logg: (cur.logg || []).concat(logEntry("Shopify-bild kopplad automatiskt: " + hit.titel)) })) { Object.assign(cur, { shopifyBild: { url: hit.url, titel: hit.titel, handle: hit.handle, likhet: "samma", auto: true } }); hits++; }
         } catch (e) { delete provat[s._id]; }
       }
-      try { localStorage.setItem("plmAutoShopify2", JSON.stringify(provat)); } catch (e) {}
+      try { localStorage.setItem("plmAutoShopify3", JSON.stringify(provat)); } catch (e) {}
       if (antal) toast(antal + " " + "Shopify-bilder hämtade");
       if (hits) await importShopifyImages();
     } finally { autoShopifyKor = false; }

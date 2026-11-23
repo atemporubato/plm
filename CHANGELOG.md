@@ -6,6 +6,14 @@ och importeras med `node tools/import-dokument.js`, och main går live på plm.a
 
 Versionsnumrering: små ändringar ger punktversion (v9.1, v9.2 …). Nytt heltal (v10) bara vid stora ändringar.
 
+## v10.15 (2026-11-23)
+
+Miniatyrerna visar en bild per färg, och @-mejl som inte går iväg säger varför. Ingen data skrivs om i bulk.
+- Style-kortet: har stylen bilder per färg (fargBilder) är miniatyrerna just de andra färgerna. Annars övriga bilder, men inte Shopify-originalet när det redan finns som kopia (samma bild visades två gånger).
+- Automatiska Shopify-bilder: NOOS/restock med flera färger vars enda bild är automatisk (Shopify-kopia eller färgöversikt) får nu en bild per färg, t.ex. Lot 2 → huvudbild + två miniatyrer. Egna uppladdade bilder rörs inte.
+- @-taggning: api/omnamn.js svarar med orsaken när inget mejl skickas (ingen PLM-användare för namnet, mejlfel, testläge med NOTISER_TEST_TILL) och appen visar den i meddelandet efter kommentaren.
+- Vem är vem (api/_lib/notiser.js): ger namnet ingen träff används förnamnet i e-postadressen; "Kalle" räknas som Carl.
+
 ## v10.14 (2026-11-23)
 
 Flera bilder på style-korten och Shopify-bilder per färg. Ingen data skrivs om i bulk.

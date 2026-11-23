@@ -6,7 +6,7 @@
 
 const DAY = 86400000;
 const PERSONER = ["elliot", "jakob", "carl", "alex", "oliver"];
-const ALIAS = { alexander: "alex", alexandre: "alex", calle: "carl", karl: "carl" };
+const ALIAS = { alexander: "alex", alexandre: "alex", calle: "carl", karl: "carl", kalle: "carl" };
 const PO_STATUS = ["Placeholder", "Inskickad", "PO bekräftad", "I produktion", "Skickad", "Inlevererad", "Problem", "Avbruten"];
 const PO_DRAFT = ["Placeholder", "Avbruten"];
 const ST_IDE = "Idé ej redo för design", ST_DESIGN = "Idé redo att designa", ST_KANBEST = "Sample kan beställas";
@@ -46,7 +46,11 @@ const hash = (s) => { let h = 0; const t = String(s || ""); for (let i = 0; i < 
 function personKey(u) {
   const first = norm((u.namn || "").split(/\s+/)[0]) || norm(String(u.email || "").split("@")[0].split(/[._-]/)[0]);
   const k = ALIAS[first] || first;
-  return KANDA.includes(k) ? k : null;
+  if (KANDA.includes(k)) return k;
+  // Namnet gav ingen träff (smeknamn, tomt, efternamn först): prova förnamnet i e-postadressen.
+  const e = norm(String(u.email || "").split("@")[0].split(/[._-]/)[0]);
+  const k2 = ALIAS[e] || e;
+  return KANDA.includes(k2) ? k2 : null;
 }
 const NAMN = { elliot: "Elliot", jakob: "Jakob", carl: "Carl", alex: "Alex", oliver: "Oliver", conor: "Conor" };
 
