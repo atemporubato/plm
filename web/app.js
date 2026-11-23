@@ -1374,6 +1374,28 @@ import * as P from "./platform.js";
   // ---------- PRODUKTION ----------
   // Tre lägen som ska synas på håll: Beställd (leverantören har bekräftat – bundna pengar), Inskickad (skickad men inte bekräftad)
   // och Preliminär (placeholder, inget beställt). Inlevererade och avbrutna ligger för sig.
+  // När en sample godkänns blir stylen Godkänd. Här syns den i Produktion tills den ligger på en PO som är inskickad.
+  const readyToOrder = (season) => D.styles.filter((s) => styleStatusNorm(s.status) === "Godkänd" && !s.grund && !hasPlacedPo(s) && (!season || !s.sasong || norm(s.sasong) === norm(season)))
+    .sort((a, b) => String((plan(a) || {}).po || "9999").localeCompare(String((plan(b) || {}).po || "9999")) || (a.namn || "").localeCompare(b.namn || "", "sv"));
+  function orderInbox(items) {
+    const card = h("section", { class: "card inbox" }, h("div", { class: "card-head" }, h("h3", { text: "Ready to order" }), h("span", { class: "sub", text: items.length + (items.length === 1 ? " approved style without a placed PO" : " approved styles without a placed PO") + " – set quantities and colours and place the order." })));
+    const { t, tb } = table([["Style"], ["Season"], ["Supplier"], ["PO by"], ["", "num"]]);
+    for (const s of items) {
+      const img = styleImage(s); const p = plan(s); const ph = poLinesOf(s._id).map((x) => x.po).find((po) => poStatusNorm(po.status) === "Placeholder");
+      const cols = (s.farger || []).filter(Boolean);
+      const mk = () => openPo(null, { leverantor: s.leverantor || "", sasong: s.sasong || ProdView.seasonInView() || "", rader: (cols.length ? cols : [""]).map((farg) => ({ styleId: s._id, produkt: s.namn, farg, typ: s.typ || "Nyhet", storlekar: (s.storlekar || []).slice() })) });
+      tb.append(h("tr", { tabIndex: 0, dataset: { style: s._id } },
+        td("", "c-main", h("div", { style: "display:flex;gap:10px;align-items:flex-start" }, img ? h("img", { class: "rowthumb", style: "margin-top:0", src: imgUrl(img), alt: "", loading: "lazy" }) : null,
+          h("div", null, h("div", { class: "prod", text: s.namn }), h("div", { class: "sub", text: [styleKategori(s), cols.length ? cols.length + (cols.length === 1 ? " colour" : " colours") : "colours not set"].filter(Boolean).join(" · ") })))),
+        td("Season", "mono", [s.sasong, s.drop].filter(Boolean).join(" · ") || "–"),
+        td("Supplier", null, s.leverantor || h("span", { class: "muted", text: "–" })),
+        td("PO by", "mono", p && p.po ? h("div", null, fmtDate(p.po), h("div", { class: "days " + (diffDays(p.po) < 0 ? "late" : diffDays(p.po) <= 14 ? "soon" : ""), text: fmtDays(diffDays(p.po)) })) : h("span", { class: "muted", text: "–" })),
+        td("", "num", canWrite && db ? h("div", { style: "display:flex;gap:6px;justify-content:flex-end;flex-wrap:wrap" }, ph ? h("button", { class: "btn small", type: "button", text: "Open " + (ph.nr || "placeholder"), onclick: (e) => { e.stopPropagation(); openPo(ph._id); } }) : null, h("button", { class: "btn small primary", type: "button", text: "Create PO", onclick: (e) => { e.stopPropagation(); mk(); } })) : null)));
+    }
+    tb.addEventListener("click", (e) => { if (e.target.closest("button, img")) return; const tr = e.target.closest("tr[data-style]"); if (tr) openStyle(tr.dataset.style, null, { full: true }); });
+    card.append(h("div", { class: "ledger-wrap" }, t));
+    return card;
+  }
   const PO_STEPS = ["Placeholder", "Inskickad", "PO bekräftad", "I produktion", "Skickad", "Inlevererad"];
   const PO_GROUPS = [
     { key: "ordered", titel: "Ordered", desc: "confirmed by the supplier – committed money" },
@@ -1411,12 +1433,13 @@ import * as P from "./platform.js";
       this.cards.addEventListener("click", open);
       this.cards.addEventListener("keydown", (e) => { if (e.key === "Enter") open(e); });
       this.empty = h("div", { class: "empty", hidden: true });
+      this.ready = h("div", { hidden: true });
       this.budget = h("section", { class: "budget", "aria-label": "Budget" });
       this.pay = h("section", { class: "card", "aria-label": "Payments" });
       this.tl = h("div", { class: "cards" });
       this.budgetEdit = false;
       root.append(h("p", { class: "lede", text: "All purchase orders by season: drop, ETA warehouse, status and cost. Payments are under Suppliers. The budget per category is at the bottom." }),
-        this.strip.el, h("section", { class: "filters", "aria-label": "Filter" }, q, this.fSeason.el, this.fLev.el, this.seg.el, this.count), this.cards, this.empty, this.budget);
+        this.ready, this.strip.el, h("section", { class: "filters", "aria-label": "Filter" }, q, this.fSeason.el, this.fLev.el, this.seg.el, this.count), this.cards, this.empty, this.budget);
     },
     seasonInView() {
       const st = UI.prod;
@@ -1431,6 +1454,8 @@ import * as P from "./platform.js";
       this.fLev.fill(uniq(D.po.map((p) => p.leverantor)));
       const season = this.seasonInView();
       const inSeason = D.po.filter((p) => !season || norm(poSeason(p)) === norm(season));
+      const ready = ME.leverantor ? [] : readyToOrder(st.season);
+      this.ready.hidden = !ready.length; this.ready.replaceChildren(...(ready.length ? [orderInbox(ready)] : []));
       const gsum = (g) => inSeason.filter((p) => poGroup(p) === g).reduce((a, p) => a + poTotal(p), 0);
       const gn = (g) => inSeason.filter((p) => poGroup(p) === g).length;
       if (!["ordered", "sent", "prelim"].includes(st.view)) st.view = null;
@@ -4262,7 +4287,7 @@ import * as P from "./platform.js";
     const x = byId(D.styles, sample.styleId);
     if (x && x.status === "Sampling") {
       await write("styles", x._id, { status: "Godkänd", logg: (x.logg || []).concat(logEntry("Approved via " + sample._id + (sample.version ? " (" + sample.version + ")" : ""))), andrad: new Date().toISOString() });
-      toast("The style " + x.namn + " is now approved and can get EAN");
+      toast("The style " + x.namn + " is approved – it is now under Production as ready to order");
     }
   }
 
@@ -4320,7 +4345,7 @@ import * as P from "./platform.js";
       h("h3", { class: "sec-title full", text: "Product" }),
       field("Style", fStyle, { full: true }), newWrap,
       field("Version", fVersion), field("Supplier", fLev),
-      field("Colour", fFarg), field("Size", fStorlek),
+      field("Colour", fFarg, isNew ? { hint: "Several colours? Separate them with commas – one sample is created per colour." } : undefined), field("Size", fStorlek),
       field("Tyg", fTyg, { hint: "Type freely or choose a fabric that already exists." }), field("Intended season", fSas, { hint: "Which collection the sample is aimed at – drives prioritisation" }),
       field("Price", fPris), field("Currency", fValuta),
       h("h3", { class: "sec-title full", text: "Delivery" }),
@@ -4391,6 +4416,7 @@ import * as P from "./platform.js";
       if (cur.status === "Mottagen" && beslutNorm(cur.beslut) !== "Godkänd") add("Approve", async () => { if (await quickUpdate(cur, { beslut: "Godkänd", utvarderad: true }, "Godkänd")) await approveStyleFrom(cur); }, true);
       if (cur.status === "Mottagen" || cur.beslut) add("Ny runda", () => newRound(cur));
       if (isArchived(cur)) add("Pick up again", () => restoreSample(cur), true);
+      if (!isArchived(cur)) add("Same in more colours", () => { const w = isWaiting(cur); openSample(null, { styleId: cur.styleId || null, produkt: cur.produkt || "", version: cur.version, leverantor: cur.leverantor || "", tygId: cur.tygId || null, storlek: cur.storlek || "", sasong: cur.sasong || "", prisBelopp: cur.prisBelopp, prisValuta: cur.prisValuta, farg: "", status: w ? cur.status : "Beställd", bestalld: w && cur.bestalld ? cur.bestalld : todayISO(), ledtid: cur.ledtid, forvantad: w ? cur.forvantad || null : null, tracking: w ? cur.tracking || "" : "" }); });
       if (["Mottagen", "Problem"].includes(cur.status) && beslutNorm(cur.beslut) !== "Pausad") add("Pause → archive", () => quickUpdate(cur, { beslut: "Pausad", utvarderad: true }, "Paused – in the Archive"));
       if (["Mottagen", "Problem"].includes(cur.status) && beslutNorm(cur.beslut) !== "Kastad") add("Drop → archive", () => quickUpdate(cur, { beslut: "Kastad", utvarderad: true }, "Dropped – in the Archive"));
       if (cur.status !== "Problem" && cur.status !== "Mottagen") add("Flag problem", () => openFlag({ typ: "sample", ref: cur._id, titel: cur._id + " " + styleName(cur) + (cur.version ? " · " + cur.version : ""), tab: "samples", after: (text) => { const c2 = byId(D.samples, cur._id) || cur; return write("samples", cur._id, { status: "Problem", andrad: new Date().toISOString(), logg: (c2.logg || []).concat(logEntry("Flagged as a problem: " + text)) }); } }));
@@ -4453,7 +4479,24 @@ import * as P from "./platform.js";
         if (!o.forvantad && o.bestalld && o.ledtid > 0) o.forvantad = addDays(o.bestalld, o.ledtid);
         if (o.beslut) o.utvarderad = true;
         const now = new Date().toISOString();
-        if (isNew) {
+        const colours = isNew ? o.farg.split(/\s*[,;\n]\s*/).filter(Boolean) : [];
+        if (isNew && colours.length > 1) {
+          // En sample per färg, i övrigt likadana. Varje får sitt eget ID.
+          const made = [];
+          for (const farg of colours) {
+            const nid = await freshId("samples", D.samples, "S", 3);
+            const body = Object.assign({ id: nid, material: "", utvarderad: !!o.beslut, bilder: [], logg: [logEntry("Sample created (" + o.status + "), one of " + colours.length + " colours")], andrad: now }, o, { farg });
+            if (!(await create("samples", nid, body))) break;
+            if (!byId(D.samples, nid)) D.samples.push(Object.assign({}, body, { _id: nid }));
+            made.push(nid);
+          }
+          if (made.length) {
+            if (o.beslut === "Godkänd") await approveStyleFrom(Object.assign({ _id: made[0] }, o));
+            if (st && isIdea(st)) await write("styles", st._id, { status: "Sampling", andrad: now, logg: (st.logg || []).concat(logEntry("First samples ordered (" + made.join(", ") + ") – the idea is now in sampling")) });
+            toast(made.length + " samples created: " + made.join(", "));
+            closeSheet(); scheduleRefresh();
+          }
+        } else if (isNew) {
           const nid = await freshId("samples", D.samples, "S", 3);
           const body = Object.assign({ id: nid, material: "", utvarderad: !!o.beslut, bilder: [], logg: [logEntry("Sample created (" + o.status + ")")], andrad: now }, o);
           if (await create("samples", nid, body)) {

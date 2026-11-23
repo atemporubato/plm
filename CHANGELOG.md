@@ -6,6 +6,14 @@ och importeras med `node tools/import-dokument.js`, och main går live på plm.a
 
 Versionsnumrering: små ändringar ger punktversion (v9.1, v9.2 …). Nytt heltal (v10) bara vid stora ändringar.
 
+## v10.3 (2026-11-23)
+
+Från Alex: samples i flera färger, och godkända styles ska synas i Produktion. Ingen dataimport, inga fält ändras.
+- Ny sample i flera färger: skriv färgerna med komma emellan ("Navy, Khaki, Ecru") så skapas en sample per färg med eget ID och i övrigt samma uppgifter.
+- "Samma i fler färger" på en befintlig sample: öppnar en ny sample med style, version, leverantör, tyg, storlek, säsong, pris, datum och tracking ifyllda – bara färgen är tom.
+- Produktion har en ruta "Redo att beställa" överst: godkända styles som inte har någon lagd PO (placeholder räknas inte som lagd). Per style: säsong/drop, leverantör, "PO senast" ur tidsplanen, "Skapa PO" (leverantör, säsong och en rad per färg ifyllda) och "Öppna <placeholder>" om stylen redan ligger på en preliminär PO. Stylen försvinner ur rutan när PO:n är inskickad.
+- När en sample godkänns säger systemet nu att stylen ligger under Produktion som redo att beställa.
+
 ## v10.2 (2026-11-23)
 
 Produktion: tydligare skillnad mellan beställt och preliminärt. Bara utseende – status och data är desamma.

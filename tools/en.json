@@ -1558,7 +1558,20 @@
   "Preliminärt": "Preliminary",
   "PO bekräftade eller i produktion": "PO confirmed or in production",
   "PO väntar på bekräftelse": "PO awaiting confirmation",
-  "placeholders, inget beställt": "placeholders, nothing ordered"
+  "placeholders, inget beställt": "placeholders, nothing ordered",
+  "Flera färger? Skriv dem med komma emellan – en sample skapas per färg.": "Several colours? Separate them with commas – one sample is created per colour.",
+  "), en av": "), one of",
+  "Första samples beställda (": "First samples ordered (",
+  "samples skapade:": "samples created:",
+  "Samma i fler färger": "Same in more colours",
+  "Redo att beställa": "Ready to order",
+  "godkänd style utan lagd PO": "approved style without a placed PO",
+  "godkända styles utan lagd PO": "approved styles without a placed PO",
+  "– sätt kvantiteter och färger och lägg ordern.": "– set quantities and colours and place the order.",
+  "färg": "colour",
+  "färger ej satta": "colours not set",
+  "Skapa PO": "Create PO",
+  "är godkänd – den ligger nu under Produktion som redo att beställa": "is approved – it is now under Production as ready to order"
  },
  "values": {
   "Storleksset": "Size set",
