@@ -6,6 +6,13 @@ och importeras med `node tools/import-dokument.js`, och main går live på plm.a
 
 Versionsnumrering: små ändringar ger punktversion (v9.1, v9.2 …). Nytt heltal (v10) bara vid stora ändringar.
 
+## v10.14 (2026-11-23)
+
+Flera bilder på style-korten och Shopify-bilder per färg. Ingen data skrivs om i bulk.
+- Style-kortet (Kollektion, Bibliotek m.fl.): huvudbilden fyller kortet och övriga bilder ligger som små överlappande miniatyrer i nedre högra hörnet (högst tre, sedan "+N"). Ersätter räknaren "N bilder".
+- Automatiska Shopify-bilder för NOOS/restock letar nu en produkt per färg på stylen (t.ex. Lot 2 → Lot Nr 2 Denim Indigo/Black/Ecru). Alla hämtas in som stylens bilder, första färgen blir huvudbild (bildAuto, så en manuellt vald bild eller ett sample-foto går före) och kopplingen färg → bild sparas i fargBilder. Flertydiga träffar hoppas över per färg.
+- Styles som provades med den gamla sökningen provas om (nytt minne i webbläsaren).
+
 ## v10.13 (2026-11-23)
 
 Rollrutorna behåller det som sparas, och filterraden har en höjd. Ingen data ändras.

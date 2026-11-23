@@ -2258,7 +2258,7 @@ import * as P from "./platform.js";
       const allImgs = styleAllImages(s);
       const g = grundOf(s);
       const b = h("button", { class: "pcard", type: "button", onclick: () => openStyle(s._id) },
-        h("div", { class: "pimg" }, img ? h("img", { src: imgUrl(img), alt: s.namn, loading: "lazy", onerror: (e) => { const el = e.target; if (/^https?:/.test(el.src)) el.replaceWith(h("span", { class: "noimg", text: "The image from Shopify could not be shown – press \"Fetch Shopify images\"" })); } }) : emptyTile(s, xs), styleStatusPill(s), h("span", { class: "typtag t-" + slug(s.typ || "Nyhet"), text: typLabel(s) }), allImgs.length > 1 ? h("span", { class: "n", text: allImgs.length + " images" }) : null, g ? h("span", { class: "grundtag", text: "Variant of " + g.namn }) : imageSource(s) ? h("span", { class: "grundtag", text: imageSource(s) === "Shopify" ? (s.shopifyBild && s.shopifyBild.likhet === "liknande" ? "Similar · Shopify" : "Shopify") : imageSource(s) }) : null),
+        h("div", { class: "pimg" }, img ? h("img", { src: imgUrl(img), alt: s.namn, loading: "lazy", onerror: (e) => { const el = e.target; if (/^https?:/.test(el.src)) el.replaceWith(h("span", { class: "noimg", text: "The image from Shopify could not be shown – press \"Fetch Shopify images\"" })); } }) : emptyTile(s, xs), styleStatusPill(s), h("span", { class: "typtag t-" + slug(s.typ || "Nyhet"), text: typLabel(s) }), (() => { const rest = allImgs.filter((x) => x !== img); if (!rest.length) return null; const visa = rest.slice(0, 3); return h("span", { class: "pthumbs" }, rest.length > visa.length ? h("span", { class: "more", text: "+" + (rest.length - visa.length) }) : null, visa.slice().reverse().map((x) => h("img", { src: imgUrl(x), alt: "", loading: "lazy", onerror: (e) => e.target.remove() }))); })(), g ? h("span", { class: "grundtag", text: "Variant of " + g.namn }) : imageSource(s) ? h("span", { class: "grundtag", text: imageSource(s) === "Shopify" ? (s.shopifyBild && s.shopifyBild.likhet === "liknande" ? "Similar · Shopify" : "Shopify") : imageSource(s) }) : null),
         h("div", { class: "pbody" }, h("span", { class: "pname", text: s.namn }), h("span", { class: "psub", text: [s.leverantor, styleKategori(s), styleTyg(s)].filter(Boolean).join(" · ") }),
           (s.farger || []).length ? h("span", { class: "psub", text: s.farger.join(", ") }) : null,
           h("span", { class: "psub", text: units ? units + " units" : last ? (last.version || "") + " · " + (last.status || "") : "" }),
@@ -3544,12 +3544,12 @@ import * as P from "./platform.js";
   let autoShopifyKor = false;
   async function hostedAutoShopify() {
     if (autoShopifyKor || !canWrite || !db || !assets || designOnly() || ME.leverantor) return;
-    let provat = {}; try { provat = JSON.parse(localStorage.getItem("plmAutoShopify") || "{}"); } catch (e) {}
+    let provat = {}; try { provat = JSON.parse(localStorage.getItem("plmAutoShopify2") || "{}"); } catch (e) {}
     const nu = Date.now(), vecka = 7 * 864e5;
     const todo = D.styles.filter((s) => ["NOOS", "Restock"].includes(s.typ) && s.namn && !s.shopifyBild && !s.bildId && !docImages(s).length && !(provat[s._id] && nu - provat[s._id] < vecka)).slice(0, 40);
     if (!todo.length) return;
     autoShopifyKor = true;
-    let hits = 0;
+    let hits = 0, antal = 0;
     try {
       const { data: { session } } = await P.supabase.auth.getSession();
       for (const s of todo) {
@@ -3557,14 +3557,33 @@ import * as P from "./platform.js";
         try {
           const res = await fetch("/api/bild", { method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer " + (session ? session.access_token : "") }, body: JSON.stringify({ sok: s.namn, farger: s.farger || [] }) });
           if (!res.ok) { delete provat[s._id]; continue; }
-          const hit = (await res.json()).hit;
-          if (!hit || !hit.url) continue;
+          const svar = await res.json();
+          const hit = svar.hit;
           const cur = byId(D.styles, s._id) || s;
           if (cur.shopifyBild || cur.bildId || docImages(cur).length) continue;
+          // En bild per färg (t.ex. Lot 2 i Indigo, Black, Ecru): alla hämtas in, första blir huvudbild och övriga visas som miniatyrer.
+          const per = Array.isArray(svar.perFarg) ? svar.perFarg.slice(0, 8) : [];
+          if (per.length > 1 || (per.length === 1 && !hit)) {
+            const ids = [], fargBilder = {};
+            for (const x of per) {
+              try {
+                const u = new URL(x.url); u.searchParams.set("width", "1200");
+                const blob = await hostedBild(u.toString());
+                const small = await shrinkImage(new File([blob], "shopify.jpg", { type: blob.type || "image/jpeg" }), 1600);
+                if (!small) continue;
+                const r = await assets.upload(small, small.type ? undefined : { type: "image/jpeg" });
+                ids.push(r.id); fargBilder[x.farg] = r.id;
+              } catch (e) {}
+            }
+            if (ids.length && await write("styles", s._id, { bilder: ids, bildId: ids[0], bildAuto: true, fargBilder, andrad: new Date().toISOString(), logg: (cur.logg || []).concat(logEntry("Shopify images fetched automatically: " + per.map((x) => x.titel).join(", "))) })) antal += ids.length;
+            continue;
+          }
+          if (!hit || !hit.url) continue;
           if (await write("styles", s._id, { shopifyBild: { url: hit.url, titel: hit.titel, handle: hit.handle, likhet: "samma", auto: true }, andrad: new Date().toISOString(), logg: (cur.logg || []).concat(logEntry("Shopify image linked automatically: " + hit.titel)) })) { Object.assign(cur, { shopifyBild: { url: hit.url, titel: hit.titel, handle: hit.handle, likhet: "samma", auto: true } }); hits++; }
         } catch (e) { delete provat[s._id]; }
       }
-      try { localStorage.setItem("plmAutoShopify", JSON.stringify(provat)); } catch (e) {}
+      try { localStorage.setItem("plmAutoShopify2", JSON.stringify(provat)); } catch (e) {}
+      if (antal) toast(antal + " " + "Shopify images fetched");
       if (hits) await importShopifyImages();
     } finally { autoShopifyKor = false; }
   }

@@ -364,6 +364,11 @@ table.ledger { width: 100%; border-collapse: collapse; min-width: 960px; }
 .typtag.t-nyhet { background: var(--ink); color: var(--paper); }
 .typtag.t-noos { background: var(--surface); }
 .typtag.t-restock { background: var(--paper); border-style: dashed; }
+/* Fler bilder (t.ex. en per färg): huvudbilden fyller kortet, övriga ligger som små överlappande bilder i hörnet (v10.14). */
+.pcard .pimg .pthumbs { position: absolute; right: 8px; bottom: 8px; display: flex; align-items: flex-end; }
+.pcard .pimg .pthumbs img { width: 46px; height: 60px; object-fit: cover; border: 2px solid var(--surface); background: var(--paper); margin-left: -14px; }
+.pcard .pimg .pthumbs img:first-of-type { margin-left: 0; }
+.pcard .pimg .pthumbs .more { font-family: var(--f-label); font-size: 9px; letter-spacing: .06em; background: var(--ink); color: var(--paper); padding: 2px 5px; margin-right: 4px; }
 .pcard .pimg .n { position: absolute; right: 8px; bottom: 8px; background: var(--ink); color: var(--paper); font-family: var(--f-label); font-size: 9px; padding: 2px 6px; letter-spacing: .06em; }
 .pcard .pbody { padding: 10px 12px 12px; display: grid; gap: 3px; }
 .pcard .pname { font-size: 16px; line-height: 1.2; }

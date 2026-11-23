@@ -58,16 +58,35 @@ function pickProduct(name, colours, products) {
   const score = (p) => (p.status === "ACTIVE" ? 2 : 0) + (cols.some((c) => words(p.title).join(" ").endsWith(c)) ? 1 : 0);
   return pool.slice().sort((a, b) => score(b) - score(a))[0];
 }
+// One product per colour: the title must contain the style name and the colour. If several products fit, the one with the
+// fewest other words wins; a tie between different products is ambiguous and that colour is left out.
+const FILL = new Set(["in", "nr", "no", "the"]);
+function pickPerColour(name, colours, products) {
+  const want = words(name); if (!want.length) return [];
+  const base = products.filter((p) => p.image && want.every((w) => words(p.title).includes(w)));
+  const out = [];
+  for (const c of colours || []) {
+    const cw = words(c); if (!cw.length) continue;
+    const scored = base.filter((p) => cw.every((w) => words(p.title).includes(w))).map((p) => ({ p, extra: words(p.title).filter((w) => !want.includes(w) && !cw.includes(w) && !FILL.has(w)).sort().join(" ") }));
+    if (!scored.length) continue;
+    const min = Math.min(...scored.map((x) => x.extra ? x.extra.split(" ").length : 0));
+    const best = scored.filter((x) => (x.extra ? x.extra.split(" ").length : 0) === min);
+    if (new Set(best.map((x) => x.extra)).size !== 1) continue;
+    const hit = best.sort((a, b) => (b.p.status === "ACTIVE") - (a.p.status === "ACTIVE"))[0].p;
+    if (!out.some((o) => o.url === hit.image)) out.push({ farg: c, url: hit.image, titel: hit.title, handle: hit.handle });
+  }
+  return out;
+}
 async function searchProduct(name, colours) {
   const token = await shopifyToken();
   const q = words(name).map((w) => "title:" + w + "*").join(" ");
   const res = await fetch(`https://${env("SHOPIFY_STORE")}/admin/api/${API}/graphql.json`, { method: "POST", headers: { "Content-Type": "application/json", "X-Shopify-Access-Token": token },
-    body: JSON.stringify({ query: "query($q:String!){ products(first:50, query:$q){ nodes{ title handle status featuredMedia{ preview{ image{ url } } } } } }", variables: { q } }) });
+    body: JSON.stringify({ query: "query($q:String!){ products(first:100, query:$q){ nodes{ title handle status featuredMedia{ preview{ image{ url } } } } } }", variables: { q } }) });
   const body = await res.json();
   if (body.errors) throw new Error("Shopify: " + JSON.stringify(body.errors).slice(0, 200));
   const products = ((body.data && body.data.products && body.data.products.nodes) || []).map((n) => ({ title: n.title, handle: n.handle, status: n.status, image: n.featuredMedia && n.featuredMedia.preview && n.featuredMedia.preview.image ? n.featuredMedia.preview.image.url : null }));
   const hit = pickProduct(name, colours, products);
-  return hit ? { url: hit.image, titel: hit.title, handle: hit.handle } : null;
+  return { hit: hit ? { url: hit.image, titel: hit.title, handle: hit.handle } : null, perFarg: pickPerColour(name, colours, products) };
 }
 
 module.exports = async (req, res) => {
@@ -75,7 +94,7 @@ module.exports = async (req, res) => {
     if (req.method !== "POST") return res.status(405).json({ error: "POST only" });
     if (!(await verifyUser(req))) return res.status(401).json({ error: "Not signed in" });
     // { sok, farger }: finds the product image for a style by name. Answers { hit: null } when nothing matches for certain.
-    if (req.body && req.body.sok) { const hit = await searchProduct(String(req.body.sok).slice(0, 120), Array.isArray(req.body.farger) ? req.body.farger.slice(0, 20) : []); return res.status(200).json({ hit }); }
+    if (req.body && req.body.sok) { const found = await searchProduct(String(req.body.sok).slice(0, 120), Array.isArray(req.body.farger) ? req.body.farger.slice(0, 20) : []); return res.status(200).json(found); }
     let raw = String((req.body && req.body.url) || "").trim();
     if (raw.startsWith("//")) raw = "https:" + raw;
     let first;
@@ -105,3 +124,4 @@ module.exports = async (req, res) => {
   }
 };
 module.exports.pickProduct = pickProduct;
+module.exports.pickPerColour = pickPerColour;
