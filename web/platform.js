@@ -40,6 +40,8 @@ export const hosted = () => extra;
 function snapshotFor(key) {
   if (key === "ean/pool") return { exists: !!pool, data: () => pool };
   if (key === "installningar/app") return { exists: !!settings, data: () => settings };
+  // Enskilt dokument (t.ex. behorighet/roller): utan detta fick lyssnaren aldrig tillbaka det sparade, och formuläret föll tillbaka till standardvärdena.
+  if (key.includes("/")) { const [c, i] = key.split("/"); const dm = cache[c]; return { exists: !!(dm && dm.has(i)), data: () => (dm ? dm.get(i) : undefined) }; }
   const m = cache[key] || new Map();
   let entries = [...m.entries()];
   if (key === "eanLogg") entries = entries.sort((a, b) => String(b[1].t || "").localeCompare(String(a[1].t || ""))).slice(0, 50);

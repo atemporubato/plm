@@ -241,6 +241,9 @@ header.top { display: flex; flex-wrap: wrap; align-items: flex-end; justify-cont
 .seg { display: inline-flex; border: 1px solid var(--line-strong); border-radius: 0; overflow: hidden; background: var(--surface); flex-wrap: wrap; }
 .seg button { border: 0; background: transparent; padding: 8px 12px; cursor: pointer; border-right: 1px solid var(--line); font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink); }
 .seg button:last-child { border-right: 0; }
+/* Filterraden: sökfält, rullistor och knappgrupper har samma höjd (v10.13). */
+.filters select, .filters input[type="search"] { height: 38px; box-sizing: border-box; padding-top: 0; padding-bottom: 0; }
+.seg button { min-height: 36px; }
 .seg button[aria-pressed="true"] { background: var(--ink); color: var(--paper); }
 .count { color: var(--muted); font-size: 14px; margin-left: auto; }
 .tray { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; padding: 8px 12px; background: var(--indigo-soft); border-radius: 0; color: var(--ink); }

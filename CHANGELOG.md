@@ -6,6 +6,12 @@ och importeras med `node tools/import-dokument.js`, och main går live på plm.a
 
 Versionsnumrering: små ändringar ger punktversion (v9.1, v9.2 …). Nytt heltal (v10) bara vid stora ändringar.
 
+## v10.13 (2026-11-23)
+
+Rollrutorna behåller det som sparas, och filterraden har en höjd. Ingen data ändras.
+- Fel rättat i web/platform.js: lyssnare på ett enskilt dokument (behorighet/roller) fick aldrig tillbaka det sparade. Rollmatrisen (t.ex. Extern designer) ritades därför om med de gamla värdena direkt efter "Spara roller", och ändrade rättigheter slog inte igenom förrän sidan laddades om.
+- Filterraden: rullistor, sökfält och knappgrupper har samma höjd.
+
 ## v10.12 (2026-11-23)
 
 ETA-regel, automatiska Shopify-bilder för NOOS/restock och layoutfixar. Ingen data skrivs om i bulk.
