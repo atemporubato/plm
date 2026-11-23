@@ -10,7 +10,7 @@
 const { renderMail, personKey, NAMN, mentions } = require("./_lib/notiser");
 
 const BASE = process.env.PLM_URL || "https://plm.atemporubato.com";
-const COLLS = ["samples", "styles", "po", "tyglager"];
+const COLLS = ["samples", "styles", "po", "tyglager", "refplagg", "handelser", "drops", "tyger", "leverantorer"];
 const env = (k) => { const v = process.env[k]; if (!v) throw new Error("Missing environment variable " + k); return v; };
 
 async function sb(path, opts = {}) {
@@ -51,6 +51,11 @@ async function describe(coll, id, d) {
   if (coll === "samples") { const st = await one("styles", d.styleId); return { ref: id + (st && st.namn ? " " + st.namn : "") + (d.farg ? " · " + d.farg : ""), link: "#" + id }; }
   if (coll === "styles") return { ref: d.namn || id, link: "#" + id };
   if (coll === "po") return { ref: "PO " + (d.nr || id) + (d.leverantor ? " · " + d.leverantor : ""), link: "#po:" + id };
+  if (coll === "refplagg") return { ref: "reference garment " + (d.plagg || id), link: "#" + id };
+  if (coll === "handelser") return { ref: d.titel || id, link: "#" + id };
+  if (coll === "drops") return { ref: [d.sasong, d.namn].filter(Boolean).join(" ") || id, link: "#kollektion" };
+  if (coll === "tyger") return { ref: "fabric " + (d.namn || id), link: "#" + id };
+  if (coll === "leverantorer") return { ref: "supplier " + (d.namn || id), link: "#leverantorer" };
   const tyg = d.tygNamn ? null : await one("tyger", d.tygId);
   return { ref: id + " " + (d.tygNamn || (tyg && tyg.namn) || "fabric lot"), link: "#" + id };
 }

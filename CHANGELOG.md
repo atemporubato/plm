@@ -19,6 +19,14 @@ Bara hostade delar, artefakten oförändrad (v10.15). Ingen data skrivs om i bul
 - Shopify-bilder: gäller nu alla styles som saknar bild, inte bara NOOS/restock, så historiska (arkiverade) produkter som Tennis Jacket får sin bild. För nyheter krävs att produktnamnet stämmer exakt.
 - En färg som heter något annat i butiken (Lot 1: Indigo här, Dark Blue Rinse där) paras ihop när exakt en färg och exakt en aktiv produkt i samma style_group återstår. Styles som bara fick en del av färgerna provas om. Första färgen på stylen blir huvudbild.
 
+## v10.16 (2026-11-23)
+
+Kommentarer är en egen sektion i alla ark, inte en rad i historiken. Inga befintliga fält ändras.
+- Sektionen "Kommentarer" finns nu på sample, style, PO, lagerparti, drop, händelse (Lanseringar), tyg, referensplagg, leverantör och i Conors design-ark. Den ligger ovanför historiken, med fältet överst och kommentarerna under.
+- Taggning fungerar likadant överallt: skriv @ och förnamn (t.ex. @Carl) så föreslås teamet, och personen får kommentaren som mejl direkt.
+- Kommentarer sparas som förut i logg, nu märkta kom: true, och står därför också kvar i historiken. Äldre anteckningar utan märkning syns bara i historiken.
+- api/omnamn.js tar emot kommentarer från de nya ställena (refplagg, handelser, drops, tyger, leverantorer), och 10-mejlet fångar taggar på händelser, drops och leverantörer om direktmejlet inte gick.
+
 ## v10.15 (2026-11-23)
 
 Miniatyrerna visar en bild per färg, och @-mejl som inte går iväg säger varför. Ingen data skrivs om i bulk.

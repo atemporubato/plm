@@ -1640,7 +1640,10 @@
   "Flytta PO:n till en annan drop – då räknas den mot den droppens datum": "Move the PO to another drop – it is then measured against that drop's dates",
   "Automatisk flagga. Löses med \"PO i lager\" när leveransen är inne, med \"Byt drop\" om PO:n hör till en senare drop, eller av sig själv när ETA flyttas.": "Automatic flag. Resolve it with \"PO in warehouse\" once the delivery has arrived, or \"Change drop\" if the PO belongs to a later drop – it also clears by itself if the ETA is moved.",
   "Flytta även stylarna till": "Also move the styles to",
-  "Ändrar droppen överallt. Urbockad = bara den här PO:n, t.ex. en restock.": "Changes the drop everywhere. Unticked = only this PO, e.g. a restock."
+  "Ändrar droppen överallt. Urbockad = bara den här PO:n, t.ex. en restock.": "Changes the drop everywhere. Unticked = only this PO, e.g. a restock.",
+  "Kommentarer": "Comments",
+  "Inga kommentarer ännu.": "No comments yet.",
+  "Skriv @ och förnamn, t.ex. @Carl, så får personen kommentaren som mejl direkt.": "Type @ and a first name, e.g. @Carl, and that person gets the comment by email straight away."
  },
  "values": {
   "Storleksset": "Size set",

@@ -281,13 +281,13 @@ function compute({ state, docs, settings = {}, persons = [], now = new Date() })
   /* --- @-taggning i kommentarer (loggrader med @namn) som inte redan gått som direktmejl (/api/omnamn) --- */
   if (since) {
     const mejlade = new Set(settings._omnMejlad || []);
-    for (const [coll, list] of [["samples", docs.samples], ["styles", docs.styles], ["po", docs.po], ["tyglager", docs.tyglager]]) {
+    for (const [coll, list] of [["samples", docs.samples], ["styles", docs.styles], ["po", docs.po], ["tyglager", docs.tyglager], ["handelser", docs.handelser], ["drops", docs.drops], ["leverantorer", docs.leverantorer]]) {
       for (const d of list || []) for (const l of Array.isArray(d.logg) ? d.logg : []) {
         if (!l || !l.t || l.t <= since || !String(l.text || "").includes("@")) continue;
         if (mejlade.has("omn-" + coll + "-" + d._id + "-" + l.t)) continue;
         const ks = Object.keys(mentions(l.text)); if (!ks.length) continue;
-        const ref = coll === "samples" ? sampleLabel(d) : coll === "styles" ? d.namn || d._id : coll === "po" ? "PO " + (d.nr || d._id) : d._id;
-        const link = coll === "samples" ? L.sample(d) : coll === "styles" ? L.style(d) : coll === "po" ? L.po(d) : "#" + d._id;
+        const ref = coll === "samples" ? sampleLabel(d) : coll === "styles" ? d.namn || d._id : coll === "po" ? "PO " + (d.nr || d._id) : coll === "handelser" ? d.titel || d._id : coll === "drops" ? [d.sasong, d.namn].filter(Boolean).join(" ") || d._id : coll === "leverantorer" ? "supplier " + (d.namn || d._id) : d._id;
+        const link = coll === "samples" ? L.sample(d) : coll === "styles" ? L.style(d) : coll === "po" ? L.po(d) : coll === "drops" ? "#kollektion" : coll === "leverantorer" ? "#leverantorer" : "#" + d._id;
         add(ks, item("M:" + coll + ":" + d._id + ":" + l.t, "gora", "@", (actorName(l.av) || "Someone") + " tagged you on " + ref, "“" + kort(l.text, 200) + "”", link, "Open"), l.av);
       }
     }

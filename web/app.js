@@ -1410,7 +1410,7 @@ import * as P from "./platform.js";
         if (await write("drops", d._id, o)) { toast("Saved"); closeSheet(); }
       }
     }
-    openSheet({ flagRef: isNew ? null : { typ: "drop", ref: d._id, titel: d.sasong + " " + d.namn, tab: "kollektion" }, tag: isNew ? "New" : d.sasong, title: isNew ? "New drop" : d.sasong + " · " + d.namn, sub: isNew ? "" : members.length + (members.length === 1 ? " product" : " products"), body: [form, imgSec], foot: footButtons({ del: "Delete drop", onDelete: isNew ? null : async () => { if (await remove("drops", d._id)) { toast("Removed"); closeSheet(); } }, canDelete: !members.length, blockText: "Move the products first", onSave: save }), ctx: { refresh: () => { if (!isNew && !byId(D.drops, d._id)) { closeSheet(); return; } imgSec.render(); } }, focus: isNew ? "f_dsasong" : null });
+    openSheet({ flagRef: isNew ? null : { typ: "drop", ref: d._id, titel: d.sasong + " " + d.namn, tab: "kollektion" }, tag: isNew ? "New" : d.sasong, title: isNew ? "New drop" : d.sasong + " · " + d.namn, sub: isNew ? "" : members.length + (members.length === 1 ? " product" : " products"), body: [form, imgSec].concat(isNew ? [] : [commentsSection("drops", () => RAW.drops.find((x) => x._id === d._id) || raw, "f_drnote", ro)]), foot: footButtons({ del: "Delete drop", onDelete: isNew ? null : async () => { if (await remove("drops", d._id)) { toast("Removed"); closeSheet(); } }, canDelete: !members.length, blockText: "Move the products first", onSave: save }), ctx: { refresh: () => { if (!isNew && !byId(D.drops, d._id)) { closeSheet(); return; } imgSec.render(); } }, focus: isNew ? "f_dsasong" : null });
   }
 
   // ---------- PRODUKTION ----------
@@ -2104,7 +2104,7 @@ import * as P from "./platform.js";
     const noteIn = attachMentions(inp("f_pnote", "", { placeholder: NOTE_PH, autocomplete: "off" }));
     const addNote = async () => { if (!isNew) await addComment("po", current(), noteIn); };
     noteIn.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); addNote(); } });
-    if (!isNew) body.push(h("section", null, h("h3", { class: "sec-title", text: "History" }), logUl, ro ? null : h("div", { class: "add-note" }, noteIn, h("button", { class: "btn small", type: "button", text: "Add", onclick: addNote }))));
+    if (!isNew) body.push(commentsSection("po", current, "f_pnote", ro), h("section", null, h("h3", { class: "sec-title", text: "History" }), logUl));
     openSheet({
       flagRef: isNew ? null : { typ: "po", ref: po._id, titel: (po.nr || po._id) + (po.leverantor ? " · " + po.leverantor : ""), tab: "produktion" },
       tag: isNew ? "New" : poStatusNorm(po.status),
@@ -2488,7 +2488,7 @@ import * as P from "./platform.js";
       }
     }
     const body = [form, imgSec];
-    if (!isNew) body.push(h("section", null, h("h3", { class: "sec-title", text: "History" }), logUl));
+    if (!isNew) body.push(commentsSection("refplagg", () => byId(D.ref, r._id) || r, "f_rnote", ro), h("section", null, h("h3", { class: "sec-title", text: "History" }), logUl));
     openSheet({ tag: isNew ? "New" : r._id, title: isNew ? "New reference garment" : r.plagg, sub: isNew ? "" : [r.skickadTill, r.status].filter(Boolean).join(" · "), body, foot: footButtons({ del: "Delete reference garment", onDelete: isNew ? null : async () => { if (await remove("refplagg", r._id)) { toast("Removed"); closeSheet(); } }, canDelete: true, onSave: save }), ctx: { refresh: () => { if (!isNew && !byId(D.ref, r._id)) { closeSheet(); return; } if (!isNew) { imgSec.render(); renderLogInto(logUl, (byId(D.ref, r._id) || r).logg); } } }, focus: isNew ? "f_rplagg" : null });
     if (!isNew) renderLogInto(logUl, r.logg);
   }
@@ -3079,7 +3079,7 @@ import * as P from "./platform.js";
       }
     }
     const body = [form];
-    if (!isNew) body.push(h("section", null, h("h3", { class: "sec-title", text: "History" }), logUl));
+    if (!isNew) body.push(commentsSection("handelser", () => byId(D.handelser, e._id) || e, "f_enote", ro), h("section", null, h("h3", { class: "sec-title", text: "History" }), logUl));
     openSheet({ flagRef: isNew ? null : { typ: "handelse", ref: e._id, titel: e.titel, tab: "coo" }, tag: isNew ? "New" : EV_TYP_LABEL[e.typ] || e._id, title: isNew ? "New event" : e.titel, sub: isNew ? "" : [fmtDate(e.datum) + (e.slut ? "–" + fmtDate(e.slut) : ""), e.agare, e.sasong].filter(Boolean).join(" · "), body, foot: footButtons({ del: "Delete event", onDelete: isNew ? null : async () => { if (await remove("handelser", e._id)) { toast("Removed"); closeSheet(); } }, canDelete: true, onSave: save }), ctx: { refresh: () => { if (!isNew && !byId(D.handelser, e._id)) { closeSheet(); return; } if (!isNew) renderLogInto(logUl, (byId(D.handelser, e._id) || e).logg); } }, focus: isNew ? "f_etitel" : null });
     if (!isNew) renderLogInto(logUl, e.logg);
   }
@@ -4082,7 +4082,7 @@ import * as P from "./platform.js";
     const right = h("div", { class: "foot-right" }, h("button", { class: "btn", type: "button", text: ro ? "Close" : "Cancel", onclick: closeSheet }));
     if (!ro) { right.append(h("button", { class: "btn" + (waiting() ? "" : " primary"), type: "button", text: "Save", onclick: (e) => save(false, e.target) })); if (waiting()) right.append(h("button", { class: "btn primary", type: "button", text: "Design done – send to sampling", onclick: (e) => save(true, e.target) })); }
     openSheet({ flagRef: { typ: "style", ref: id, titel: st.namn + (st.sasong ? " · " + st.sasong : ""), tab: "design" }, tag: "Design", title: st.namn, sub: [styleKategori(st), st.sasong, st.drop].filter(Boolean).join(" · "),
-      body: [brief, refSec, designSec, h("section", null, h("h3", { class: "sec-title", text: "To Carl and Alex" }), form)], foot: [h("div"), right],
+      body: [brief, refSec, designSec, h("section", null, h("h3", { class: "sec-title", text: "To Carl and Alex" }), form), commentsSection("styles", current, "f_dnote", ro)], foot: [h("div"), right],
       ctx: { refresh: () => { if (!byId(D.styles, id)) { closeSheet(); return; } designSec.render(); syncState(); } } });
     syncState();
   }
@@ -4426,7 +4426,7 @@ import * as P from "./platform.js";
   }
   async function addComment(coll, cur, input) {
     const t = input.value.trim(); if (!t || !cur || !cur._id) return false;
-    const e = logEntry(t); const till = mentionKeys(t).filter((k) => k !== myKey()); if (till.length) e.till = till;
+    const e = logEntry(t); e.kom = true; const till = mentionKeys(t).filter((k) => k !== myKey()); if (till.length) e.till = till;
     if (!(await write(coll, cur._id, { logg: (cur.logg || []).concat(e), andrad: e.t }))) return false;
     input.value = "";
     if (till.length) {
@@ -4434,7 +4434,25 @@ import * as P from "./platform.js";
       const res = await notifyMention(coll, cur._id, e.t);
       toast((res && res.skickat ? "Comment saved – email sent to " + names : "Comment saved – " + names + " will get it in the 10:00 email") + (res && res.info ? " (" + res.info + ")" : ""));
     }
-    return true;
+    return e;
+  }
+  // Kommentarer: en egen sektion i varje ark (inte gömd i historiken). @ och förnamn mejlar personen direkt.
+  // Kommentarerna sparas som förut i logg (kom: true) och står därför också kvar i historiken.
+  function commentsSection(coll, getCur, inputId, ro) {
+    const ul = h("ul", { class: "log" });
+    const input = attachMentions(inp(inputId, "", { placeholder: NOTE_PH, autocomplete: "off" }));
+    const extra = [];
+    const draw = () => {
+      const all = (((getCur() || {}).logg) || []).slice(); for (const e of extra) if (!all.some((x) => x && x.t === e.t)) all.push(e);
+      const ks = all.filter((x) => x && (x.kom || (x.till && x.till.length)));
+      if (ks.length) renderLogInto(ul, ks); else ul.replaceChildren(h("li", { class: "sub", text: "No comments yet." }));
+    };
+    const add = async () => { const cur = getCur(); if (!cur || !cur._id) return; const e = await addComment(coll, cur, input); if (e) { extra.push(e); draw(); } };
+    input.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); add(); } });
+    draw();
+    return h("section", { class: "comments-sec" }, h("h3", { class: "sec-title", text: "Comments" }),
+      ro ? null : h("div", { class: "add-note" }, input, h("button", { class: "btn small", type: "button", text: "Add", onclick: add })),
+      ro ? null : h("span", { class: "hint", text: "Type @ and a first name, e.g. @Carl, and that person gets the comment by email straight away." }), ul);
   }
   function openFlag(o) {
     const fText = h("textarea", { id: "f_flagtext", rows: 4, placeholder: "What is the problem, and what needs to happen?" });
@@ -4782,7 +4800,7 @@ import * as P from "./platform.js";
     }
 
     const body = [quick, remind, planBox, imgSec, form];
-    if (!isNew) body.push(h("section", null, h("h3", { class: "sec-title", text: "History" }), logUl, ro ? null : noteRow));
+    if (!isNew) body.push(commentsSection("samples", current, "f_note", ro), h("section", null, h("h3", { class: "sec-title", text: "History" }), logUl));
     openSheet({
       flagRef: isNew ? null : { typ: "sample", ref: s._id, titel: s._id + " " + styleName(s) + (s.version ? " · " + s.version : ""), tab: "samples" },
       tag: isNew ? "New" : s._id,
@@ -5199,7 +5217,7 @@ import * as P from "./platform.js";
     const body = [varSec, form, ownImgs, planSec, gallerySec, prodSec, samplesSec, eanSec, shopSec];
     if (lean) body.splice(0, body.length, ...body.filter((x, i) => i < 3 || x === gallerySec || x === samplesSec));
     if (!isNew && designSummary(st)) body.splice(Math.min(3, body.length), 0, designSummary(st));
-    if (!isNew) body.push(h("section", null, h("h3", { class: "sec-title", text: "History" }), logUl, ro ? null : h("div", { class: "add-note" }, noteIn, h("button", { class: "btn small", type: "button", text: "Add", onclick: addNote }))));
+    if (!isNew) body.push(commentsSection("styles", current, "f_snote", ro), h("section", null, h("h3", { class: "sec-title", text: "History" }), logUl));
     const foot = footButtons({ del: "Delete style", onDelete: isNew ? null : async () => { if (await remove("styles", st._id)) { toast("Removed"); closeSheet(); } }, canDelete: !nSamples && !(st.ean || []).length && !nVariants, blockText: "The style has samples, EAN or variants linked", onSave: () => save() });
     if (!ro) {
       const s0 = styleStatusNorm(st.status);
@@ -5264,7 +5282,7 @@ import * as P from "./platform.js";
       else if (await write("tyger", t._id, Object.assign({ andrad: now }, o))) { toast("Saved"); closeSheet(); }
     }
     const inUse = !isNew && (D.samples.some((s) => s.tygId === t._id) || lotsOf(t._id).length > 0 || D.styles.some((s) => s.tygId === t._id));
-    openSheet({ tag: isNew ? "New" : t._id, title: isNew ? "New fabric" : t.namn, sub: isNew ? "" : t.leverantor || "", body: [form, imgSec, stock, used], foot: footButtons({ del: "Delete fabric", onDelete: isNew ? null : async () => { if (await remove("fabrics", t._id)) { toast("Removed"); closeSheet(); } }, canDelete: !inUse, blockText: "The fabric is used by samples or has stock", onSave: save }), ctx: { refresh: renderUsed }, focus: isNew ? "f_tnamn" : null });
+    openSheet({ tag: isNew ? "New" : t._id, title: isNew ? "New fabric" : t.namn, sub: isNew ? "" : t.leverantor || "", body: [form, imgSec, stock, used].concat(isNew ? [] : [commentsSection("fabrics", () => byId(D.tyger, t._id) || t, "f_tnote", ro)]), foot: footButtons({ del: "Delete fabric", onDelete: isNew ? null : async () => { if (await remove("fabrics", t._id)) { toast("Removed"); closeSheet(); } }, canDelete: !inUse, blockText: "The fabric is used by samples or has stock", onSave: save }), ctx: { refresh: renderUsed }, focus: isNew ? "f_tnamn" : null });
   }
 
   // ---------- fabric lot sheet ----------
@@ -5391,7 +5409,7 @@ import * as P from "./platform.js";
       } finally { if (btn) btn.disabled = false; }
     }
     const body = [quick, form];
-    if (!isNew) body.push(h("section", null, h("h3", { class: "sec-title", text: "History" }), logUl, ro ? null : h("div", { class: "add-note" }, noteIn, h("button", { class: "btn small", type: "button", text: "Add", onclick: addNote }))));
+    if (!isNew) body.push(commentsSection("tyglager", current, "f_lnote", ro), h("section", null, h("h3", { class: "sec-title", text: "History" }), logUl));
     openSheet({
       tag: isNew ? "New" : l._id,
       title: isNew ? "New batch" : lotName(l) + (l.farg ? " · " + l.farg : "") + (isTrims(l) && l.storlek ? " · " + l.storlek : ""),
@@ -5486,7 +5504,7 @@ import * as P from "./platform.js";
       else poSec.append(h("ul", { class: "mini" }, pos.map((p) => { const pl = paymentPlan(p); const unpaid = pl.filter((x) => !x.betald); return h("li", null, h("button", { class: "mini-row", type: "button", onclick: () => openPo(p._id) }, h("span", { class: "tag", text: p.nr || p._id }), h("span", { class: "mini-main" }, h("strong", { text: [p.sasong, p.drop].filter(Boolean).join(" ") + " · " + fmtSEK(poTotal(p)) }), h("span", { class: "sub", text: pl.length ? pl.map((x) => x.typ + " " + fmtTkr(x.belopp) + (x.datum ? " " + fmtDate(x.datum) : "") + (x.betald ? (x.antagenBetald ? " ✔ (assumed)" : " ✔") : "")).join(" · ") : "no payment plan" })), h("span", { class: "mini-side" }, poStatusPill(p), unpaid.length ? h("span", { class: "sub mono", text: "unpaid " + fmtTkr(unpaid.reduce((s0, x) => s0 + x.belopp, 0)) }) : null))); })));
     }
     const inUse = !isNew && (D.samples.some((s0) => norm(s0.leverantor) === norm(l.namn)) || D.styles.some((s0) => norm(s0.leverantor) === norm(l.namn)) || D.po.some((p) => norm(p.leverantor) === norm(l.namn)));
-    openSheet({ tag: isNew ? "New" : l.kod || (l.typ || ""), title: isNew ? "New supplier" : l.namn, sub: isNew ? "" : [l.typ || "Producent", l.valuta, termsText(l)].filter(Boolean).join(" · "), body: [form, poSec], foot: footButtons({ del: "Delete supplier", onDelete: isNew ? null : async () => { if (await remove("leverantorer", l._id)) { toast("Removed"); closeSheet(); } }, canDelete: !inUse, blockText: "The supplier is used by samples, styles or POs", onSave: save }), focus: isNew ? "f_lnamn" : null });
+    openSheet({ tag: isNew ? "New" : l.kod || (l.typ || ""), title: isNew ? "New supplier" : l.namn, sub: isNew ? "" : [l.typ || "Producent", l.valuta, termsText(l)].filter(Boolean).join(" · "), body: [form, poSec].concat(isNew ? [] : [commentsSection("leverantorer", () => byId(D.lev, l._id) || l, "f_lvnote", ro)]), foot: footButtons({ del: "Delete supplier", onDelete: isNew ? null : async () => { if (await remove("leverantorer", l._id)) { toast("Removed"); closeSheet(); } }, canDelete: !inUse, blockText: "The supplier is used by samples, styles or POs", onSave: save }), focus: isNew ? "f_lnamn" : null });
   }
 
   // ---------- exports ----------
