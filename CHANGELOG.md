@@ -6,6 +6,14 @@ och importeras med `node tools/import-dokument.js`, och main går live på plm.a
 
 Versionsnumrering: små ändringar ger punktversion (v9.1, v9.2 …). Nytt heltal (v10) bara vid stora ändringar.
 
+## v10.9 (2026-11-23)
+
+Renare PO-kort, prioritet bort, bilddiagnos-rutan bort. Ingen data ändras.
+- PO-kortet i Produktion visar inte längre kommentaren. Kvar är det väsentliga: Nyhet/Restock/NOOS (ur raderna), säsong och drop, ETA lager, ex-factory, tygstatus och total. Kommentaren står kvar i PO:n och syns om man håller muspekaren över kortets rubrik.
+- Prioritet är borttagen ur gränssnittet: fältet i PO:n, etiketten på kortet och kolumnen i CSV-exporten. Värdet ligger kvar orört i datan.
+- Rutan "Bilddiagnos" (bilder direkt från Shopify) visas inte längre. Knappen "Hämta Shopify-bilder" uppe till höger finns kvar.
+- "Restock" visas som "Re-stock" överallt i den engelska versionen.
+
 ## v10.8 (2026-11-23)
 
 Drop på en PO går att ändra av alla som får redigera – behövs för att lösa "Försenad" när PO:n hör till en annan drop (t.ex. en restock). Nytt fält dropEgen på PO; inget befintligt fält ändras och PO:er utan eget val fungerar som förut.

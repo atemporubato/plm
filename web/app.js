@@ -77,7 +77,7 @@ import * as P from "./platform.js";
   // ---------- DOM helpers ----------
   // Engelsk visning av värden som sparas på svenska i databasen (status, kategori, plats …). Listan är tom i källan;
   // den engelska byggen (tools/i18n.mjs) fyller i den. Datan skrivs aldrig om – bara det som visas.
-  const EN_VAL = {"Storleksset":"Size set","På plåtning":"At photo shoot","Testas":"Being tested","Utlånad":"On loan","Gåva":"Gift","Såld":"Sold","Hos leverantör":"At supplier","Arkiv":"Archive","Ej aktuell":"Not applicable","Idé ej redo för design":"Idea – not ready for design","Idé redo att designa":"Idea – ready for design","Sample kan beställas":"Sample can be ordered","Delvis slut":"Partly sold out","Utgått":"Discontinued","Rubato (eget lager)":"Rubato (own stock)","Accessoarer":"Accessories","Hög":"High","Låg":"Low","Hos fabrik":"At factory","Beställt":"Ordered","På väg":"On its way","Saknas":"Missing","Eget lager":"Own stock","Hängare":"Hanger","Planerade":"Planned","Bokad":"Booked","Planerad":"Planned","Tyg":"Fabric","Producent":"Manufacturer","Övrigt":"Other","Okända":"Unknown","Nej":"No","Ja":"Yes","Ej betalt":"Not paid","Betalt":"Paid","Skickat":"Sent","Hos leverantören":"At the supplier","På väg tillbaka":"On its way back","Förlorat":"Lost","Mottagen":"Received","Beställd":"Ordered","Skickad":"Shipped","Returnerad":"Returned","Fotosample":"Photo sample","Produktionssample":"Production sample","Fotohäng":"Photo rail","Inskickad":"Submitted","PO bekräftad":"PO confirmed","I produktion":"In production","Inlevererad":"Delivered","Inne":"In","Godkänd":"Approved","Ny runda":"New round","Pausad":"Paused","Kastad":"Dropped","Underkänd":"Rejected","Skippad":"Dropped","PO lagd":"PO placed","Levererad":"Delivered","Nyhet":"New","Slut":"Sold out","I lager":"In stock","Förbrukad":"Used up","Byxor":"Trousers","Skrädderi":"Tailoring","Skjortor":"Shirts","Stickat & Jersey":"Knitwear & Jersey","Ytterplagg":"Outerwear","Avbruten":"Cancelled","Utkast":"Draft","Inställd":"Cancelled","Fotade":"Shot","Retuscherade":"Retouched","Publicerade":"Published","Fotad":"Shot","Klar":"Done","Utan säsong":"No season","Okategoriserat":"Uncategorised","Bekräftade":"Confirmed","Att förhandla":"To negotiate","Tillbaka hos Rubato":"Back at Rubato","Pågår":"Ongoing","Förfallet":"Overdue","Senare":"Later","Löst":"Resolved","Öppen":"Open","beräknad":"estimated","Produktidé":"Idea – not ready for design","Idé under utveckling":"Sample can be ordered"};
+  const EN_VAL = {"Storleksset":"Size set","På plåtning":"At photo shoot","Testas":"Being tested","Utlånad":"On loan","Gåva":"Gift","Såld":"Sold","Hos leverantör":"At supplier","Arkiv":"Archive","Ej aktuell":"Not applicable","Idé ej redo för design":"Idea – not ready for design","Idé redo att designa":"Idea – ready for design","Sample kan beställas":"Sample can be ordered","Delvis slut":"Partly sold out","Utgått":"Discontinued","Rubato (eget lager)":"Rubato (own stock)","Accessoarer":"Accessories","Hög":"High","Låg":"Low","Hos fabrik":"At factory","Beställt":"Ordered","På väg":"On its way","Saknas":"Missing","Eget lager":"Own stock","Hängare":"Hanger","Planerade":"Planned","Bokad":"Booked","Planerad":"Planned","Tyg":"Fabric","Producent":"Manufacturer","Övrigt":"Other","Okända":"Unknown","Nej":"No","Ja":"Yes","Ej betalt":"Not paid","Betalt":"Paid","Skickat":"Sent","Hos leverantören":"At the supplier","På väg tillbaka":"On its way back","Förlorat":"Lost","Mottagen":"Received","Beställd":"Ordered","Skickad":"Shipped","Returnerad":"Returned","Fotosample":"Photo sample","Produktionssample":"Production sample","Fotohäng":"Photo rail","Inskickad":"Submitted","PO bekräftad":"PO confirmed","I produktion":"In production","Inlevererad":"Delivered","Inne":"In","Godkänd":"Approved","Ny runda":"New round","Pausad":"Paused","Kastad":"Dropped","Underkänd":"Rejected","Skippad":"Dropped","PO lagd":"PO placed","Levererad":"Delivered","Nyhet":"New","Slut":"Sold out","I lager":"In stock","Förbrukad":"Used up","Byxor":"Trousers","Skrädderi":"Tailoring","Skjortor":"Shirts","Stickat & Jersey":"Knitwear & Jersey","Ytterplagg":"Outerwear","Avbruten":"Cancelled","Utkast":"Draft","Inställd":"Cancelled","Fotade":"Shot","Retuscherade":"Retouched","Publicerade":"Published","Fotad":"Shot","Klar":"Done","Utan säsong":"No season","Okategoriserat":"Uncategorised","Bekräftade":"Confirmed","Att förhandla":"To negotiate","Tillbaka hos Rubato":"Back at Rubato","Pågår":"Ongoing","Förfallet":"Overdue","Senare":"Later","Löst":"Resolved","Öppen":"Open","beräknad":"estimated","Produktidé":"Idea – not ready for design","Idé under utveckling":"Sample can be ordered","Restock":"Re-stock"};
   const tv = (s) => { if (typeof s !== "string" || !s) return s; const v = EN_VAL[s]; if (v != null) return v; if (s.includes(" · ")) return s.split(" · ").map(tv).join(" · "); const m = /^(.*\D) (\d+[a-z]?)$/.exec(s); return m && EN_VAL[m[1]] != null ? EN_VAL[m[1]] + " " + m[2] : s; };
   function h(tag, props, ...kids) {
     const e = document.createElement(tag);
@@ -471,12 +471,7 @@ import * as P from "./platform.js";
   }
   function renderDiag() {
     const el = $("diag"); if (!el) return;
-    const n = shopTodo().length;
-    if (extImg !== false || !n || !["bibliotek", "kollektion", "produktion", "foto"].includes(UI.tab)) { el.hidden = true; el.replaceChildren(); return; }
-    el.hidden = false;
-    el.replaceChildren(h("span", { text: "Image check: the browser is not allowed to show images straight from Shopify in this app (" + n + " styles affected). " }),
-      canWrite && assets ? h("button", { class: "linkish", type: "button", text: "Fetch Shopify images into the app", onclick: importShopifyImages }) : h("span", { text: "Ask Elliot to run \"Fetch Shopify images\"." }),
-      h("span", { class: "sub", text: " If that does not work either, the fetch is blocked as well – the images then have to be added through Claude (see the chat)." }));
+    el.hidden = true; el.replaceChildren(); // rutan visas inte längre (v10.9)
   }
   async function importShopifyImages() {
     if (!assets) { toast("Requires Contributor access or higher."); return; }
@@ -1587,16 +1582,18 @@ import * as P from "./platform.js";
       const eta = poEta(p);
       const d = eta ? diffDays(eta) : null;
       const bits = [h("span", { class: "nr", text: p.nr || p._id }), h("span", { class: "m", text: p.leverantor || "" }), poStagePill(p)];
+      // Nyhet / Restock / NOOS, ur raderna – kommentaren visas inte på kortet (den står kvar i PO:n).
+      const typer = STYLE_TYP.filter((t) => (p.rader || []).some((r) => (r.typ || "Nyhet") === t));
+      if (typer.length) bits.push(h("span", { class: "m" }, h("b", { text: typer.join(" · ") })));
       bits.push(h("span", { class: "m" }, "Drop ", h("b", { text: [p.sasong, p.drop].filter(Boolean).join(" ") || "–" })));
       bits.push(h("span", { class: "m" }, "ETA warehouse ", h("b", { text: eta ? fmtDate(eta) : "–" })));
       if (d != null && PO_OPEN.includes(ps)) bits.push(h("span", { class: "days " + (d < 0 ? "late" : d <= 14 ? "soon" : ""), text: fmtDays(d) }));
       if (isISO(p.bekraftadEx) || isISO(p.planeradEx)) bits.push(h("span", { class: "m" }, "Ex-factory ", h("b", { text: fmtDate(p.bekraftadEx || p.planeradEx) })));
-      if (p.prioritet && p.prioritet !== "Normal") bits.push(h("span", { class: "m", text: p.prioritet }));
       if (p.tygstatus) bits.push(h("span", { class: "m" }, "Fabric: ", h("b", { text: p.tygstatus })));
       const tot = poTotal(p);
       bits.push(h("span", { class: "m" }, "Total ", h("b", { text: fmtSEK(tot) })));
-      if (p.kommentar) bits.push(h("span", { class: "m", text: p.kommentar }));
       const head = h("div", { class: "card-head", dataset: { po: p._id }, tabIndex: 0, style: "cursor:pointer" }, h("h3", { text: p.nr || p._id }), h("div", { class: "po-head" }, bits.slice(1)));
+      if (p.kommentar) head.title = p.kommentar;
       if (canWrite && db) head.append(h("div", { class: "right" }, h("button", { class: "btn small", type: "button", text: "Open PO", onclick: () => openPo(p._id) })));
       return head;
     },
@@ -1827,7 +1824,6 @@ import * as P from "./platform.js";
     fDrop.addEventListener("change", () => { const ds = styleDropsNow(); if (fDrop.value !== FOLJ && fDrop.value !== "" && ds.length) fFlytta.checked = !((current() || po).rader || []).some((r) => (r.typ || "Nyhet") !== "Nyhet"); syncDropPo(); });
     syncDropPo();
     const fStatus = selectEl("f_pstatus", PO_STATUS, poStatusNorm(po.status));
-    const fPrio = selectEl("f_pprio", PRIORITET, po.prioritet || "Normal");
     const fProd = inp("f_pprod", po.produktionstid, { type: "number", min: "0", step: "1", placeholder: "days" });
     const fFoto = selectEl("f_pfoto", FOTOSAMPLE_PO, fotoPoNorm(po.fotosample));
     const fFotoD = inp("f_pfotod", po.fotosampleLeverans, { type: "date" });
@@ -1854,7 +1850,7 @@ import * as P from "./platform.js";
     const form = h("form", { class: "form three", id: "poForm", autocomplete: "off", onsubmit: (e) => e.preventDefault() },
       h("h3", { class: "sec-title full", text: "Order" }),
       h("div", { class: "field" }, h("label", { for: "f_pnr", text: "PO no." }), fNr, nrHint), field("Supplier", fLev), field("Status", fStatus),
-      field("Season", fSas), h("div", { class: "field" }, h("label", { for: "f_pdrop", text: "Drop" }), fDrop, dropHint, flyttaWrap), field("Priority", fPrio),
+      field("Season", fSas), h("div", { class: "field" }, h("label", { for: "f_pdrop", text: "Drop" }), fDrop, dropHint, flyttaWrap), h("div"),
       h("h3", { class: "sec-title full", text: "Schedule" }),
       field("Order date", fOrdD), field("Production time (days)", fProd), field("Requested delivery", fLevO, { hint: "Empty = the drop's \"In stock by\"" }),
       field("Planned ex-factory", fPlan), field("Confirmed ex-factory", fBekEx), field("ETA warehouse", fEta),
@@ -1999,7 +1995,7 @@ import * as P from "./platform.js";
 
     const logUl = h("ul", { class: "log" });
     async function save() {
-      const o = { nr: fNr.value.trim(), leverantor: fLev.value.trim(), sasong: fSas.value.trim(), drop: poDropChoice().drop, dropEgen: poDropChoice().egen, status: fStatus.value, prioritet: fPrio.value, produktionstid: num(fProd.value), fotosample: fFoto.value, fotosampleLeverans: fFotoD.value || null, tygstatus: fTygS.value, orderBekraftad: fBek.value === "1", planeradEx: fPlan.value || null, bekraftadEx: fBekEx.value || null, etaLager: fEta.value || null, valuta: fVal.value.trim() || "SEK", kommentar: fKom.value.trim(),
+      const o = { nr: fNr.value.trim(), leverantor: fLev.value.trim(), sasong: fSas.value.trim(), drop: poDropChoice().drop, dropEgen: poDropChoice().egen, status: fStatus.value, prioritet: po.prioritet || "Normal", produktionstid: num(fProd.value), fotosample: fFoto.value, fotosampleLeverans: fFotoD.value || null, tygstatus: fTygS.value, orderBekraftad: fBek.value === "1", planeradEx: fPlan.value || null, bekraftadEx: fBekEx.value || null, etaLager: fEta.value || null, valuta: fVal.value.trim() || "SEK", kommentar: fKom.value.trim(),
         orderDatum: fOrdD.value || null, leveransOnskad: fLevO.value || null, labelInstructions: fLabel.value.trim(),
         forskottBelopp: num(fFskB.value), forskottDatum: fFskD.value || null, forskottBetald: fFskP.value === "1", slutBelopp: num(fSlutB.value), slutDatum: fSlutD.value || null, slutBetald: fSlutP.value === "1" };
       if (!o.leverantor) { toast("Enter supplier."); fLev.focus(); return; }
@@ -2151,8 +2147,8 @@ import * as P from "./platform.js";
   }
   function exportPo() {
     const rows = [];
-    for (const p of D.po) for (const r of p.rader || []) { const st = byId(D.styles, r.styleId); rows.push([p.nr, p.leverantor, p.sasong, p.drop, poStatusNorm(p.status), p.prioritet, r.produkt, r.styleId, st ? styleKategori(st) : "", r.farg, r.typ, r.tyg, r.antal, r.tygkostnad, r.styckpris, lineCost(r), p.valuta, p.tygstatus, p.orderBekraftad ? "Ja" : "Nej", p.planeradEx, p.bekraftadEx, p.etaLager, p.fotosample, p.forskottBetalt, p.slutbetalning, p.kommentar]); }
-    saveFile("Rubato_Produktion_" + todayISO() + ".csv", csv(["PO no.", "Supplier", "Season", "Drop", "Status", "Priority", "Product", "Style ID", "Category", "Colour", "New/Restock", "Tyg", "Quantity", "Fabric cost/unit", "Unit price", "Cost", "Currency", "Fabric status", "Order confirmed", "Planned ex-factory", "Confirmed ex-factory", "ETA warehouse", "Fotosample", "Deposit paid", "Final payment", "Comment"], rows));
+    for (const p of D.po) for (const r of p.rader || []) { const st = byId(D.styles, r.styleId); rows.push([p.nr, p.leverantor, p.sasong, p.drop, poStatusNorm(p.status), r.produkt, r.styleId, st ? styleKategori(st) : "", r.farg, r.typ, r.tyg, r.antal, r.tygkostnad, r.styckpris, lineCost(r), p.valuta, p.tygstatus, p.orderBekraftad ? "Ja" : "Nej", p.planeradEx, p.bekraftadEx, p.etaLager, p.fotosample, p.forskottBetalt, p.slutbetalning, p.kommentar]); }
+    saveFile("Rubato_Produktion_" + todayISO() + ".csv", csv(["PO no.", "Supplier", "Season", "Drop", "Status", "Product", "Style ID", "Category", "Colour", "New/Restock", "Tyg", "Quantity", "Fabric cost/unit", "Unit price", "Cost", "Currency", "Fabric status", "Order confirmed", "Planned ex-factory", "Confirmed ex-factory", "ETA warehouse", "Fotosample", "Deposit paid", "Final payment", "Comment"], rows));
   }
 
   // ---------- KOLLEKTION (Carl) ----------
