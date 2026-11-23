@@ -254,7 +254,7 @@ import * as P from "./platform.js";
     return out.sort((a, b) => a.localeCompare(b, "sv"));
   }
   function derivePo() {
-    D.po = RAW.po.map((p) => { const ds = poStyleDrops(p); const raw = String(p.drop || "").trim(); return ds.length ? Object.assign({}, p, { drop: ds.join(" + "), _drops: ds, _dropRaw: raw, _dropFranStyles: true }) : Object.assign({}, p, { _drops: raw ? [raw] : [], _dropRaw: raw, _dropFranStyles: false }); });
+    D.po = RAW.po.map((p) => { const ds = poStyleDrops(p); const raw = String(p.drop || "").trim(); return ds.length && !p.dropEgen ? Object.assign({}, p, { drop: ds.join(" + "), _drops: ds, _dropRaw: raw, _dropFranStyles: true }) : Object.assign({}, p, { _drops: raw ? [raw] : [], _dropRaw: raw, _dropFranStyles: false }); });
   }
   // Vad en flyttad lansering betyder för leveranserna: nytt "i lager senast" och vilka PO som inte hinner.
   function launchImpact(sasong, dropNamn, nyLansering) {
@@ -1407,7 +1407,7 @@ import * as P from "./platform.js";
         if (await write("drops", d._id, o)) { toast("Saved"); closeSheet(); }
       }
     }
-    openSheet({ flagRef: isNew ? null : { typ: "drop", ref: d._id, titel: d.sasong + " " + d.namn, tab: "kollektion" }, tag: isNew ? "New" : d.sasong, title: isNew ? "New drop" : d.sasong + " · " + d.namn, sub: isNew ? "" : members.length + (members.length === 1 ? " product" : " products"), body: [form, imgSec], foot: footButtons({ onDelete: isNew ? null : async () => { if (await remove("drops", d._id)) { toast("Removed"); closeSheet(); } }, canDelete: !members.length, blockText: "Move the products first", onSave: save }), ctx: { refresh: () => { if (!isNew && !byId(D.drops, d._id)) { closeSheet(); return; } imgSec.render(); } }, focus: isNew ? "f_dsasong" : null });
+    openSheet({ flagRef: isNew ? null : { typ: "drop", ref: d._id, titel: d.sasong + " " + d.namn, tab: "kollektion" }, tag: isNew ? "New" : d.sasong, title: isNew ? "New drop" : d.sasong + " · " + d.namn, sub: isNew ? "" : members.length + (members.length === 1 ? " product" : " products"), body: [form, imgSec], foot: footButtons({ del: "Delete drop", onDelete: isNew ? null : async () => { if (await remove("drops", d._id)) { toast("Removed"); closeSheet(); } }, canDelete: !members.length, blockText: "Move the products first", onSave: save }), ctx: { refresh: () => { if (!isNew && !byId(D.drops, d._id)) { closeSheet(); return; } imgSec.render(); } }, focus: isNew ? "f_dsasong" : null });
   }
 
   // ---------- PRODUKTION ----------
@@ -1797,8 +1797,35 @@ import * as P from "./platform.js";
     const fNr = inp("f_pnr", po.nr, { placeholder: "e.g. EMI-SS27-5" });
     const fLev = inp("f_plev", po.leverantor, { list: "dlLev", autocomplete: "off" });
     const fSas = seasonSelect("f_psas", po.sasong, "– Choose season –");
-    const poDropFranStyles = !isNew && !!po._dropFranStyles;
-    const fDrop = poDropFranStyles ? inp("f_pdrop", po.drop, { disabled: true }) : dropSelect("f_pdrop", po._dropRaw != null ? po._dropRaw : po.drop, fSas);
+    // Drop på PO:n: följer stylarna om inget annat väljs. Alla som får redigera kan välja en annan drop –
+    // antingen bara för den här PO:n (t.ex. en restock) eller för stylarna också (då flyttas droppen överallt).
+    const FOLJ = "__stylarna";
+    const styleDropsNow = () => (isNew ? [] : poStyleDrops({ sasong: fSas.value, rader: (current() || po).rader || [] }));
+    let poDropFoljer = !isNew && !po.dropEgen && styleDropsNow().length > 0;
+    fSas.addEventListener("change", () => { poDropFoljer = fDrop.value === FOLJ; });
+    const fDrop = dropSelect("f_pdrop", po._dropRaw != null ? po._dropRaw : po.drop, fSas);
+    const baseRefill = fDrop.refill;
+    fDrop.refill = (keep) => { baseRefill(keep === FOLJ ? "" : keep); const ds = styleDropsNow(); if (ds.length) { fDrop.insertBefore(new Option("Follows the styles: " + ds.join(" + "), FOLJ), fDrop.firstChild); if (poDropFoljer || keep === FOLJ) fDrop.value = FOLJ; } };
+    fDrop.refill(po._dropRaw != null ? po._dropRaw : po.drop);
+    const fFlytta = h("input", { type: "checkbox", id: "f_pflytta" });
+    const flyttaWrap = h("div", { hidden: true }, h("label", { class: "plain", for: "f_pflytta" }, fFlytta, h("span")), h("span", { class: "hint", text: "Changes the drop everywhere. Unticked = only this PO, e.g. a restock." }));
+    const dropHint = h("span", { class: "hint" });
+    const syncDropPo = () => {
+      const ds = styleDropsNow(); const v = fDrop.value;
+      const annan = ds.length > 0 && v !== FOLJ && v !== "" && !(ds.length === 1 && norm(ds[0]) === norm(v));
+      flyttaWrap.hidden = !annan;
+      if (annan) flyttaWrap.querySelector("label span").textContent = "Also move the styles to " + v;
+      dropHint.textContent = !ds.length ? "Follows the styles as soon as they have a drop" : v === FOLJ ? "Follows the styles' drop. Choose another drop to move the PO, e.g. a restock or a late delivery." : v === "" ? "Own choice: the PO is not counted against any drop." : annan ? "Own choice on the PO – overrides the styles' drop." : "Same drop as the styles.";
+    };
+    const poDropChoice = () => {
+      const ds = styleDropsNow(); const v = fDrop.value;
+      if (v === FOLJ) return { drop: po._dropRaw || "", egen: false, flytta: false };
+      const same = ds.length === 1 && norm(ds[0]) === norm(v);
+      const flytta = ds.length > 0 && v !== "" && !same && fFlytta.checked;
+      return { drop: v.trim(), egen: ds.length > 0 && !same && !flytta, flytta };
+    };
+    fDrop.addEventListener("change", () => { const ds = styleDropsNow(); if (fDrop.value !== FOLJ && fDrop.value !== "" && ds.length) fFlytta.checked = !((current() || po).rader || []).some((r) => (r.typ || "Nyhet") !== "Nyhet"); syncDropPo(); });
+    syncDropPo();
     const fStatus = selectEl("f_pstatus", PO_STATUS, poStatusNorm(po.status));
     const fPrio = selectEl("f_pprio", PRIORITET, po.prioritet || "Normal");
     const fProd = inp("f_pprod", po.produktionstid, { type: "number", min: "0", step: "1", placeholder: "days" });
@@ -1827,7 +1854,7 @@ import * as P from "./platform.js";
     const form = h("form", { class: "form three", id: "poForm", autocomplete: "off", onsubmit: (e) => e.preventDefault() },
       h("h3", { class: "sec-title full", text: "Order" }),
       h("div", { class: "field" }, h("label", { for: "f_pnr", text: "PO no." }), fNr, nrHint), field("Supplier", fLev), field("Status", fStatus),
-      field("Season", fSas), field("Drop", fDrop, { hint: poDropFranStyles ? "Follows the styles' drop – changed on the style" : "Follows the styles as soon as they have a drop" }), field("Priority", fPrio),
+      field("Season", fSas), h("div", { class: "field" }, h("label", { for: "f_pdrop", text: "Drop" }), fDrop, dropHint, flyttaWrap), field("Priority", fPrio),
       h("h3", { class: "sec-title full", text: "Schedule" }),
       field("Order date", fOrdD), field("Production time (days)", fProd), field("Requested delivery", fLevO, { hint: "Empty = the drop's \"In stock by\"" }),
       field("Planned ex-factory", fPlan), field("Confirmed ex-factory", fBekEx), field("ETA warehouse", fEta),
@@ -1972,7 +1999,7 @@ import * as P from "./platform.js";
 
     const logUl = h("ul", { class: "log" });
     async function save() {
-      const o = { nr: fNr.value.trim(), leverantor: fLev.value.trim(), sasong: fSas.value.trim(), drop: poDropFranStyles ? (po._dropRaw || "") : fDrop.value.trim(), status: fStatus.value, prioritet: fPrio.value, produktionstid: num(fProd.value), fotosample: fFoto.value, fotosampleLeverans: fFotoD.value || null, tygstatus: fTygS.value, orderBekraftad: fBek.value === "1", planeradEx: fPlan.value || null, bekraftadEx: fBekEx.value || null, etaLager: fEta.value || null, valuta: fVal.value.trim() || "SEK", kommentar: fKom.value.trim(),
+      const o = { nr: fNr.value.trim(), leverantor: fLev.value.trim(), sasong: fSas.value.trim(), drop: poDropChoice().drop, dropEgen: poDropChoice().egen, status: fStatus.value, prioritet: fPrio.value, produktionstid: num(fProd.value), fotosample: fFoto.value, fotosampleLeverans: fFotoD.value || null, tygstatus: fTygS.value, orderBekraftad: fBek.value === "1", planeradEx: fPlan.value || null, bekraftadEx: fBekEx.value || null, etaLager: fEta.value || null, valuta: fVal.value.trim() || "SEK", kommentar: fKom.value.trim(),
         orderDatum: fOrdD.value || null, leveransOnskad: fLevO.value || null, labelInstructions: fLabel.value.trim(),
         forskottBelopp: num(fFskB.value), forskottDatum: fFskD.value || null, forskottBetald: fFskP.value === "1", slutBelopp: num(fSlutB.value), slutDatum: fSlutD.value || null, slutBetald: fSlutP.value === "1" };
       if (!o.leverantor) { toast("Enter supplier."); fLev.focus(); return; }
@@ -1982,6 +2009,7 @@ import * as P from "./platform.js";
       try {
         const now = new Date().toISOString();
         // resolve styles for lines (create new ones when needed)
+        const flyttaStyles = !isNew && poDropChoice().flytta;
         const rader = [];
         for (const r of lines) {
           if (!r.produkt && !r.styleId) continue;
@@ -2002,6 +2030,8 @@ import * as P from "./platform.js";
           const cur = current();
           const changes = describeChanges(Object.assign({}, cur, { drop: cur._dropRaw != null ? cur._dropRaw : cur.drop }), o, PO_LABELS);
           if (JSON.stringify(cur.rader || []) !== JSON.stringify(rader)) changes.push("Lines changed (" + rader.length + ")");
+          if (!!cur.dropEgen !== !!o.dropEgen) changes.push(o.dropEgen ? "Drop: own choice on the PO (" + (o.drop || "no drop") + ")" : "Drop: follows the styles again");
+          if (flyttaStyles) changes.push("Styles on the PO moved to " + o.drop);
           if (!(await write("po", cur._id, Object.assign({}, o, { andrad: now, logg: (cur.logg || []).concat(changes.map(logEntry)) })))) return;
           Object.assign(cur, o);
           toast("Saved");
@@ -2016,11 +2046,13 @@ import * as P from "./platform.js";
           if ((!st.storlekar || !st.storlekar.length) && r.storlekar.length) patch.storlekar = r.storlekar;
           if (!st.sasong && o.sasong) patch.sasong = o.sasong;
           if (!st.drop && o.drop) patch.drop = o.drop;
+          const flyttad = flyttaStyles && norm(st.sasong) === norm(o.sasong) && norm(st.drop) !== norm(o.drop);
+          if (flyttad) patch.drop = o.drop;
           const ss = styleStatusNorm(st.status);
           if (active && (ss === "Sampling" || ss === "Godkänd")) patch.status = o.status === "Inlevererad" ? "Levererad" : ["I produktion", "Skickad"].includes(o.status) ? "I produktion" : "PO lagd";
           else if (active && ss === "PO lagd" && ["I produktion", "Skickad"].includes(o.status)) patch.status = "I produktion";
           else if (o.status === "Inlevererad" && ["PO lagd", "I produktion"].includes(ss)) patch.status = "Levererad";
-          if (Object.keys(patch).length) { patch.andrad = now; patch.logg = (st.logg || []).concat(logEntry("Updated from PO " + o.nr + (patch.status ? ": status " + patch.status : ""))); await write("styles", st._id, patch); Object.assign(st, patch); }
+          if (Object.keys(patch).length) { patch.andrad = now; patch.logg = (st.logg || []).concat(logEntry("Updated from PO " + o.nr + (patch.status ? ": status " + patch.status : "") + (flyttad ? ": drop " + o.drop : ""))); await write("styles", st._id, patch); Object.assign(st, patch); }
         }
         if (active) { const cur = byId(D.po, pid) || Object.assign({ _id: pid }, o); await assignEans(cur, false); }
         // Fotosample: beställs automatiskt för nyheter när PO:n är lagd och inget annat är angivet
@@ -2053,7 +2085,7 @@ import * as P from "./platform.js";
       title: isNew ? "New PO" : (po.nr || po._id),
       sub: isNew ? "" : [po.leverantor, po.sasong, po.drop].filter(Boolean).join(" · "),
       body,
-      foot: footButtons({ onDelete: isNew ? null : async () => { if (await remove("po", po._id)) { toast("Removed"); closeSheet(); } }, canDelete: true, onSave: save, saveLabel: isNew ? "Save PO" : "Save" }),
+      foot: footButtons({ del: "Delete PO", onDelete: isNew ? null : async () => { if (await remove("po", po._id)) { toast("Removed"); closeSheet(); } }, canDelete: true, onSave: save, saveLabel: isNew ? "Save PO" : "Save" }),
       ctx: { refresh: () => { if (!isNew && !byId(D.po, po._id)) { closeSheet(); return; } renderEan(); renderAtt(); if (!isNew) renderLogInto(logUl, current().logg); } },
       focus: isNew ? "f_plev" : null
     });
@@ -2430,7 +2462,7 @@ import * as P from "./platform.js";
     }
     const body = [form, imgSec];
     if (!isNew) body.push(h("section", null, h("h3", { class: "sec-title", text: "History" }), logUl));
-    openSheet({ tag: isNew ? "New" : r._id, title: isNew ? "New reference garment" : r.plagg, sub: isNew ? "" : [r.skickadTill, r.status].filter(Boolean).join(" · "), body, foot: footButtons({ onDelete: isNew ? null : async () => { if (await remove("refplagg", r._id)) { toast("Removed"); closeSheet(); } }, canDelete: true, onSave: save }), ctx: { refresh: () => { if (!isNew && !byId(D.ref, r._id)) { closeSheet(); return; } if (!isNew) { imgSec.render(); renderLogInto(logUl, (byId(D.ref, r._id) || r).logg); } } }, focus: isNew ? "f_rplagg" : null });
+    openSheet({ tag: isNew ? "New" : r._id, title: isNew ? "New reference garment" : r.plagg, sub: isNew ? "" : [r.skickadTill, r.status].filter(Boolean).join(" · "), body, foot: footButtons({ del: "Delete reference garment", onDelete: isNew ? null : async () => { if (await remove("refplagg", r._id)) { toast("Removed"); closeSheet(); } }, canDelete: true, onSave: save }), ctx: { refresh: () => { if (!isNew && !byId(D.ref, r._id)) { closeSheet(); return; } if (!isNew) { imgSec.render(); renderLogInto(logUl, (byId(D.ref, r._id) || r).logg); } } }, focus: isNew ? "f_rplagg" : null });
     if (!isNew) renderLogInto(logUl, r.logg);
   }
 
@@ -3021,7 +3053,7 @@ import * as P from "./platform.js";
     }
     const body = [form];
     if (!isNew) body.push(h("section", null, h("h3", { class: "sec-title", text: "History" }), logUl));
-    openSheet({ flagRef: isNew ? null : { typ: "handelse", ref: e._id, titel: e.titel, tab: "coo" }, tag: isNew ? "New" : EV_TYP_LABEL[e.typ] || e._id, title: isNew ? "New event" : e.titel, sub: isNew ? "" : [fmtDate(e.datum) + (e.slut ? "–" + fmtDate(e.slut) : ""), e.agare, e.sasong].filter(Boolean).join(" · "), body, foot: footButtons({ onDelete: isNew ? null : async () => { if (await remove("handelser", e._id)) { toast("Removed"); closeSheet(); } }, canDelete: true, onSave: save }), ctx: { refresh: () => { if (!isNew && !byId(D.handelser, e._id)) { closeSheet(); return; } if (!isNew) renderLogInto(logUl, (byId(D.handelser, e._id) || e).logg); } }, focus: isNew ? "f_etitel" : null });
+    openSheet({ flagRef: isNew ? null : { typ: "handelse", ref: e._id, titel: e.titel, tab: "coo" }, tag: isNew ? "New" : EV_TYP_LABEL[e.typ] || e._id, title: isNew ? "New event" : e.titel, sub: isNew ? "" : [fmtDate(e.datum) + (e.slut ? "–" + fmtDate(e.slut) : ""), e.agare, e.sasong].filter(Boolean).join(" · "), body, foot: footButtons({ del: "Delete event", onDelete: isNew ? null : async () => { if (await remove("handelser", e._id)) { toast("Removed"); closeSheet(); } }, canDelete: true, onSave: save }), ctx: { refresh: () => { if (!isNew && !byId(D.handelser, e._id)) { closeSheet(); return; } if (!isNew) renderLogInto(logUl, (byId(D.handelser, e._id) || e).logg); } }, focus: isNew ? "f_etitel" : null });
     if (!isNew) renderLogInto(logUl, e.logg);
   }
 
@@ -4313,10 +4345,29 @@ import * as P from "./platform.js";
   function flagRow(f) {
     const when = f.t ? fmtDate(String(f.t).slice(0, 10)) : "";
     const acts = h("div", { class: "fa" });
-    const reset = () => acts.replaceChildren(h("button", { class: "btn small", type: "button", text: "Open", onclick: () => openFlagTarget(f) }), canWrite && db ? h("button", { class: "btn small primary", type: "button", text: "Löst", onclick: () => ask() }) : null);
-    const ask = () => { const i = h("input", { type: "text", placeholder: "What was done? (optional)", style: "min-width:200px" }); acts.replaceChildren(i, h("button", { class: "btn small primary", type: "button", text: "Mark resolved", onclick: () => resolveFlag(f, i.value.trim()) }), h("button", { class: "btn small", type: "button", text: "Cancel", onclick: reset })); i.focus(); };
+    const reset = () => acts.replaceChildren(h("button", { class: "btn small", type: "button", text: "Open", onclick: () => openFlagTarget(f) }), canWrite && db ? h("button", { class: "btn small primary", type: "button", text: "Resolve flag", onclick: () => ask() }) : null);
+    const ask = () => { const i = h("input", { type: "text", placeholder: "What was done? (optional)", style: "min-width:200px" }); acts.replaceChildren(i, h("button", { class: "btn small primary", type: "button", text: "Mark flag as resolved", onclick: () => resolveFlag(f, i.value.trim()) }), h("button", { class: "btn small", type: "button", text: "Cancel", onclick: reset })); i.focus(); };
     reset();
     return h("div", { class: "flagrow" }, h("span", { class: "pill s-Problem", text: "Flag" }), h("div", null, h("div", { class: "ft" }, h("b", { text: f.titel || f.ref }), " – ", f.text || ""), h("div", { class: "fm", text: [f.avNamn ? "flagged by " + f.avNamn : "", when, (f.till || []).length ? "to " + f.till.map(personName).join(", ") : ""].filter(Boolean).join(" · ") })), acts);
+  }
+  // Försenad PO: flaggan är automatisk. "PO i lager" sätter PO:n som inlevererad (och stylarna på raderna som levererade), och då försvinner flaggan.
+  async function markPoInWarehouse(p) {
+    const cur = byId(D.po, p._id) || p; const now = new Date().toISOString(); const nr = cur.nr || cur._id;
+    if (!(await write("po", cur._id, { status: "Inlevererad", andrad: now, logg: (cur.logg || []).concat(logEntry("Status: " + tv(poStatusNorm(cur.status)) + " → " + tv("Inlevererad") + " (PO in warehouse)")) }))) return;
+    for (const r of cur.rader || []) {
+      const st = r.styleId ? byId(D.styles, r.styleId) : null; if (!st) continue;
+      if (!["Sampling", "Godkänd", "PO lagd", "I produktion"].includes(styleStatusNorm(st.status))) continue;
+      const patch = { status: "Levererad", andrad: now, logg: (st.logg || []).concat(logEntry("Updated from PO " + nr + ": status Levererad")) };
+      if (await write("styles", st._id, patch)) Object.assign(st, patch);
+    }
+    toast("PO " + nr + " is in the warehouse"); scheduleRefresh();
+  }
+  function lateRow(x) {
+    const acts = h("div", { class: "fa" });
+    const reset = () => acts.replaceChildren(h("button", { class: "btn small", type: "button", text: "Open PO", onclick: () => openPo(x.p._id) }), canWrite && db ? h("button", { class: "btn small", type: "button", text: "Change drop", title: "Move the PO to another drop – it is then measured against that drop's dates", onclick: () => { openPo(x.p._id); setTimeout(() => { const el = $("f_pdrop"); if (el) { el.scrollIntoView({ block: "center" }); el.focus(); } }, 120); } }) : null, canWrite && db ? h("button", { class: "btn small primary", type: "button", text: "PO in warehouse", title: "Marks the PO as delivered – that resolves the flag", onclick: () => ask() }) : null);
+    const ask = () => acts.replaceChildren(h("span", { class: "sub", text: "Has the delivery arrived at the warehouse?" }), h("button", { class: "btn small primary", type: "button", text: "Yes, in warehouse", onclick: async (e) => { e.target.disabled = true; await markPoInWarehouse(x.p); } }), h("button", { class: "btn small", type: "button", text: "Cancel", onclick: reset }));
+    reset();
+    return h("div", { class: "flagrow", dataset: { po: x.p._id } }, h("span", { class: "pill s-Problem", text: "Late" }), h("div", null, h("div", { class: "ft" }, h("b", { text: (x.p.nr || x.p._id) + (x.p.leverantor ? " · " + x.p.leverantor : "") }), " – ", poLateText(x.p, x.l)), h("div", { class: "fm", text: "Automatic flag. Resolve it with \"PO in warehouse\" once the delivery has arrived, or \"Change drop\" if the PO belongs to a later drop – it also clears by itself if the ETA is moved." })), acts);
   }
   function renderFlags() {
     const box = $("flagbox"); if (!box) return;
@@ -4328,7 +4379,7 @@ import * as P from "./platform.js";
       const n = fs.length + late.length;
       const card = h("section", { class: "card flagbox" }, h("div", { class: "card-head" }, h("h3", { text: "Flagged" }), h("span", { class: "sub", text: n + (n === 1 ? " item" : " items") + " that need resolving. They stay here until the problem is solved." })));
       for (const f of fs) card.append(flagRow(f));
-      for (const x of late) card.append(h("div", { class: "flagrow" }, h("span", { class: "pill s-Problem", text: "Late" }), h("div", null, h("div", { class: "ft" }, h("b", { text: (x.p.nr || x.p._id) + (x.p.leverantor ? " · " + x.p.leverantor : "") }), " – ", poLateText(x.p, x.l)), h("div", { class: "fm", text: "Automatic. Disappears when the ETA changes or the PO is delivered." })), h("div", { class: "fa" }, h("button", { class: "btn small", type: "button", text: "Open PO", onclick: () => openPo(x.p._id) }))));
+      for (const x of late) card.append(lateRow(x));
       box.replaceChildren(...[card].concat(ready.length ? [readyCard(ready)] : [])); box.hidden = false;
     }
     const perTab = {}; for (const f of flagsOpen()) perTab[f.tab] = (perTab[f.tab] || 0) + 1;
@@ -4338,7 +4389,7 @@ import * as P from "./platform.js";
     document.querySelectorAll("#areas .area").forEach((b) => { const n = (AREA_TABS[b.dataset.area] || []).filter(tabAllowed).reduce((a, t) => a + (perTab[t] || 0), 0); const el = b.querySelector("b"); if (el) el.dataset.flags = n ? String(n) : ""; });
   }
   // Flaggan syns också på själva saken, med en knapp för att lösa den där man står.
-  const flagNote = (typ, ref) => { const fs = flagsFor(typ, ref); return fs.length ? h("div", { class: "flagnote" }, fs.map((f) => h("div", { style: "display:flex;gap:10px;align-items:baseline;justify-content:space-between;flex-wrap:wrap" }, h("span", null, h("b", { text: (f.avNamn ? "Flagged by " + f.avNamn : "Flagged") + ": " }), f.text || ""), canWrite && db ? h("button", { class: "btn small", type: "button", text: "Mark resolved", onclick: async (e) => { const row = e.target.parentElement; e.target.disabled = true; await resolveFlag(f, ""); row.remove(); } }) : null))) : null; };
+  const flagNote = (typ, ref) => { const fs = flagsFor(typ, ref); return fs.length ? h("div", { class: "flagnote" }, fs.map((f) => h("div", { style: "display:flex;gap:10px;align-items:baseline;justify-content:space-between;flex-wrap:wrap" }, h("span", null, h("b", { text: (f.avNamn ? "Flagged by " + f.avNamn : "Flagged") + ": " }), f.text || ""), canWrite && db ? h("button", { class: "btn small", type: "button", text: "Mark flag as resolved", onclick: async (e) => { const row = e.target.parentElement; e.target.disabled = true; await resolveFlag(f, ""); row.remove(); } }) : null))) : null; };
 
   // ---------- sheet ----------
   let sheetCtx = null;
@@ -4364,8 +4415,8 @@ import * as P from "./platform.js";
   function footButtons(o) {
     const left = h("div");
     if (o.onDelete && canWrite && db) {
-      const reset = () => left.replaceChildren(h("button", { class: "btn small danger", type: "button", text: "Remove", disabled: !o.canDelete, title: o.canDelete ? null : o.blockText || "Cannot be removed while something is linked to it", onclick: () => ask() }));
-      const ask = () => left.replaceChildren(h("span", { class: "confirm" }, h("span", { text: "Remove for everyone?" }), h("button", { class: "btn small danger", type: "button", text: "Yes, remove", onclick: o.onDelete }), h("button", { class: "btn small", type: "button", text: "Keep", onclick: reset })));
+      const reset = () => left.replaceChildren(h("button", { class: "btn small danger", type: "button", text: o.del || "Delete", disabled: !o.canDelete, title: o.canDelete ? "Deletes the whole item for everyone – not just the flag" : o.blockText || "Cannot be removed while something is linked to it", onclick: () => ask() }));
+      const ask = () => left.replaceChildren(h("span", { class: "confirm" }, h("span", { text: (o.del || "Delete") + " for everyone? This cannot be undone." }), h("button", { class: "btn small danger", type: "button", text: "Yes, delete", onclick: o.onDelete }), h("button", { class: "btn small", type: "button", text: "Keep", onclick: reset })));
       reset();
     }
     const right = h("div", { class: "foot-right" }, h("button", { class: "btn", type: "button", text: "Cancel", onclick: closeSheet }));
@@ -4615,7 +4666,7 @@ import * as P from "./platform.js";
       title: isNew ? "New sample" : styleName(s) + (s.version ? " · " + s.version : ""),
       sub: isNew ? "" : [s.farg, s.leverantor, platsText(s)].filter(Boolean).join(" · "),
       body,
-      foot: footButtons({ onDelete: isNew ? null : async () => { if (await remove("samples", s._id)) { toast("Removed"); closeSheet(); } }, canDelete: true, onSave: save }),
+      foot: footButtons({ del: "Delete sample", onDelete: isNew ? null : async () => { if (await remove("samples", s._id)) { toast("Removed"); closeSheet(); } }, canDelete: true, onSave: save }),
       ctx: { refresh: () => { if (!isNew && !current()) { closeSheet(); return; } renderQuick(); renderRemind(); renderPlanLine(); renderImages(); if (!isNew) renderLogInto(logUl, (current() || s).logg); } },
       focus: isNew ? "f_style" : null
     });
@@ -5025,7 +5076,7 @@ import * as P from "./platform.js";
     if (lean) body.splice(0, body.length, ...body.filter((x, i) => i < 3 || x === gallerySec || x === samplesSec));
     if (!isNew && designSummary(st)) body.splice(Math.min(3, body.length), 0, designSummary(st));
     if (!isNew) body.push(h("section", null, h("h3", { class: "sec-title", text: "History" }), logUl, ro ? null : h("div", { class: "add-note" }, noteIn, h("button", { class: "btn small", type: "button", text: "Add", onclick: addNote }))));
-    const foot = footButtons({ onDelete: isNew ? null : async () => { if (await remove("styles", st._id)) { toast("Removed"); closeSheet(); } }, canDelete: !nSamples && !(st.ean || []).length && !nVariants, blockText: "The style has samples, EAN or variants linked", onSave: () => save() });
+    const foot = footButtons({ del: "Delete style", onDelete: isNew ? null : async () => { if (await remove("styles", st._id)) { toast("Removed"); closeSheet(); } }, canDelete: !nSamples && !(st.ean || []).length && !nVariants, blockText: "The style has samples, EAN or variants linked", onSave: () => save() });
     if (!ro) {
       const s0 = styleStatusNorm(st.status);
       if (s0 === ST_IDE) foot[1].insertBefore(h("button", { class: "btn", type: "button", id: "btnDesign", text: "Send to design (Conor)", title: "The idea is ready to be designed. Conor sees it under Design.", onclick: sendToDesign }), foot[1].lastChild);
@@ -5089,7 +5140,7 @@ import * as P from "./platform.js";
       else if (await write("tyger", t._id, Object.assign({ andrad: now }, o))) { toast("Saved"); closeSheet(); }
     }
     const inUse = !isNew && (D.samples.some((s) => s.tygId === t._id) || lotsOf(t._id).length > 0 || D.styles.some((s) => s.tygId === t._id));
-    openSheet({ tag: isNew ? "New" : t._id, title: isNew ? "New fabric" : t.namn, sub: isNew ? "" : t.leverantor || "", body: [form, imgSec, stock, used], foot: footButtons({ onDelete: isNew ? null : async () => { if (await remove("fabrics", t._id)) { toast("Removed"); closeSheet(); } }, canDelete: !inUse, blockText: "The fabric is used by samples or has stock", onSave: save }), ctx: { refresh: renderUsed }, focus: isNew ? "f_tnamn" : null });
+    openSheet({ tag: isNew ? "New" : t._id, title: isNew ? "New fabric" : t.namn, sub: isNew ? "" : t.leverantor || "", body: [form, imgSec, stock, used], foot: footButtons({ del: "Delete fabric", onDelete: isNew ? null : async () => { if (await remove("fabrics", t._id)) { toast("Removed"); closeSheet(); } }, canDelete: !inUse, blockText: "The fabric is used by samples or has stock", onSave: save }), ctx: { refresh: renderUsed }, focus: isNew ? "f_tnamn" : null });
   }
 
   // ---------- fabric lot sheet ----------
@@ -5222,7 +5273,7 @@ import * as P from "./platform.js";
       title: isNew ? "New batch" : lotName(l) + (l.farg ? " · " + l.farg : "") + (isTrims(l) && l.storlek ? " · " + l.storlek : ""),
       sub: isNew ? "" : [isTrims(l) ? "Trims" : "Tyg", l.plats, lotQty(l) != null ? fmtQty(l, lotQty(l)) + " left" : (isTrims(l) ? "quantity missing" : "metres missing"), l.status].filter(Boolean).join(" · "),
       body,
-      foot: footButtons({ onDelete: isNew ? null : async () => { if (await remove("tyglager", l._id)) { toast("Removed"); closeSheet(); } }, canDelete: true, onSave: save }),
+      foot: footButtons({ del: "Delete stock lot", onDelete: isNew ? null : async () => { if (await remove("tyglager", l._id)) { toast("Removed"); closeSheet(); } }, canDelete: true, onSave: save }),
       ctx: { refresh: () => { if (!isNew && !byId(D.lager, l._id)) { closeSheet(); return; } renderQuick(); if (!isNew) renderLogInto(logUl, current().logg); } },
       focus: isNew ? (preset && preset.tygId ? "f_lplats" : "f_ltyg") : null
     });
@@ -5311,7 +5362,7 @@ import * as P from "./platform.js";
       else poSec.append(h("ul", { class: "mini" }, pos.map((p) => { const pl = paymentPlan(p); const unpaid = pl.filter((x) => !x.betald); return h("li", null, h("button", { class: "mini-row", type: "button", onclick: () => openPo(p._id) }, h("span", { class: "tag", text: p.nr || p._id }), h("span", { class: "mini-main" }, h("strong", { text: [p.sasong, p.drop].filter(Boolean).join(" ") + " · " + fmtSEK(poTotal(p)) }), h("span", { class: "sub", text: pl.length ? pl.map((x) => x.typ + " " + fmtTkr(x.belopp) + (x.datum ? " " + fmtDate(x.datum) : "") + (x.betald ? (x.antagenBetald ? " ✔ (assumed)" : " ✔") : "")).join(" · ") : "no payment plan" })), h("span", { class: "mini-side" }, poStatusPill(p), unpaid.length ? h("span", { class: "sub mono", text: "unpaid " + fmtTkr(unpaid.reduce((s0, x) => s0 + x.belopp, 0)) }) : null))); })));
     }
     const inUse = !isNew && (D.samples.some((s0) => norm(s0.leverantor) === norm(l.namn)) || D.styles.some((s0) => norm(s0.leverantor) === norm(l.namn)) || D.po.some((p) => norm(p.leverantor) === norm(l.namn)));
-    openSheet({ tag: isNew ? "New" : l.kod || (l.typ || ""), title: isNew ? "New supplier" : l.namn, sub: isNew ? "" : [l.typ || "Producent", l.valuta, termsText(l)].filter(Boolean).join(" · "), body: [form, poSec], foot: footButtons({ onDelete: isNew ? null : async () => { if (await remove("leverantorer", l._id)) { toast("Removed"); closeSheet(); } }, canDelete: !inUse, blockText: "The supplier is used by samples, styles or POs", onSave: save }), focus: isNew ? "f_lnamn" : null });
+    openSheet({ tag: isNew ? "New" : l.kod || (l.typ || ""), title: isNew ? "New supplier" : l.namn, sub: isNew ? "" : [l.typ || "Producent", l.valuta, termsText(l)].filter(Boolean).join(" · "), body: [form, poSec], foot: footButtons({ del: "Delete supplier", onDelete: isNew ? null : async () => { if (await remove("leverantorer", l._id)) { toast("Removed"); closeSheet(); } }, canDelete: !inUse, blockText: "The supplier is used by samples, styles or POs", onSave: save }), focus: isNew ? "f_lnamn" : null });
   }
 
   // ---------- exports ----------

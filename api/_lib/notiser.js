@@ -113,7 +113,8 @@ function makeMoney(docs, settings) {
 /* ---------- drop-register (samma regler som appen) ----------
    Lanseringen ägs av Jakobs drop-rad i COO (händelse med matris "drop"); finns ingen rad gäller droppens eget datum.
    "I lager senast" = lansering minus marginalen (5 dagar) om droppen inte har ett eget datum.
-   En PO hör till de drops som stylarna på raderna har (samma säsong); annars det som står på PO:n. */
+   En PO hör till de drops som stylarna på raderna har (samma säsong); annars det som står på PO:n.
+   Har PO:n ett eget val (dropEgen) gäller det som står på PO:n, även om det är tomt. */
 function register(docs, settings = {}) {
   const marginal = num(settings.lagerMarginal) ?? 5;
   const tbd = (x) => /^TBD\s/i.test(x.titel || "");
@@ -128,7 +129,7 @@ function register(docs, settings = {}) {
   for (const d of docs.drops || []) { const k = dropKey(d.sasong, d.namn); seen.add(k); drops.push(eff(d, rows.get(k))); }
   for (const [k, e] of rows) if (!seen.has(k)) drops.push(eff({ sasong: e.sasong, namn: e.drop }, e));
   const styles = new Map((docs.styles || []).map((s) => [s._id, s]));
-  const poDrops = (p) => { const out = []; for (const r of p.rader || []) { const st = r.styleId ? styles.get(r.styleId) : null; const dn = st ? String(st.drop || "").trim() : ""; if (dn && norm(st.sasong) === norm(p.sasong) && !out.some((x) => norm(x) === norm(dn))) out.push(dn); } if (!out.length && String(p.drop || "").trim()) out.push(String(p.drop).trim()); return out.sort((a, b) => a.localeCompare(b, "sv")); };
+  const poDrops = (p) => { const out = []; if (p.dropEgen) return String(p.drop || "").trim() ? [String(p.drop).trim()] : []; for (const r of p.rader || []) { const st = r.styleId ? styles.get(r.styleId) : null; const dn = st ? String(st.drop || "").trim() : ""; if (dn && norm(st.sasong) === norm(p.sasong) && !out.some((x) => norm(x) === norm(dn))) out.push(dn); } if (!out.length && String(p.drop || "").trim()) out.push(String(p.drop).trim()); return out.sort((a, b) => a.localeCompare(b, "sv")); };
   return { drops, poDrops, marginal };
 }
 

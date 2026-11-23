@@ -6,6 +6,26 @@ och importeras med `node tools/import-dokument.js`, och main går live på plm.a
 
 Versionsnumrering: små ändringar ger punktversion (v9.1, v9.2 …). Nytt heltal (v10) bara vid stora ändringar.
 
+## v10.8 (2026-11-23)
+
+Drop på en PO går att ändra av alla som får redigera – behövs för att lösa "Försenad" när PO:n hör till en annan drop (t.ex. en restock). Nytt fält dropEgen på PO; inget befintligt fält ändras och PO:er utan eget val fungerar som förut.
+- Drop-fältet på PO:n var låst så fort stylarna hade en drop. Nu är det en rullista: "Följer stylarna: <drop>" (som förut), säsongens drops och "Ingen drop".
+- Väljer man en annan drop gäller den för PO:n och går före stylarnas drop (dropEgen). Rutan "Flytta även stylarna till <drop>" flyttar stylarna på PO:n också – då ändras droppen överallt (Kollektion, tidsplan, Lanseringar). Rutan är förvald när alla rader är nyheter och urbockad när PO:n har restock-rader.
+- "Ingen drop" som eget val betyder att PO:n inte räknas mot någon drop.
+- Försenad-raden i Flaggat har knappen "Byt drop", som öppnar PO:n med drop-fältet i fokus.
+- Mejlen (10-mejlet, försenad PO, flyttad lansering) följer samma regel.
+
+## v10.7 (2026-11-23)
+
+- Försenad PO i Flaggat-rutan har fått knappen "PO i lager". Den frågar "Är leveransen inne i lagret?" och sätter sedan PO:n som Inlevererad, med rad i historiken. Stylarna på PO:ns rader blir Levererad, på samma sätt som när statusen ändras i PO-arket. Därmed försvinner den automatiska flaggan.
+- Texten på raden säger hur flaggan löses: med "PO i lager", eller av sig själv när ETA flyttas.
+
+## v10.6 (2026-11-23)
+
+Tydligare knappar, så att radera inte förväxlas med att ta bort en flagga. Bara texter – inget i data eller beteende ändras.
+- Knappen längst ner till vänster i arket hette "Ta bort" och raderar hela posten. Den heter nu vad den gör: "Radera sample", "Radera style", "Radera PO", "Radera drop" osv., och frågan lyder "… för alla? Går inte att ångra." med svaren "Ja, radera" och "Behåll".
+- Flaggan löses med "Lös flaggan" i Flaggat-rutan och "Markera flaggan som löst" på själva saken (hette "Löst" och "Markera löst").
+
 ## v10.5 (2026-11-23)
 
 Tagga folk i kommentarer, med direktmejl. Ingen dataimport och ingen schemaändring: inga fält tas bort eller skrivs om.
