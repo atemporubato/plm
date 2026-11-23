@@ -6,6 +6,16 @@ och importeras med `node tools/import-dokument.js`, och main går live på plm.a
 
 Versionsnumrering: små ändringar ger punktversion (v9.1, v9.2 …). Nytt heltal (v10) bara vid stora ändringar.
 
+## v10.10 (2026-11-23)
+
+Enklare PO-formulär. Ingen data ändras, sparade fält på befintliga POs ligger kvar.
+- PO-nr sätts automatiskt: leverantörens prefix, säsong och nästa löpnummer. Följer med när leverantör eller säsong byts, tills någon skriver ett eget.
+- Tidplan på en ny PO har bara Orderdatum och Önskad ex-factory (tidigare Planerad ex-factory). Produktionstid räknas ut ur de två och går inte att skriva in. Bekräftad ex-factory, ETA lager och Önskad leverans visas först när PO:n är sparad.
+- Valuta är en rullista: SEK, JPY, EUR, GBP, USD. På en ny PO föreslås leverantörens valuta.
+- Tygstatus: "Hos fabrik" (engelska: Fabric already at producer) ligger först och är förvalt på en ny PO.
+- Produkter på PO:n: en ruta per storlek (skala XS–XXL eller 44–58, annars stylens egna storlekar) och antalet summeras automatiskt. En hel rad kan klistras in ("1 3 12 10 4"). Beskrivning, Tyg/enhet, Fotosample och Kostnad per rad är borta ur formuläret; totalen står kvar under raderna. Tyg och Styckpris är kvar.
+- Raden sparar bara storlekar med antal, så EAN delas inte ut till storlekar som inte beställs. PO-filen sorterar storlekskolumnerna i skalans ordning.
+
 ## Ikon (2026-11-23)
 
 Rubato-loggan som ikon i stället för den tomma globen. Ingen data ändras, artefakten oförändrad.

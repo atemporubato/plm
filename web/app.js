@@ -71,13 +71,17 @@ import * as P from "./platform.js";
   const LIB_XLSX = "https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js";
   const PO_DEFAULTS = { customer: "Dannefalk & Pers AB", email: "info@atemporubato.com", tel: "0046707994668 / 0046708341212", delivery: "Enhagsslingan 4, 187 40 Täby", invoice: "Strindbergsgatan 31, 115 31 Stockholm — EMAIL INVOICE TO: INVOICE@ATEMPORUBATO.COM", label: "Put on labels and barcodes delivered by customer (Rubato)" };
   const PRIORITET = ["Hög", "Normal", "Låg"];
-  const TYGSTATUS_PO = ["", "Hos fabrik", "Beställt", "På väg", "Saknas", "Eget lager"];
+  const TYGSTATUS_PO = ["Hos fabrik", "Beställt", "På väg", "Saknas", "Eget lager", ""];
+  const PO_VALUTOR = ["SEK", "JPY", "EUR", "GBP", "USD"];
+  const PO_SKALOR = { "XS–XXL": ["XS", "S", "M", "L", "XL", "XXL"], "44–58": ["44", "46", "48", "50", "52", "54", "56", "58"] };
+  const skalaAv = (list) => { if (!list || !list.length) return null; const up = list.map((x) => String(x).trim().toUpperCase()); for (const k of Object.keys(PO_SKALOR)) if (up.every((x) => PO_SKALOR[k].includes(x))) return k; return null; };
+  const sortSizes = (list) => { const k = skalaAv(list); if (!k) return list; const o = PO_SKALOR[k]; return list.slice().sort((a, b) => o.indexOf(String(a).trim().toUpperCase()) - o.indexOf(String(b).trim().toUpperCase())); };
   const poStatusNorm = (x) => (x === "Utkast" ? "Placeholder" : PO_STATUS.includes(x) ? x : x ? "Inskickad" : "Placeholder");
 
   // ---------- DOM helpers ----------
   // Engelsk visning av värden som sparas på svenska i databasen (status, kategori, plats …). Listan är tom i källan;
   // den engelska byggen (tools/i18n.mjs) fyller i den. Datan skrivs aldrig om – bara det som visas.
-  const EN_VAL = {"Storleksset":"Size set","På plåtning":"At photo shoot","Testas":"Being tested","Utlånad":"On loan","Gåva":"Gift","Såld":"Sold","Hos leverantör":"At supplier","Arkiv":"Archive","Ej aktuell":"Not applicable","Idé ej redo för design":"Idea – not ready for design","Idé redo att designa":"Idea – ready for design","Sample kan beställas":"Sample can be ordered","Delvis slut":"Partly sold out","Utgått":"Discontinued","Rubato (eget lager)":"Rubato (own stock)","Accessoarer":"Accessories","Hög":"High","Låg":"Low","Hos fabrik":"At factory","Beställt":"Ordered","På väg":"On its way","Saknas":"Missing","Eget lager":"Own stock","Hängare":"Hanger","Planerade":"Planned","Bokad":"Booked","Planerad":"Planned","Tyg":"Fabric","Producent":"Manufacturer","Övrigt":"Other","Okända":"Unknown","Nej":"No","Ja":"Yes","Ej betalt":"Not paid","Betalt":"Paid","Skickat":"Sent","Hos leverantören":"At the supplier","På väg tillbaka":"On its way back","Förlorat":"Lost","Mottagen":"Received","Beställd":"Ordered","Skickad":"Shipped","Returnerad":"Returned","Fotosample":"Photo sample","Produktionssample":"Production sample","Fotohäng":"Photo rail","Inskickad":"Submitted","PO bekräftad":"PO confirmed","I produktion":"In production","Inlevererad":"Delivered","Inne":"In","Godkänd":"Approved","Ny runda":"New round","Pausad":"Paused","Kastad":"Dropped","Underkänd":"Rejected","Skippad":"Dropped","PO lagd":"PO placed","Levererad":"Delivered","Nyhet":"New","Slut":"Sold out","I lager":"In stock","Förbrukad":"Used up","Byxor":"Trousers","Skrädderi":"Tailoring","Skjortor":"Shirts","Stickat & Jersey":"Knitwear & Jersey","Ytterplagg":"Outerwear","Avbruten":"Cancelled","Utkast":"Draft","Inställd":"Cancelled","Fotade":"Shot","Retuscherade":"Retouched","Publicerade":"Published","Fotad":"Shot","Klar":"Done","Utan säsong":"No season","Okategoriserat":"Uncategorised","Bekräftade":"Confirmed","Att förhandla":"To negotiate","Tillbaka hos Rubato":"Back at Rubato","Pågår":"Ongoing","Förfallet":"Overdue","Senare":"Later","Löst":"Resolved","Öppen":"Open","beräknad":"estimated","Produktidé":"Idea – not ready for design","Idé under utveckling":"Sample can be ordered","Restock":"Re-stock"};
+  const EN_VAL = {"Storleksset":"Size set","På plåtning":"At photo shoot","Testas":"Being tested","Utlånad":"On loan","Gåva":"Gift","Såld":"Sold","Hos leverantör":"At supplier","Arkiv":"Archive","Ej aktuell":"Not applicable","Idé ej redo för design":"Idea – not ready for design","Idé redo att designa":"Idea – ready for design","Sample kan beställas":"Sample can be ordered","Delvis slut":"Partly sold out","Utgått":"Discontinued","Rubato (eget lager)":"Rubato (own stock)","Accessoarer":"Accessories","Hög":"High","Låg":"Low","Hos fabrik":"Fabric already at producer","Beställt":"Ordered","På väg":"On its way","Saknas":"Missing","Eget lager":"Own stock","Hängare":"Hanger","Planerade":"Planned","Bokad":"Booked","Planerad":"Planned","Tyg":"Fabric","Producent":"Manufacturer","Övrigt":"Other","Okända":"Unknown","Nej":"No","Ja":"Yes","Ej betalt":"Not paid","Betalt":"Paid","Skickat":"Sent","Hos leverantören":"At the supplier","På väg tillbaka":"On its way back","Förlorat":"Lost","Mottagen":"Received","Beställd":"Ordered","Skickad":"Shipped","Returnerad":"Returned","Fotosample":"Photo sample","Produktionssample":"Production sample","Fotohäng":"Photo rail","Inskickad":"Submitted","PO bekräftad":"PO confirmed","I produktion":"In production","Inlevererad":"Delivered","Inne":"In","Godkänd":"Approved","Ny runda":"New round","Pausad":"Paused","Kastad":"Dropped","Underkänd":"Rejected","Skippad":"Dropped","PO lagd":"PO placed","Levererad":"Delivered","Nyhet":"New","Slut":"Sold out","I lager":"In stock","Förbrukad":"Used up","Byxor":"Trousers","Skrädderi":"Tailoring","Skjortor":"Shirts","Stickat & Jersey":"Knitwear & Jersey","Ytterplagg":"Outerwear","Avbruten":"Cancelled","Utkast":"Draft","Inställd":"Cancelled","Fotade":"Shot","Retuscherade":"Retouched","Publicerade":"Published","Fotad":"Shot","Klar":"Done","Utan säsong":"No season","Okategoriserat":"Uncategorised","Bekräftade":"Confirmed","Att förhandla":"To negotiate","Tillbaka hos Rubato":"Back at Rubato","Pågår":"Ongoing","Förfallet":"Overdue","Senare":"Later","Löst":"Resolved","Öppen":"Open","beräknad":"estimated","Produktidé":"Idea – not ready for design","Idé under utveckling":"Sample can be ordered","Restock":"Re-stock"};
   const tv = (s) => { if (typeof s !== "string" || !s) return s; const v = EN_VAL[s]; if (v != null) return v; if (s.includes(" · ")) return s.split(" · ").map(tv).join(" · "); const m = /^(.*\D) (\d+[a-z]?)$/.exec(s); return m && EN_VAL[m[1]] != null ? EN_VAL[m[1]] + " " + m[2] : s; };
   function h(tag, props, ...kids) {
     const e = document.createElement(tag);
@@ -1693,7 +1697,7 @@ import * as P from "./platform.js";
   };
 
   // ---------- PO sheet ----------
-  const PO_LABELS = { nr: "PO no.", leverantor: "Supplier", sasong: "Season", drop: "Drop", status: "Status", prioritet: "Priority", produktionstid: "Production time", fotosample: "Fotosample", fotosampleLeverans: "Photo sample expected", tygstatus: "Fabric status", orderBekraftad: "Order confirmed", planeradEx: "Planned ex-factory", bekraftadEx: "Confirmed ex-factory", etaLager: "ETA warehouse", valuta: "Currency", kommentar: "Comment", orderDatum: "Order date", leveransOnskad: "Requested delivery", labelInstructions: "Label instructions", forskottBelopp: "Deposit amount", forskottDatum: "Deposit due", forskottBetald: "Deposit paid", slutBelopp: "Final payment amount", slutDatum: "Final payment due", slutBetald: "Final payment paid" };
+  const PO_LABELS = { nr: "PO no.", leverantor: "Supplier", sasong: "Season", drop: "Drop", status: "Status", prioritet: "Priority", produktionstid: "Production time", fotosample: "Fotosample", fotosampleLeverans: "Photo sample expected", tygstatus: "Fabric status", orderBekraftad: "Order confirmed", planeradEx: "Requested ex-factory", bekraftadEx: "Confirmed ex-factory", etaLager: "ETA warehouse", valuta: "Currency", kommentar: "Comment", orderDatum: "Order date", leveransOnskad: "Requested delivery", labelInstructions: "Label instructions", forskottBelopp: "Deposit amount", forskottDatum: "Deposit due", forskottBetald: "Deposit paid", slutBelopp: "Final payment amount", slutDatum: "Final payment due", slutBetald: "Final payment paid" };
   const manualPayments = (po) => { const out = []; if (num(po.forskottBelopp)) out.push({ po, typ: "Förskott", belopp: num(po.forskottBelopp), datum: po.forskottDatum, betald: !!po.forskottBetald, kalla: "manuell", idx: "f" }); if (num(po.slutBelopp)) out.push({ po, typ: "Slutbetalning", belopp: num(po.slutBelopp), datum: po.slutDatum, betald: !!po.slutBetald, kalla: "manuell", idx: "s" }); return out; };
   const LEV_TYP = ["Producent", "Tyg", "Trim", "Övrigt"];
   const VILLKOR_VID = [["order", "on order"], ["produktion", "at production start"], ["exfactory", "at ex-factory"], ["leverans", "on delivery"], ["faktura", "net from invoice (ex-factory)"]];
@@ -1791,7 +1795,7 @@ import * as P from "./platform.js";
     if (!po) { toast("Cannot find the PO."); return; }
     const ro = !canWrite || !db;
     const current = () => (isNew ? po : byId(D.po, po._id) || po);
-    const fNr = inp("f_pnr", po.nr, { placeholder: "e.g. EMI-SS27-5" });
+    const fNr = inp("f_pnr", po.nr, { placeholder: "Set automatically" });
     const fLev = inp("f_plev", po.leverantor, { list: "dlLev", autocomplete: "off" });
     const fSas = seasonSelect("f_psas", po.sasong, "– Choose season –");
     // Drop på PO:n: följer stylarna om inget annat väljs. Alla som får redigera kan välja en annan drop –
@@ -1824,10 +1828,10 @@ import * as P from "./platform.js";
     fDrop.addEventListener("change", () => { const ds = styleDropsNow(); if (fDrop.value !== FOLJ && fDrop.value !== "" && ds.length) fFlytta.checked = !((current() || po).rader || []).some((r) => (r.typ || "Nyhet") !== "Nyhet"); syncDropPo(); });
     syncDropPo();
     const fStatus = selectEl("f_pstatus", PO_STATUS, poStatusNorm(po.status));
-    const fProd = inp("f_pprod", po.produktionstid, { type: "number", min: "0", step: "1", placeholder: "days" });
+    const fProd = h("div", { class: "calc", id: "f_pprod" });
     const fFoto = selectEl("f_pfoto", FOTOSAMPLE_PO, fotoPoNorm(po.fotosample));
     const fFotoD = inp("f_pfotod", po.fotosampleLeverans, { type: "date" });
-    const fTygS = selectEl("f_ptygs", TYGSTATUS_PO.map((x) => [x, x || "–"]), po.tygstatus || "");
+    const fTygS = selectEl("f_ptygs", TYGSTATUS_PO.map((x) => [x, x || "–"]), isNew ? "Hos fabrik" : po.tygstatus || "");
     const fBek = selectEl("f_pbek", [["", "Nej"], ["1", "Ja"]], po.orderBekraftad ? "1" : "");
     const fPlan = inp("f_pplan", po.planeradEx, { type: "date" });
     const fBekEx = inp("f_pbekex", po.bekraftadEx, { type: "date" });
@@ -1842,18 +1846,28 @@ import * as P from "./platform.js";
     const fSlutD = inp("f_pslutd", po.slutDatum, { type: "date" });
     const fSlutP = selectEl("f_pslutp", [["", "Ej betalt"], ["1", "Betalt"]], po.slutBetald ? "1" : "");
     const legacyPay = [po.forskottBetalt ? "Deposit (old field): " + po.forskottBetalt : "", po.slutbetalning ? "Final payment (old field): " + po.slutbetalning : ""].filter(Boolean).join(" · ");
-    const fVal = inp("f_pval", po.valuta || "SEK");
+    const fVal = selectEl("f_pval", PO_VALUTOR, po.valuta || "SEK");
     const fKom = area("f_pkom", po.kommentar);
-    const nrHint = h("span", { class: "hint", text: isNew ? "Empty = next serial number for the supplier and season" : "" });
-    const syncProd = () => { if (!fProd.value && fLev.value) { const v = levNum(fLev.value, "production time"); if (v != null) fProd.placeholder = v + " d (the supplier's)"; } };
-    fLev.addEventListener("change", syncProd); syncProd();
+    const nrHint = h("span", { class: "hint", text: isNew ? "Prefix, season and running number – set automatically" : "" });
+    // PO-nr: leverantörens prefix + säsong + nästa löpnummer. Följer med tills någon skriver ett eget.
+    const syncNr = () => { if (!isNew || fNr.dataset.egen === "1") return; fNr.value = fLev.value.trim() && fSas.value ? nextPoNr(fLev.value.trim(), fSas.value) : ""; };
+    fNr.addEventListener("input", () => { fNr.dataset.egen = fNr.value.trim() ? "1" : ""; });
+    // Valuta: leverantörens valuta föreslås på en ny PO tills någon väljer själv.
+    const syncVal = () => { if (!isNew || fVal.dataset.egen === "1") return; const l = levByName(fLev.value); if (l && PO_VALUTOR.includes(l.valuta)) fVal.value = l.valuta; };
+    fVal.addEventListener("change", () => { fVal.dataset.egen = "1"; });
+    // Produktionstid räknas ut: orderdatum till önskad ex-factory.
+    const prodDagar = () => (isISO(fOrdD.value) && isISO(fPlan.value) ? daysBetween(fOrdD.value, fPlan.value) : null);
+    const syncProd = () => { const d = prodDagar(); fProd.textContent = d == null ? "–" : d < 0 ? "Ex-factory is before the order date" : d + " " + "days"; };
+    [fOrdD, fPlan].forEach((x) => { x.addEventListener("input", syncProd); x.addEventListener("change", syncProd); });
+    [fLev, fSas].forEach((x) => { x.addEventListener("input", syncNr); x.addEventListener("change", () => { syncNr(); syncVal(); }); });
+    syncProd(); syncNr(); syncVal();
     const form = h("form", { class: "form three", id: "poForm", autocomplete: "off", onsubmit: (e) => e.preventDefault() },
       h("h3", { class: "sec-title full", text: "Order" }),
       h("div", { class: "field" }, h("label", { for: "f_pnr", text: "PO no." }), fNr, nrHint), field("Supplier", fLev), field("Status", fStatus),
       field("Season", fSas), h("div", { class: "field" }, h("label", { for: "f_pdrop", text: "Drop" }), fDrop, dropHint, flyttaWrap), h("div"),
       h("h3", { class: "sec-title full", text: "Schedule" }),
-      field("Order date", fOrdD), field("Production time (days)", fProd), field("Requested delivery", fLevO, { hint: "Empty = the drop's \"In stock by\"" }),
-      field("Planned ex-factory", fPlan), field("Confirmed ex-factory", fBekEx), field("ETA warehouse", fEta),
+      field("Order date", fOrdD), field("Requested ex-factory", fPlan), field("Production time", fProd, { hint: "Calculated: order date to ex-factory" }),
+      isNew ? null : field("Confirmed ex-factory", fBekEx), isNew ? null : field("ETA warehouse", fEta), isNew ? null : field("Requested delivery", fLevO, { hint: "Empty = the drop's \"In stock by\"" }),
       h("h3", { class: "sec-title full", text: "Fabric and photo sample" }),
       field("Fabric status", fTygS), field("Fotosample", fFoto, { hint: "Empty = ordered automatically for new styles" }), field("Photo sample expected", fFotoD),
       h("h3", { class: "sec-title full", text: "Övrigt" }),
@@ -1872,42 +1886,55 @@ import * as P from "./platform.js";
       const fFarg = inp("l_farg_" + idx, r.farg, { placeholder: "Colour", list: "dlFarger", autocomplete: "off" });
       const fTyp = selectEl("l_typ_" + idx, STYLE_TYP, r.typ || (st ? st.typ : "Nyhet") || "Nyhet");
       const fTyg = inp("l_tyg_" + idx, r.tyg, { list: "dlTyg", autocomplete: "off", placeholder: "Tyg" });
-      const fStorl = inp("l_storl_" + idx, (r.storlekar && r.storlekar.length ? r.storlekar : sizesOf(st)).join(", "), { placeholder: "Sizes, e.g. 46, 48, 50" });
-      const fPer = inp("l_per_" + idx, r.perStorlek ? (r.storlekar && r.storlekar.length ? r.storlekar : sizesOf(st)).map((sz) => r.perStorlek[sz] ?? 0).join(", ") : "", { placeholder: "Quantity per size, e.g. 4, 5, 11" });
-      const fBesk = inp("l_besk_" + idx, r.beskrivning, { placeholder: "Description for the PO file, e.g. fabric, buttons, label" });
-      const fAntal = inp("l_antal_" + idx, r.antal, { type: "number", min: "0", step: "1", placeholder: "Quantity" });
-      const fTygK = inp("l_tygk_" + idx, r.tygkostnad, { type: "number", min: "0", step: "0.01", placeholder: "Fabric/unit" });
-      const fPris = inp("l_pris_" + idx, r.styckpris, { type: "number", min: "0", step: "0.01", placeholder: "Unit price (CMT)" });
-      const fFotoL = inp("l_foto_" + idx, r.fotosample, { placeholder: "Fotosample" });
-      const kost = h("span", { class: "mono" });
+      const fPris = inp("l_pris_" + idx, r.styckpris, { type: "number", min: "0", step: "0.01", placeholder: "Unit price" });
+      // Storlekar: en ruta per storlek. Skalan är XS–XXL eller 44–58; andra storlekar (stylens egna) visas som de är.
+      const EGNA = "__egna";
+      const start = r.storlekar && r.storlekar.length ? r.storlekar : sizesOf(st);
+      const egna = start.length && !skalaAv(start) ? start.slice() : null;
+      let sizes = egna || PO_SKALOR[skalaAv(start) || "XS–XXL"];
+      const q = {};
+      if (r.perStorlek) for (const k of Object.keys(r.perStorlek)) { const hit = sizes.find((sz) => norm(sz) === norm(k)); if (hit && num(r.perStorlek[k])) q[hit] = num(r.perStorlek[k]); }
+      const utanStorlek = Object.keys(q).length ? null : num(r.antal);
+      const fSkala = selectEl("l_skala_" + idx, Object.keys(PO_SKALOR).concat(egna ? [[EGNA, "The style's sizes"]] : []), egna ? EGNA : skalaAv(start) || "XS–XXL");
+      const grid = h("div", { class: "szrow" });
+      const tot = h("b", { text: "0" });
       const hint = h("span", { class: "sub" });
+      const sum = () => sizes.reduce((a, sz) => a + (num(q[sz]) || 0), 0);
       const sync = () => {
         const s2 = styleByName(fProdN.value);
         r.produkt = fProdN.value.trim(); r.styleId = s2 ? s2._id : (r.styleId && st && norm(st.namn) === norm(r.produkt) ? r.styleId : null);
-        r.farg = fFarg.value.trim(); r.typ = fTyp.value; r.tyg = fTyg.value.trim(); r.fotosample = fFotoL.value.trim();
-        r.storlekar = parseList(fStorl.value);
-        const per = parseList(fPer.value).map(num);
-        if (per.length && r.storlekar.length) { r.perStorlek = {}; r.storlekar.forEach((sz, i) => (r.perStorlek[sz] = per[i] ?? 0)); if (!fAntal.value || fAntal.dataset.auto === "1") { fAntal.value = per.reduce((a, b) => a + (b || 0), 0); fAntal.dataset.auto = "1"; } }
-        else r.perStorlek = null;
-        r.antal = num(fAntal.value); r.tygkostnad = num(fTygK.value); r.styckpris = num(fPris.value);
-        const c = lineCost(r); r.kostnad = c;
-        kost.textContent = c != null ? fmtSEK(c) : "–";
-        hint.textContent = s2 ? s2._id + (styleKategori(s2) ? " · " + styleKategori(s2) : " · no category") + (s2.storlekar && s2.storlekar.length && !fStorl.value ? " · sizes from the style" : "") : (r.produkt ? "A new style is created on save" : "");
+        r.farg = fFarg.value.trim(); r.typ = fTyp.value; r.tyg = fTyg.value.trim(); r.styckpris = num(fPris.value);
+        const fyllda = sizes.filter((sz) => num(q[sz]) > 0);
+        if (fyllda.length) { r.storlekar = fyllda; r.perStorlek = {}; fyllda.forEach((sz) => (r.perStorlek[sz] = num(q[sz]))); r.antal = sum(); }
+        else { r.storlekar = sizes.slice(); r.perStorlek = null; r.antal = utanStorlek; }
+        r.kostnad = lineCost(r);
+        tot.textContent = String(num(r.antal) || 0);
+        hint.textContent = [s2 ? s2._id + (styleKategori(s2) ? " · " + styleKategori(s2) : " · no category") : (r.produkt ? "A new style is created on save" : ""), !fyllda.length && utanStorlek ? "Quantity has no split per size" : "", num(r.tygkostnad) ? "Fabric cost " + fmtSEK(num(r.tygkostnad)) + " per unit is included in the total" : ""].filter(Boolean).join(" · ");
         renderTotals();
       };
-      [fProdN, fFarg, fTyp, fTyg, fStorl, fPer, fAntal, fTygK, fPris, fFotoL].forEach((x) => { x.addEventListener("input", sync); x.addEventListener("change", sync); });
-      fAntal.addEventListener("input", () => { fAntal.dataset.auto = ""; });
-      fProdN.addEventListener("change", () => { const s2 = styleByName(fProdN.value); if (s2 && !fStorl.value && sizesOf(s2).length) fStorl.value = sizesOf(s2).join(", "); if (s2 && !fTyp.dataset.touched) fTyp.value = s2.typ || "Nyhet"; sync(); });
-      fBesk.addEventListener("input", () => { r.beskrivning = fBesk.value.trim(); });
+      const renderGrid = () => {
+        grid.replaceChildren(...sizes.map((sz, i) => {
+          const f = h("input", { type: "number", min: "0", step: "1", inputmode: "numeric", id: "l_q_" + idx + "_" + i, "aria-label": sz });
+          f.value = num(q[sz]) ? String(q[sz]) : "";
+          f.addEventListener("input", () => { const v = num(f.value); if (v) q[sz] = v; else delete q[sz]; sync(); });
+          f.addEventListener("focus", () => f.select());
+          // Klistra in en hel rad (t.ex. "1 3 12 10 4") så fylls rutorna härifrån och framåt.
+          f.addEventListener("paste", (e) => { const parts = ((e.clipboardData && e.clipboardData.getData("text")) || "").split(/[^0-9]+/).filter(Boolean); if (parts.length < 2) return; e.preventDefault(); parts.forEach((v, j) => { const s3 = sizes[i + j]; if (!s3) return; if (Number(v)) q[s3] = Number(v); else delete q[s3]; }); renderGrid(); sync(); });
+          return h("label", { class: "sz" }, h("span", { text: sz }), f);
+        }), h("div", { class: "sztot" }, h("span", { text: "Quantity" }), tot));
+        if (ro) lock(grid);
+      };
+      [fProdN, fFarg, fTyp, fTyg, fPris].forEach((x) => { x.addEventListener("input", sync); x.addEventListener("change", sync); });
+      fSkala.addEventListener("change", () => { sizes = fSkala.value === EGNA ? egna : PO_SKALOR[fSkala.value]; renderGrid(); sync(); });
+      fProdN.addEventListener("change", () => { const s2 = styleByName(fProdN.value); const k = s2 ? skalaAv(sizesOf(s2)) : null; if (k && !sum() && fSkala.value !== k) { fSkala.value = k; sizes = PO_SKALOR[k]; renderGrid(); } if (s2 && !fTyp.dataset.touched) fTyp.value = s2.typ || "Nyhet"; sync(); });
       fTyp.addEventListener("change", () => (fTyp.dataset.touched = "1"));
       const box = h("div", { class: "line" },
         h("div", { class: "row two" }, field("Product", fProdN), field("Colour", fFarg), field("New / restock", fTyp)),
-        h("div", { class: "row two" }, field("Tyg", fTyg), field("Sizes", fStorl), field("Quantity per size", fPer)),
-        h("div", { class: "row", style: "grid-template-columns:1fr" }, field("Description (PO file)", fBesk)),
-        h("div", { class: "row" }, field("Quantity", fAntal), field("Fabric/unit", fTygK), field("Unit price", fPris), field("Fotosample", fFotoL), h("div", { class: "field" }, h("label", { text: "Cost" }), h("div", { style: "padding:7px 0" }, kost)), h("div")),
+        h("div", { class: "row three" }, field("Tyg", fTyg), field("Size scale", fSkala), field("Unit price", fPris)),
+        grid,
         h("div", { class: "foot" }, hint, ro ? null : h("button", { class: "btn small danger", type: "button", text: "Remove line", onclick: () => { lines.splice(idx, 1); renderLines(); } })));
       if (ro) lock(box);
-      sync();
+      renderGrid(); sync();
       return box;
     }
     function renderLines() { linesEl.replaceChildren(...lines.map((r, i) => lineEditor(r, i))); renderTotals(); }
@@ -1995,7 +2022,7 @@ import * as P from "./platform.js";
 
     const logUl = h("ul", { class: "log" });
     async function save() {
-      const o = { nr: fNr.value.trim(), leverantor: fLev.value.trim(), sasong: fSas.value.trim(), drop: poDropChoice().drop, dropEgen: poDropChoice().egen, status: fStatus.value, prioritet: po.prioritet || "Normal", produktionstid: num(fProd.value), fotosample: fFoto.value, fotosampleLeverans: fFotoD.value || null, tygstatus: fTygS.value, orderBekraftad: fBek.value === "1", planeradEx: fPlan.value || null, bekraftadEx: fBekEx.value || null, etaLager: fEta.value || null, valuta: fVal.value.trim() || "SEK", kommentar: fKom.value.trim(),
+      const o = { nr: fNr.value.trim(), leverantor: fLev.value.trim(), sasong: fSas.value.trim(), drop: poDropChoice().drop, dropEgen: poDropChoice().egen, status: fStatus.value, prioritet: po.prioritet || "Normal", produktionstid: prodDagar() != null && prodDagar() >= 0 ? prodDagar() : num(po.produktionstid), fotosample: fFoto.value, fotosampleLeverans: fFotoD.value || null, tygstatus: fTygS.value, orderBekraftad: fBek.value === "1", planeradEx: fPlan.value || null, bekraftadEx: fBekEx.value || null, etaLager: fEta.value || null, valuta: fVal.value || "SEK", kommentar: fKom.value.trim(),
         orderDatum: fOrdD.value || null, leveransOnskad: fLevO.value || null, labelInstructions: fLabel.value.trim(),
         forskottBelopp: num(fFskB.value), forskottDatum: fFskD.value || null, forskottBetald: fFskP.value === "1", slutBelopp: num(fSlutB.value), slutDatum: fSlutD.value || null, slutBetald: fSlutP.value === "1" };
       if (!o.leverantor) { toast("Enter supplier."); fLev.focus(); return; }
@@ -2107,6 +2134,7 @@ import * as P from "./platform.js";
     const sizes = [];
     const lines = po.rader || [];
     for (const r of lines) { const st = byId(D.styles, r.styleId); for (const sz of (r.storlekar && r.storlekar.length ? r.storlekar : sizesOf(st))) if (!sizes.includes(sz)) sizes.push(sz); }
+    sizes.splice(0, sizes.length, ...sortSizes(sizes));
     const totCol = 3 + sizes.length;
     const hr = ws.getRow(13); hr.height = 15;
     ["Printed Name", "Description & Colours"].concat(sizes, ["Tot"]).forEach((t, i) => { const c = hr.getCell(i + 1); c.value = t; c.font = FB; c.alignment = { horizontal: i >= 2 ? "center" : "left" }; });
