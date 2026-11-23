@@ -6,6 +6,14 @@ och importeras med `node tools/import-dokument.js`, och main går live på plm.a
 
 Versionsnumrering: små ändringar ger punktversion (v9.1, v9.2 …). Nytt heltal (v10) bara vid stora ändringar.
 
+## v10.2 (2026-11-23)
+
+Produktion: tydligare skillnad mellan beställt och preliminärt. Bara utseende – status och data är desamma.
+- PO:erna delas upp under rubriker med antal och summa: Beställda (PO bekräftad, I produktion, Skickad), Inskickade (Inskickad, Problem), Preliminära (Placeholder), och under "Alla" även Inlevererade och Avbrutna.
+- Korten ser olika ut per grupp: svart vänsterkant (beställd), grå vänsterkant (inskickad), streckad ram och grå text (preliminär).
+- Etiketten säger vad läget betyder ("Inskickad · väntar på bekräftelse") och varje PO har en stegmätare Placeholder → Inskickad → Bekräftad → I produktion → Skickad → Inlevererad.
+- Rutorna överst visar summorna för de tre grupperna i stället för Öppna POs / Väntar på bekräftelse / Försenade / Lagt. Försenade ligger i Flaggat-rutan sedan v10.
+
 ## v10.1 (2026-11-23)
 
 - Området Produkt har undertexten "From idea to drop".

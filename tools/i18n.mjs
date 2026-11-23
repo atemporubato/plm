@@ -55,7 +55,7 @@ function applyJs(code, report) {
   for (const l of lits) {
     // Rör aldrig kod (klassnamn, nycklar) eller värden som jämförs mot sparad data – de översätts vid visning i stället.
     if (l.code || cmpValues.has(l.value) || Object.hasOwn(EN.values, l.value)) continue;
-    const en = lookup(l.value);
+    const en = EN.exact && Object.hasOwn(EN.exact, l.value) ? EN.exact[l.value] : lookup(l.value);
     if (en == null) { if (report && looksLikeText(l.value) && !EN.keep.includes(l.value.trim())) report.add(l.value.trim()); continue; }
     out += code.slice(pos, l.start) + (l.kind === "str" ? JSON.stringify(en) : tplEscape(en)); pos = l.end;
   }

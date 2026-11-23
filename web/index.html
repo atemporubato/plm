@@ -284,6 +284,28 @@ table.ledger { width: 100%; border-collapse: collapse; min-width: 960px; }
 .ps-inlevererad { background: var(--ok); color: #F8F7F0; }
 .ps-problem { background: var(--late-soft); color: var(--late); }
 .ps-avbruten { color: var(--muted); border-color: var(--line-strong); text-decoration: line-through; }
+.tile .s { font-family: var(--f-ui); font-size: 13px; color: var(--muted); text-transform: none; letter-spacing: 0; }
+.tile .s:empty { display: none; }
+.tile.t-prelim { background: repeating-linear-gradient(135deg, transparent 0 7px, rgba(33,33,33,.035) 7px 8px); } .tile.t-prelim .n, .tile.t-prelim .l { color: var(--muted); }
+.po-sec { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; margin: 18px 0 -4px; padding-bottom: 8px; border-bottom: 2px solid var(--ink); }
+.po-sec:first-child { margin-top: 4px; }
+.po-sec h2 { font-family: var(--f-label); font-weight: 400; font-size: 14px; letter-spacing: .16em; text-transform: uppercase; margin: 0; }
+.po-sec .d { font-family: var(--f-ui); font-size: 14px; color: var(--muted); }
+.po-sec .sum { margin-left: auto; font-family: var(--f-display); font-size: 22px; }
+.po-sec.g-prelim, .po-sec.g-done, .po-sec.g-cancel { border-bottom: 2px dashed var(--line-strong); } .po-sec.g-prelim h2, .po-sec.g-prelim .sum, .po-sec.g-done h2, .po-sec.g-done .sum, .po-sec.g-cancel h2, .po-sec.g-cancel .sum { color: var(--muted); }
+.po-sec.g-done { border-bottom-style: solid; border-bottom-color: var(--line-strong); }
+.po-card.g-ordered { border: 1px solid var(--ink); border-left: 6px solid var(--ink); }
+.po-card.g-sent { border: 1px solid var(--ink); border-left: 6px solid #a9a8a0; }
+.po-card.g-prelim, .po-card.g-cancel { border: 1px dashed var(--line-strong); background: transparent; }
+.po-card.g-prelim .card-head, .po-card.g-cancel .card-head { background: transparent; }
+.po-card.g-prelim .card-head h3, .po-card.g-prelim .prod, .po-card.g-prelim td, .po-card.g-prelim .m b, .po-card.g-cancel .card-head h3, .po-card.g-cancel .prod, .po-card.g-cancel td, .po-card.g-cancel .m b { color: var(--muted); }
+.po-card.g-done { border: 1px solid var(--line-strong); }
+.pill.pg-ordered { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+.pill.pg-sent { background: transparent; color: var(--ink); border: 1px solid var(--ink); }
+.pill.pg-prelim, .pill.pg-cancel { background: transparent; color: var(--muted); border: 1px dashed var(--line-strong); }
+.pill.pg-done { background: transparent; color: var(--ink); border: 1px solid var(--line-strong); }
+.po-steps { display: inline-flex; gap: 3px; align-items: center; } .po-steps i { width: 22px; height: 5px; background: var(--line); display: block; } .po-steps i.on { background: var(--ink); }
+.po-card.g-prelim .po-steps i.on { background: var(--muted); }
 .po-head { display: flex; flex-wrap: wrap; gap: 6px 16px; align-items: center; }
 .po-head .nr { font-family: var(--f-label); font-size: 11px; letter-spacing: .06em; }
 .po-head .m { font-family: var(--f-ui); font-size: 14px; text-transform: none; letter-spacing: 0; color: var(--muted); }

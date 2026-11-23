@@ -808,10 +808,11 @@ import * as P from "./platform.js";
     const parts = {};
     for (const d of defs) {
       const n = h("span", { class: "n mono", text: "–" });
-      const b = h("button", { class: "tile " + (d.cls || ""), type: "button", onclick: () => { state.view = state.view === d.key ? null : d.key; onChange(); } }, n, h("span", { class: "l", text: d.label }));
-      parts[d.key] = { n, b }; el.append(b);
+      const s = h("span", { class: "s" });
+      const b = h("button", { class: "tile " + (d.cls || ""), type: "button", onclick: () => { state.view = state.view === d.key ? null : d.key; onChange(); } }, n, h("span", { class: "l", text: d.label }), s);
+      parts[d.key] = { n, b, s }; el.append(b);
     }
-    return { el, set(counts) { for (const d of defs) { const v = counts[d.key] || 0; parts[d.key].n.textContent = String(v); parts[d.key].n.classList.toggle("zero", !v); parts[d.key].b.setAttribute("aria-pressed", String(state.view === d.key)); } } };
+    return { el, set(counts, subs) { for (const d of defs) { const v = counts[d.key] || 0; parts[d.key].n.textContent = String(v); parts[d.key].n.classList.toggle("zero", !v); parts[d.key].s.textContent = (subs && subs[d.key]) || ""; parts[d.key].b.setAttribute("aria-pressed", String(state.view === d.key)); } } };
   }
   function makeSeg(options, state, key, onChange) {
     const el = h("div", { class: "seg", role: "group", "aria-label": "Status" });
@@ -1371,15 +1372,34 @@ import * as P from "./platform.js";
   }
 
   // ---------- PRODUKTION ----------
+  // Tre lägen som ska synas på håll: Beställd (leverantören har bekräftat – bundna pengar), Inskickad (skickad men inte bekräftad)
+  // och Preliminär (placeholder, inget beställt). Inlevererade och avbrutna ligger för sig.
+  const PO_STEPS = ["Placeholder", "Inskickad", "PO bekräftad", "I produktion", "Skickad", "Inlevererad"];
+  const PO_GROUPS = [
+    { key: "ordered", titel: "Ordered", desc: "confirmed by the supplier – committed money" },
+    { key: "sent", titel: "Submitted", desc: "sent to the supplier, not confirmed yet" },
+    { key: "prelim", titel: "Preliminary", desc: "placeholders – planned, nothing ordered" },
+    { key: "done", titel: "Delivered", desc: "in the warehouse" },
+    { key: "cancel", titel: "Cancelled", desc: "not counted" }
+  ];
+  const poGroup = (p) => { const s = poStatusNorm(p.status); return s === "Placeholder" ? "prelim" : s === "Inlevererad" ? "done" : s === "Avbruten" ? "cancel" : ["PO bekräftad", "I produktion", "Skickad"].includes(s) ? "ordered" : "sent"; };
+  const PO_STAGE_TEXT = { "Placeholder": "Preliminary · not ordered", "Inskickad": "Submitted · awaiting confirmation", "PO bekräftad": "Ordered · confirmed", "I produktion": "Ordered · in production", "Skickad": "Ordered · shipped", "Inlevererad": "Inlevererad", "Avbruten": "Avbruten", "Problem": "Problem · not confirmed" };
+  function poStagePill(p) {
+    const s = poStatusNorm(p.status), g = poGroup(p);
+    const pill = h("span", { class: "pill pg-" + g, text: PO_STAGE_TEXT[s] || s });
+    const i = PO_STEPS.indexOf(s);
+    const steps = h("span", { class: "po-steps", title: PO_STEPS.map(tv).join(" → ") }, PO_STEPS.map((_, k) => h("i", { class: i >= 0 && k <= i ? "on" : "" })));
+    const l = poLate(p);
+    return h("span", { style: "display:inline-flex;gap:8px;align-items:center;flex-wrap:wrap" }, pill, steps, l ? h("span", { class: "pill s-Problem", title: poLateText(p, l), text: "Problem · late " + l.dagar + " d" }) : null);
+  }
   const ProdView = {
     mount(root) {
       const st = UI.prod;
       const upd = () => { this.update(); persist(); };
       this.strip = makeStrip([
-        { key: "open", label: "Open POs" },
-        { key: "confirm", label: "Awaiting confirmation", cls: "t-warn" },
-        { key: "late", label: "Late", cls: "t-late" },
-        { key: "spent", label: "Placed (k SEK)" }
+        { key: "ordered", label: "Beställt" },
+        { key: "sent", label: "Submitted" },
+        { key: "prelim", label: "Preliminary", cls: "t-prelim" }
       ], st, () => { this.seg.sync(); upd(); });
       const q = searchBox("q_prod", "Search PO, product, colour, fabric …", st, () => this.update());
       this.fSeason = filterSelect("f_p_season", "All seasons", st, "season", upd);
@@ -1411,22 +1431,17 @@ import * as P from "./platform.js";
       this.fLev.fill(uniq(D.po.map((p) => p.leverantor)));
       const season = this.seasonInView();
       const inSeason = D.po.filter((p) => !season || norm(poSeason(p)) === norm(season));
-      const spent = inSeason.filter((p) => PO_COMMITTED.includes(poStatusNorm(p.status))).reduce((a, p) => a + poTotal(p), 0);
-      this.strip.set({
-        open: inSeason.filter((p) => PO_OPEN.includes(poStatusNorm(p.status))).length,
-        confirm: inSeason.filter((p) => poStatusNorm(p.status) === "Inskickad").length,
-        late: inSeason.filter(poIsLate).length,
-        spent: Math.round(spent / 1000)
-      });
+      const gsum = (g) => inSeason.filter((p) => poGroup(p) === g).reduce((a, p) => a + poTotal(p), 0);
+      const gn = (g) => inSeason.filter((p) => poGroup(p) === g).length;
+      if (!["ordered", "sent", "prelim"].includes(st.view)) st.view = null;
+      this.strip.set({ ordered: fmtTkr(gsum("ordered")), sent: fmtTkr(gsum("sent")), prelim: fmtTkr(gsum("prelim")) },
+        { ordered: gn("ordered") + " PO confirmed or in production", sent: gn("sent") + " PO awaiting confirmation", prelim: gn("prelim") + " placeholders, nothing ordered" });
       this.seg.sync();
       const list = D.po.filter((p) => {
         const ps = poStatusNorm(p.status);
         if (season && norm(poSeason(p)) !== norm(season)) return false;
         switch (st.view) {
-          case "open": if (!PO_OPEN.includes(ps)) return false; break;
-          case "confirm": if (ps !== "Inskickad") return false; break;
-          case "late": if (!poIsLate(p)) return false; break;
-          case "spent": if (!PO_COMMITTED.includes(ps)) return false; break;
+          case "ordered": case "sent": case "prelim": if (poGroup(p) !== st.view) return false; break;
           default:
             if (st.status === "aktiva" && !(PO_OPEN.includes(ps) || ps === "Placeholder")) return false;
             if (st.status !== "aktiva" && st.status !== "alla" && ps !== st.status) return false;
@@ -1435,11 +1450,18 @@ import * as P from "./platform.js";
         if (q && ![p._id, p.nr, p.leverantor, p.sasong, p.drop, p.status, p.kommentar, (p.rader || []).map((r) => [r.produkt, r.farg, r.tyg].join(" ")).join(" ")].join(" ").toLowerCase().includes(q)) return false;
         return true;
       });
-      const order = { Problem: 0, Inskickad: 1, "PO bekräftad": 2, "I produktion": 3, Skickad: 4, Placeholder: 5, Inlevererad: 6, Avbruten: 7 };
-      list.sort((a, b) => (order[poStatusNorm(a.status)] ?? 9) - (order[poStatusNorm(b.status)] ?? 9) || (poEta(a) || "9999").localeCompare(poEta(b) || "9999") || String(a.nr || a._id).localeCompare(String(b.nr || b._id), "sv"));
+      const gOrder = { ordered: 0, sent: 1, prelim: 2, done: 3, cancel: 4 };
+      const order = { Skickad: 0, "I produktion": 1, "PO bekräftad": 2, Problem: 3, Inskickad: 4, Placeholder: 5, Inlevererad: 6, Avbruten: 7 };
+      list.sort((a, b) => gOrder[poGroup(a)] - gOrder[poGroup(b)] || (order[poStatusNorm(a.status)] ?? 9) - (order[poStatusNorm(b.status)] ?? 9) || (poEta(a) || "9999").localeCompare(poEta(b) || "9999") || String(a.nr || a._id).localeCompare(String(b.nr || b._id), "sv"));
       const cards = [];
+      let lastG = null;
       for (const p of list) {
-        const card = h("section", { class: "card po-card" });
+        const g = poGroup(p);
+        if (g !== lastG) {
+          lastG = g; const def = PO_GROUPS.find((x) => x.key === g); const inG = list.filter((x) => poGroup(x) === g);
+          cards.push(h("div", { class: "po-sec g-" + g }, h("h2", { text: def.titel }), h("span", { class: "d", text: inG.length + " PO · " + def.desc }), h("span", { class: "sum", text: fmtTkr(inG.reduce((a, x) => a + poTotal(x), 0)) })));
+        }
+        const card = h("section", { class: "card po-card g-" + g });
         card.append(this.groupRow(p));
         const lines = (p.rader || []);
         const { t, tb } = table([["Product"], ["Colours"], ["Quantity", "num"], ["Unit price", "num"], ["Cost", "num"]]);
@@ -1453,7 +1475,7 @@ import * as P from "./platform.js";
       this.cards.replaceChildren(...cards);
       this.empty.hidden = list.length > 0;
       if (!list.length) this.empty.replaceChildren(...(!loaded.has("po") ? [h("strong", { text: db ? "Loading production …" : "No production to show" })] : D.po.length ? [h("strong", { text: "Nothing matches the filter" }), h("span", { text: "Change season or status, or clear the search." })] : [h("strong", { text: "No POs yet" }), h("span", { text: "Add the first one with \"+ New PO\"." })]));
-      this.count.textContent = list.length + " of " + inSeason.length + " POs" + (season ? " i " + season : "");
+      this.count.textContent = list.length + " of " + inSeason.length + " POs" + (season ? " in " + season : "");
       this.renderBudget(season, inSeason);
     },
     renderTimelines(season) {
@@ -1506,7 +1528,7 @@ import * as P from "./platform.js";
       const ps = poStatusNorm(p.status);
       const eta = poEta(p);
       const d = eta ? diffDays(eta) : null;
-      const bits = [h("span", { class: "nr", text: p.nr || p._id }), h("span", { class: "m", text: p.leverantor || "" }), poStatusPill(p)];
+      const bits = [h("span", { class: "nr", text: p.nr || p._id }), h("span", { class: "m", text: p.leverantor || "" }), poStagePill(p)];
       bits.push(h("span", { class: "m" }, "Drop ", h("b", { text: [p.sasong, p.drop].filter(Boolean).join(" ") || "–" })));
       bits.push(h("span", { class: "m" }, "ETA warehouse ", h("b", { text: eta ? fmtDate(eta) : "–" })));
       if (d != null && PO_OPEN.includes(ps)) bits.push(h("span", { class: "days " + (d < 0 ? "late" : d <= 14 ? "soon" : ""), text: fmtDays(d) }));
@@ -2228,8 +2250,8 @@ import * as P from "./platform.js";
       cards.push(fotohangCard(season));
       cards.push(hangerCard(season));
       this.cards.replaceChildren(...cards);
-      if (!list.length) this.cards.prepend(h("div", { class: "empty" }, h("strong", { text: "No " + (st.typ === "alla" ? "products" : "new styles") + " with a placed PO" + (season ? " i " + season : "") }), h("span", { text: "Products appear here once the PO is placed (Submitted or later). Choose \"All seasons\" or \"All types\" to see more." })));
-      this.count.textContent = list.length + (st.typ === "alla" ? " products" : " new styles") + " with a placed PO" + (season ? " i " + season : " (all seasons)");
+      if (!list.length) this.cards.prepend(h("div", { class: "empty" }, h("strong", { text: "No " + (st.typ === "alla" ? "products" : "new styles") + " with a placed PO" + (season ? " in " + season : "") }), h("span", { text: "Products appear here once the PO is placed (Submitted or later). Choose \"All seasons\" or \"All types\" to see more." })));
+      this.count.textContent = list.length + (st.typ === "alla" ? " products" : " new styles") + " with a placed PO" + (season ? " in " + season : " (all seasons)");
     }
   };
   function fotohangCard(season) {
@@ -2504,7 +2526,7 @@ import * as P from "./platform.js";
       }
       this.cards.replaceChildren(...cards);
       if (!list.length) this.cards.append(h("div", { class: "empty" }, h("strong", { text: "Nothing to show" }), h("span", { text: "Change season or clear the filter." })));
-      this.count.textContent = list.length + " products" + (season ? " i " + season : " (all seasons)");
+      this.count.textContent = list.length + " products" + (season ? " in " + season : " (all seasons)");
     }
   };
 

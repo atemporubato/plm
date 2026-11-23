@@ -1537,7 +1537,28 @@
   "Levererat": "Delivered",
   "Från idé till drop": "From idea to drop",
   "Flaggad av": "Flagged by",
-  "flaggad av": "flagged by"
+  "flaggad av": "flagged by",
+  "bekräftade av leverantören – bundna pengar": "confirmed by the supplier – committed money",
+  "Inskickade": "Submitted",
+  "skickade till leverantören, inte bekräftade än": "sent to the supplier, not confirmed yet",
+  "Preliminära": "Preliminary",
+  "placeholders – planerat, inget beställt": "placeholders – planned, nothing ordered",
+  "Inlevererade": "Delivered",
+  "i lager": "in the warehouse",
+  "Avbrutna": "Cancelled",
+  "räknas inte": "not counted",
+  "Preliminär · ej beställd": "Preliminary · not ordered",
+  "Inskickad · väntar på bekräftelse": "Submitted · awaiting confirmation",
+  "Beställd · bekräftad": "Ordered · confirmed",
+  "Beställd · i produktion": "Ordered · in production",
+  "Beställd · skickad": "Ordered · shipped",
+  "Problem · ej bekräftad": "Problem · not confirmed",
+  "Beställt": "Ordered",
+  "Inskickat": "Submitted",
+  "Preliminärt": "Preliminary",
+  "PO bekräftade eller i produktion": "PO confirmed or in production",
+  "PO väntar på bekräftelse": "PO awaiting confirmation",
+  "placeholders, inget beställt": "placeholders, nothing ordered"
  },
  "values": {
   "Storleksset": "Size set",
@@ -1635,5 +1656,8 @@
  ],
  "css": {
   "content: \" · du\"": "content: \" · you\""
+ },
+ "exact": {
+  " i ": " in "
  }
 }
