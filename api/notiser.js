@@ -8,7 +8,7 @@
 const { compute, renderMail, personKey, NAMN } = require("./_lib/notiser");
 
 const BASE = process.env.PLM_URL || "https://plm.atemporubato.com";
-const COLLS = ["samples", "styles", "po", "drops", "leverantorer", "handelser", "flaggor"];
+const COLLS = ["samples", "styles", "po", "drops", "leverantorer", "handelser", "flaggor", "tyglager"];
 const env = (k) => { const v = process.env[k]; if (!v) throw new Error("Missing environment variable " + k); return v; };
 
 async function sb(path, opts = {}) {
@@ -32,15 +32,16 @@ async function verifyAdmin(req) {
 async function load() {
   const rows = await sb("dokument?select=collection,id,data&collection=in.(" + COLLS.concat(["_notiser"]).join(",") + ")");
   const docs = Object.fromEntries(COLLS.map((c) => [c, []]));
-  let state = null; const redo = []; // redo: styles Elliot already got a direct "ready to order" mail for
+  let state = null; const redo = [], omn = []; // redo: styles Elliot already got a direct "ready to order" mail for
   for (const r of rows) {
-    if (r.collection === "_notiser") { if (r.id === "state") state = r.data; else if (r.id.startsWith("redo-")) redo.push(r.id.slice(5)); continue; }
+    if (r.collection === "_notiser") { if (r.id === "state") state = r.data; else if (r.id.startsWith("redo-")) redo.push(r.id.slice(5)); else if (r.id.startsWith("omn-")) omn.push(r.id); continue; }
     docs[r.collection].push(Object.assign({}, r.data, { _id: r.id }));
   }
   const inst = await sb("installningar?select=nyckel,varde");
   const app = (inst.find((x) => x.nyckel === "app") || {}).varde || {};
   const settings = Object.assign({}, app); for (const x of inst) if (x.nyckel !== "app") settings[x.nyckel] = x.varde;
   settings._redoMejlad = redo;
+  settings._omnMejlad = omn; // kommentarer där de taggade redan fått direktmejl
   const users = await sb("anvandare?select=id,email,namn,roll");
   const persons = users.map((u) => ({ id: u.id, email: u.email, key: personKey(u) })).filter((p) => p.key && p.email);
   return { docs, state, settings, persons };

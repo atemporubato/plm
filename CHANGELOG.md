@@ -6,6 +6,15 @@ och importeras med `node tools/import-dokument.js`, och main går live på plm.a
 
 Versionsnumrering: små ändringar ger punktversion (v9.1, v9.2 …). Nytt heltal (v10) bara vid stora ändringar.
 
+## v10.5 (2026-11-23)
+
+Tagga folk i kommentarer, med direktmejl. Ingen dataimport och ingen schemaändring: inga fält tas bort eller skrivs om.
+- Kommentarsfältet under Historik finns på sample, style, lager och nu även PO. Skriver man @ föreslås teamet (Elliot, Jakob, Carl, Alex, Oliver, Conor); välj med pilarna och Enter/Tab eller klicka. Alexander/Calle/Karl fungerar också.
+- Den som taggas får ett direktmejl via `api/omnamn.js` (samma Microsoft-nycklar som övriga mejl). Servern läser loggraden själv, räknar ut vilka som taggats ur texten, skickar bara om den som skrev kommentaren anropar, och aldrig till den som skrev. Markeringen sparas i dokument (collection "_notiser", id "omn-<coll>-<id>-<tid>") – själva dokumentet skrivs aldrig från servern.
+- Går mejlet inte att skicka kommer taggningen med i mejlet kl. 10 (ny regel för loggrader med @namn sedan förra körningen; redan mejlade hoppas över). 10-mejlet läser nu även tyglager.
+- Loggraden får fältet till (de taggade) och Historik visar "taggade Jakob, Alex".
+- `NOTISER_TEST_TILL` gäller även de här mejlen.
+
 ## v10.4 (2026-11-23)
 
 Färger på samples, Redo att beställa som Flaggat, luftigare rullistor. Ingen dataimport; inga fält tas bort eller skrivs om.

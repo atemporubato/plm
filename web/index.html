@@ -688,7 +688,11 @@ table.vtable { width: 100%; border-collapse: collapse; font-size: 13.5px; }
 .log li { display: grid; grid-template-columns: 92px 1fr; gap: 10px; font-size: 14px; }
 .log time { font-size: 13px; color: var(--muted); padding-top: 2px; }
 .log .who { color: var(--muted); font-size: 12.5px; }
-.add-note { display: flex; gap: 8px; margin-top: 10px; }
+.add-note { display: flex; gap: 8px; margin-top: 10px; position: relative; }
+.mention-pop { position: absolute; left: 0; bottom: 100%; z-index: 30; margin-bottom: 2px; min-width: 180px; background: var(--surface); border: 1px solid var(--line-strong); box-shadow: 0 6px 18px rgba(0, 0, 0, .12); display: flex; flex-direction: column; }
+.mention-pop[hidden] { display: none; }
+.mention-pop button { text-align: left; padding: 8px 12px; background: none; border: 0; color: var(--ink); cursor: pointer; font: inherit; }
+.mention-pop button.on, .mention-pop button:hover { background: var(--paper); text-decoration: underline; }
 .add-note input { flex: 1; min-width: 0; padding: 7px 10px; border: 1px solid var(--line-strong); border-radius: 0; background: var(--paper); }
 .confirm { display: inline-flex; gap: 8px; align-items: center; font-size: 14px; flex-wrap: wrap; }
 .toast { font-family: var(--f-label); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; position: fixed; left: 50%; bottom: calc(20px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); background: var(--ink); color: var(--paper); padding: 9px 16px; border-radius: 0; font-size: 14px; z-index: 40; max-width: calc(100% - 32px); }

@@ -14,3 +14,10 @@
     return res.json();
   }
 
+  // @-taggning i kommentarer: direktmejl till dem som taggats. Servern läser loggraden själv och skickar högst en gång per kommentar.
+  async function hostedNotifyMention(coll, id, t) {
+    const { data: { session } } = await P.supabase.auth.getSession();
+    const res = await fetch("/api/omnamn", { method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer " + (session ? session.access_token : "") }, body: JSON.stringify({ coll, id, t }) });
+    if (!res.ok) return null;
+    return res.json();
+  }

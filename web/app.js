@@ -835,7 +835,8 @@ import * as P from "./platform.js";
       const d = new Date(i.t);
       const when = isNaN(d) ? "" : d.getDate() + " " + MONTHS[d.getMonth()] + " " + String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0");
       const who = i.av ? ((ps[i.av] && ps[i.av].name) || "Someone in the team") : "Import";
-      return h("li", null, h("time", { text: when }), h("div", null, h("div", { text: i.text || "" }), h("div", { class: "who", text: who })));
+      const tagged = Array.isArray(i.till) && i.till.length ? " · tagged " + i.till.map(personName).join(", ") : "";
+      return h("li", null, h("time", { text: when }), h("div", null, h("div", { text: i.text || "" }), h("div", { class: "who", text: who + tagged })));
     }));
   }
 
@@ -2042,7 +2043,10 @@ import * as P from "./platform.js";
     if (!isNew) { const tot = poTotal(po); kvs.push(h("div", { class: "kvs" }, h("div", { class: "kv" }, h("span", { class: "k", text: "Total" }), h("span", { class: "v big", text: fmtSEK(tot) })), h("div", { class: "kv" }, h("span", { class: "k", text: "Quantity" }), h("span", { class: "v big", text: String(poUnits(po)) })), h("div", { class: "kv" }, h("span", { class: "k", text: "Days left" }), h("span", { class: "v big", text: poEta(po) ? fmtDays(diffDays(poEta(po))) : "–" })))); }
     const body = [...kvs, form, linesSec, attSec];
     if (!isNew && downloads) body.push(h("section", null, h("h3", { class: "sec-title", text: "PO file" }), h("p", { class: "hint", text: "Excel in Rubato's PO template: a \"PO\" sheet with the order details, one column per size and a TOTAL row. Fill in quantity per size on the lines for a complete PO." }), h("div", { class: "quick" }, h("button", { class: "btn small primary", type: "button", text: "Create PO file (Excel)", onclick: () => exportPoXlsx(current()) }))));
-    if (!isNew) body.push(h("section", null, h("h3", { class: "sec-title", text: "History" }), logUl));
+    const noteIn = attachMentions(inp("f_pnote", "", { placeholder: NOTE_PH, autocomplete: "off" }));
+    const addNote = async () => { if (!isNew) await addComment("po", current(), noteIn); };
+    noteIn.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); addNote(); } });
+    if (!isNew) body.push(h("section", null, h("h3", { class: "sec-title", text: "History" }), logUl, ro ? null : h("div", { class: "add-note" }, noteIn, h("button", { class: "btn small", type: "button", text: "Add", onclick: addNote }))));
     openSheet({
       flagRef: isNew ? null : { typ: "po", ref: po._id, titel: (po.nr || po._id) + (po.leverantor ? " · " + po.leverantor : ""), tab: "produktion" },
       tag: isNew ? "New" : poStatusNorm(po.status),
@@ -3456,6 +3460,13 @@ import * as P from "./platform.js";
     return res.json();
   }
 
+  // @-taggning i kommentarer: direktmejl till dem som taggats. Servern läser loggraden själv och skickar högst en gång per kommentar.
+  async function hostedNotifyMention(coll, id, t) {
+    const { data: { session } } = await P.supabase.auth.getSession();
+    const res = await fetch("/api/omnamn", { method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer " + (session ? session.access_token : "") }, body: JSON.stringify({ coll, id, t }) });
+    if (!res.ok) return null;
+    return res.json();
+  }
   // ---------- COO: matrisvy (hosted-only) ----------
   // Kritisk linje per drop och per event. Rader = föräldrar (hor_till tom, matris satt), kolumner = mallens faser
   // (installningar "planeringsmallar"), celler = barnen (hor_till = förälderns id, fas = kolumnens fas).
@@ -4213,6 +4224,63 @@ import * as P from "./platform.js";
   }
   function notifyReady(id) { try { if (typeof hostedNotifyReady === "function") Promise.resolve(hostedNotifyReady(id)).catch((e) => console.error(e)); } catch (e) { console.error(e); } }
   async function notifyFlag(id) { try { if (typeof hostedNotifyFlag === "function") return await hostedNotifyFlag(id); } catch (e) { console.error(e); } return null; }
+
+  // ---------- @-TAGGNING I KOMMENTARER ----------
+  // Skriv @ i en kommentar (Historik på sample, style, PO och lager) så föreslås teamet. Den som taggas får ett
+  // direktmejl (bara hostad, /api/omnamn); går det inte kommer taggningen med i mejlet kl. 10.
+  // De taggade sparas på loggraden (fältet till); texten sparas precis som den skrevs.
+  const NOTE_PH = "Comment – type @ to tag someone (they get an email)";
+  const MENTION_ALIAS = { alexander: "alex", calle: "carl", karl: "carl" };
+  function mentionKeys(text) {
+    const out = [];
+    for (const m of String(text || "").matchAll(/@([A-Za-zÅÄÖåäö]+)/g)) { const n = norm(m[1]); const k = MENTION_ALIAS[n] || n; if (FLAG_PEOPLE.some((p) => p[0] === k) && !out.includes(k)) out.push(k); }
+    return out;
+  }
+  async function notifyMention(coll, id, t) { try { if (typeof hostedNotifyMention === "function") return await hostedNotifyMention(coll, id, t); } catch (e) { console.error(e); } return null; }
+  function attachMentions(input) {
+    let pop = null, list = [], idx = 0, start = -1;
+    const close = () => { list = []; if (pop) pop.hidden = true; };
+    const pick = (k) => {
+      const pos = input.selectionStart == null ? input.value.length : input.selectionStart;
+      const before = input.value.slice(0, start) + "@" + personName(k) + " ";
+      input.value = before + input.value.slice(pos).replace(/^[A-Za-zÅÄÖåäö]*/, "");
+      input.setSelectionRange(before.length, before.length); close(); input.focus();
+    };
+    const render = () => {
+      if (!pop) { pop = h("div", { class: "mention-pop", role: "listbox" }); (input.parentElement || document.body).append(pop); }
+      pop.replaceChildren(...list.map((k, i) => h("button", { type: "button", role: "option", class: i === idx ? "on" : "", text: "@" + personName(k), onmousedown: (e) => { e.preventDefault(); pick(k); } })));
+      pop.hidden = !list.length;
+    };
+    input.addEventListener("input", () => {
+      const pos = input.selectionStart == null ? input.value.length : input.selectionStart;
+      const m = /(^|\s)@([A-Za-zÅÄÖåäö]*)$/.exec(input.value.slice(0, pos));
+      if (!m) { close(); return; }
+      start = pos - m[2].length - 1; const q = norm(m[2]); const me = myKey();
+      list = FLAG_PEOPLE.map((p) => p[0]).filter((k) => k !== me && (norm(personName(k)).startsWith(q) || Object.keys(MENTION_ALIAS).some((a) => MENTION_ALIAS[a] === k && a.startsWith(q))));
+      idx = 0; render();
+    });
+    // capture: körs före fältets egen Enter (som sparar kommentaren) och före Escape som stänger arket
+    input.addEventListener("keydown", (e) => {
+      if (!list.length || !pop || pop.hidden) return;
+      if (e.key === "ArrowDown" || e.key === "ArrowUp") { e.preventDefault(); idx = (idx + (e.key === "ArrowDown" ? 1 : -1) + list.length) % list.length; render(); }
+      else if (e.key === "Enter" || e.key === "Tab") { e.preventDefault(); e.stopImmediatePropagation(); pick(list[idx]); }
+      else if (e.key === "Escape") { e.preventDefault(); e.stopImmediatePropagation(); close(); }
+    }, true);
+    input.addEventListener("blur", () => setTimeout(close, 150));
+    return input;
+  }
+  async function addComment(coll, cur, input) {
+    const t = input.value.trim(); if (!t || !cur || !cur._id) return false;
+    const e = logEntry(t); const till = mentionKeys(t).filter((k) => k !== myKey()); if (till.length) e.till = till;
+    if (!(await write(coll, cur._id, { logg: (cur.logg || []).concat(e), andrad: e.t }))) return false;
+    input.value = "";
+    if (till.length) {
+      const names = till.map(personName).join(", ");
+      const res = await notifyMention(coll, cur._id, e.t);
+      toast(res && res.skickat ? "Comment saved – email sent to " + names : "Comment saved – " + names + " will get it in the 10:00 email");
+    }
+    return true;
+  }
   function openFlag(o) {
     const fText = h("textarea", { id: "f_flagtext", rows: 4, placeholder: "What is the problem, and what needs to happen?" });
     const me = myKey(); const pre = (TAB_OWNER[o.tab] || []).filter((k) => k !== me);
@@ -4435,7 +4503,7 @@ import * as P from "./platform.js";
       if (bits.length) { remind.hidden = false; remind.textContent = bits.join(" "); }
     }
     const logUl = h("ul", { class: "log" });
-    const noteIn = inp("f_note", "", { placeholder: "Note, e.g. Emailed about the buttons" });
+    const noteIn = attachMentions(inp("f_note", "", { placeholder: NOTE_PH, autocomplete: "off" }));
     noteIn.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); addNote(); } });
     const noteRow = h("div", { class: "add-note" }, noteIn, h("button", { class: "btn small", type: "button", text: "Add", onclick: () => addNote() }));
     const current = () => (isNew ? null : byId(D.samples, s._id));
@@ -4494,10 +4562,7 @@ import * as P from "./platform.js";
       toast(nid + " created as " + body.version);
       openSample(nid);
     }
-    async function addNote() {
-      const t = noteIn.value.trim(); const cur = current(); if (!t || !cur) return;
-      if (await write("samples", cur._id, { logg: (cur.logg || []).concat(logEntry(t)), andrad: new Date().toISOString() })) noteIn.value = "";
-    }
+    async function addNote() { await addComment("samples", current(), noteIn); }
     async function save() {
       const btn = $("btnSave"); if (btn) btn.disabled = true;
       try {
@@ -4817,7 +4882,7 @@ import * as P from "./platform.js";
     }
 
     const logUl = h("ul", { class: "log" });
-    const noteIn = inp("f_snote", "", { placeholder: "Note about the style" });
+    const noteIn = attachMentions(inp("f_snote", "", { placeholder: NOTE_PH, autocomplete: "off" }));
     // ---- Shopify: produktdata och push (hosted-only, ligger utanför artefaktens datamodell) ----
     const sh = (P.hosted().shopify || {})[st._id] || {};
     const fargRaderOf = () => (P.hosted().farger || {})[st._id] || [];
@@ -4904,7 +4969,7 @@ import * as P from "./platform.js";
     const shopSec = h("section", { class: "shop-sec" }, h("h3", { class: "sec-title", text: "Shopify" }), isNew ? h("p", { class: "hint", text: "Save the style first." }) : shopForm, isNew ? null : fargSec, isNew ? null : resultBox);
     if (!isNew) renderFarger();
 
-    const addNote = async () => { const t = noteIn.value.trim(); const cur = current(); if (!t || isNew) return; if (await write("styles", cur._id, { logg: (cur.logg || []).concat(logEntry(t)), andrad: new Date().toISOString() })) noteIn.value = ""; };
+    const addNote = async () => { if (!isNew) await addComment("styles", current(), noteIn); };
     noteIn.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); addNote(); } });
 
     async function collect() {
@@ -5082,11 +5147,10 @@ import * as P from "./platform.js";
 
     const quick = h("div", { class: "quick" });
     const logUl = h("ul", { class: "log" });
-    const noteIn = inp("f_lnote", "", { placeholder: "Note, e.g. Roberto counted 12 m" });
+    const noteIn = attachMentions(inp("f_lnote", "", { placeholder: NOTE_PH, autocomplete: "off" }));
     noteIn.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); addNote(); } });
     async function addNote() {
-      const t = noteIn.value.trim(); const cur = current(); if (!t || isNew) return;
-      if (await write("tyglager", cur._id, { logg: (cur.logg || []).concat(logEntry(t)), andrad: new Date().toISOString() })) noteIn.value = "";
+      if (!isNew) await addComment("tyglager", current(), noteIn);
     }
     function renderQuick() {
       const cur = current();
