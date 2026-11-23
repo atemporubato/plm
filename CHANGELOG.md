@@ -6,6 +6,12 @@ och importeras med `node tools/import-dokument.js`, och main går live på plm.a
 
 Versionsnumrering: små ändringar ger punktversion (v9.1, v9.2 …). Nytt heltal (v10) bara vid stora ändringar.
 
+## Shopify-bilder via servern (2026-11-23)
+
+"Hämta Shopify-bilder" fungerar även när webbläsaren inte får läsa bilden. Artefakten oförändrad (v10.11), ingen data ändras.
+- Ny serverfunktion api/bild.js: hämtar bilden åt den inloggade. Bara Rubatos Shopify-adresser (cdn.shopify.com, atemporubato.com, *.myshopify.com). Är adressen en produktsida används sidans huvudbild.
+- tools/hosted/bild.js + tools/build.mjs: appen provar först direkt, annars via /api/bild. Felmeddelandet säger nu vad som gick fel per style i stället för att skylla på säkerhetsregler (det gällde bara i Claude-artefakten).
+
 ## v10.11 (2026-11-23)
 
 Färre PO-lägen och renare PO-kort. Ingen data skrivs om: äldre statusar läses om när de visas.

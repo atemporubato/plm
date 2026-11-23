@@ -487,19 +487,18 @@ import * as P from "./platform.js";
     for (const s0 of todo) {
       try {
         const u = new URL(shopUrl(s0)); u.searchParams.set("width", "1200");
-        const resp = await fetch(u.toString(), { mode: "cors" });
-        if (!resp.ok) throw new Error("http " + resp.status);
-        const blob = await resp.blob();
+        const blob = await hostedBild(u.toString());
         const file = new File([blob], "shopify.jpg", { type: blob.type || "image/jpeg" });
         const small = await shrinkImage(file, 1600);
+        if (!small) throw new Error("Not an image");
         const r = await assets.upload(small, small.type ? undefined : { type: "image/jpeg" });
         const cur = byId(D.styles, s0._id) || s0;
         const now = new Date().toISOString();
         if (await write("styles", s0._id, { bilder: docImages(cur).concat([r.id]), bildId: cur.bildId || r.id, andrad: now, logg: (cur.logg || []).concat(logEntry("Shopify image fetched into the app: " + shopTitle(cur))) })) ok++; else { fail++; failed.push(s0.namn); }
-      } catch (e) { fail++; failed.push(s0.namn); }
+      } catch (e) { fail++; failed.push(s0.namn + " – " + String((e && e.message) || e).slice(0, 120)); }
       banner("Fetching images … " + (ok + fail) + " of " + todo.length);
     }
-    banner(fail ? "Could not fetch " + fail + " of " + todo.length + " images (" + failed.slice(0, 4).join(", ") + (failed.length > 4 ? " …" : "") + "). The app's security rules block fetching from cdn.shopify.com – the images then have to be added through Claude." : "");
+    banner(fail ? "Could not fetch " + fail + " of " + todo.length + " images (" + failed.slice(0, 4).join(", ") + (failed.length > 4 ? " …" : "") + "). Check the Shopify address on the style, or upload the image yourself." : "");
     if (ok) extImg = null;
     toast(ok + (ok === 1 ? " image fetched" : " images fetched") + (fail ? ", " + fail + " failed" : ""));
     renderActions();
@@ -3519,6 +3518,18 @@ import * as P from "./platform.js";
     const res = await fetch("/api/omnamn", { method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer " + (session ? session.access_token : "") }, body: JSON.stringify({ coll, id, t }) });
     if (!res.ok) return null;
     return res.json();
+  }
+  // ---------- SHOPIFY-BILD: hämtas direkt, annars via servern (bara hostad) ----------
+  // Webbläsaren får inte alltid läsa bilder från Shopify (CORS), och en produktsida är ingen bild. Då hämtar /api/bild den i stället.
+  async function hostedBild(url) {
+    try {
+      const resp = await fetch(url, { mode: "cors" });
+      if (resp.ok) { const b = await resp.blob(); if (/^image\//.test(b.type)) return b; }
+    } catch (e) {}
+    const { data: { session } } = await P.supabase.auth.getSession();
+    const res = await fetch("/api/bild", { method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer " + (session ? session.access_token : "") }, body: JSON.stringify({ url }) });
+    if (!res.ok) { let msg = "HTTP " + res.status; try { msg = (await res.json()).error || msg; } catch (e) {} throw new Error(msg); }
+    return res.blob();
   }
   // ---------- COO: matrisvy (hosted-only) ----------
   // Kritisk linje per drop och per event. Rader = föräldrar (hor_till tom, matris satt), kolumner = mallens faser
