@@ -6,6 +6,13 @@ och importeras med `node tools/import-dokument.js`, och main går live på plm.a
 
 Versionsnumrering: små ändringar ger punktversion (v9.1, v9.2 …). Nytt heltal (v10) bara vid stora ändringar.
 
+## v10.19 (2026-11-24)
+
+Lager: nytt fält "Passar" på varje parti (nytt fält passar; inget befintligt fält ändras).
+- Partiet får fältet "Passar" (vilka produkter det kan användas till, t.ex. "Walking Coat, Big Coat").
+- I lagerlistan visas det i fetstil som ingress överst i kommentarskolumnen: "Passar: …".
+- Sökbart i lagerfliken och med som egen kolumn i CSV-exporten.
+
 ## v10.18 (2026-11-24)
 
 Mejl avstängt tills vidare (Elliot 24 nov). Flaggning är kvar, i appen.

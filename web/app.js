@@ -2746,7 +2746,7 @@ import * as P from "./platform.js";
         }
         if (!typOk(l)) return false;
         if (st.plats && l.plats !== st.plats) return false;
-        if (q && ![l._id, lotName(l), l.farg, l.storlek, isTrims(l) ? "trims" : "tyg", l.plats, l.kommentar, reservedName(l), l.status].join(" ").toLowerCase().includes(q)) return false;
+        if (q && ![l._id, lotName(l), l.farg, l.storlek, isTrims(l) ? "trims" : "tyg", l.plats, l.passar, l.kommentar, reservedName(l), l.status].join(" ").toLowerCase().includes(q)) return false;
         return true;
       });
       const keyOf = st.group === "plats" ? (l) => l.plats || "No location" : st.group === "tyg" ? (l) => lotName(l) : () => "";
@@ -2800,7 +2800,7 @@ import * as P from "./platform.js";
       td("Reserved for", null, reservedName(l) || ""),
       td("Updated", "mono", isISO(upd) ? fmtDate(upd) : ""),
       td("Status", "c-status", h("span", { class: "pill ls-" + slug(l.status || "x"), text: l.status || "–" })),
-      td("Comment", "note", l.kommentar || "")
+      td("Comment", "note", l.passar ? h("span", { class: "fits", text: "Fits: " + l.passar }) : null, l.kommentar || "")
     );
     return tr;
   }
@@ -5290,7 +5290,7 @@ import * as P from "./platform.js";
   }
 
   // ---------- fabric lot sheet ----------
-  const L_LABELS = { tygId: "Tyg", farg: "Colour", plats: "Location", status: "Status", inkoptMeter: "Purchased (m)", meter: "Left (m)", bredd: "Width (cm)", prisPerMeter: "Price per metre", prisValuta: "Currency", inkopt: "Purchased", reserveradFor: "Reserved for", kommentar: "Comment", typ: "Typ", tygNamn: "Item", storlek: "Size", inkoptAntal: "Purchased (pcs)", antal: "Left (pcs)", prisPerSt: "Price per pc" };
+  const L_LABELS = { passar: "Fits", tygId: "Tyg", farg: "Colour", plats: "Location", status: "Status", inkoptMeter: "Purchased (m)", meter: "Left (m)", bredd: "Width (cm)", prisPerMeter: "Price per metre", prisValuta: "Currency", inkopt: "Purchased", reserveradFor: "Reserved for", kommentar: "Comment", typ: "Typ", tygNamn: "Item", storlek: "Size", inkoptAntal: "Purchased (pcs)", antal: "Left (pcs)", prisPerSt: "Price per pc" };
   function openLager(id, preset) {
     if (designOnly()) return;
     const isNew = !id;
@@ -5317,7 +5317,8 @@ import * as P from "./platform.js";
     fInkSt.addEventListener("change", () => { if (isNew && !fKvarSt.value && fInkSt.value) fKvarSt.value = fInkSt.value; });
     const styleOpts = [["", "– None –"]].concat(D.styles.filter((s) => isActiveStyle(s) || s._id === l.reserveradFor).sort((a, b) => (a.namn || "").localeCompare(b.namn || "", "sv")).map((s) => [s._id, s.namn + (s.sasong ? " · " + s.sasong : "")]));
     const fRes = selectEl("f_lres", styleOpts, l.reserveradFor || "");
-    const fKom = area("f_lkom", l.kommentar, "E.g. what the batch is intended for, or where the metre figure comes from");
+    const fPassar = inp("f_lpassar", l.passar, { placeholder: "e.g. Walking Coat, Big Coat" });
+    const fKom = area("f_lkom", l.kommentar, "E.g. where the metre count comes from, or what has been ordered");
     fInk.addEventListener("change", () => { if (isNew && !fKvar.value && fInk.value) fKvar.value = fInk.value; });
     const fArt = field("Tyg", fTyg, { full: true, hint: "Type freely or choose a fabric that already exists." });
     const fsTyg = [h("h3", { class: "sec-title full", text: "Metres" }), field("Purchased (m)", fInk), field("Left (m, approx.)", fKvar, { hint: "Empty = not known yet" }), field("Width (cm)", fBredd), field("Price per metre", fPris)];
@@ -5329,6 +5330,7 @@ import * as P from "./platform.js";
       field("Reserved for", fRes), field("Purchase date", fInkDate),
       ...fsTyg, ...fsTrims,
       field("Currency", fVal),
+      field("Fits", fPassar, { full: true, hint: "Which products the batch can be used for. Shown in bold first in the list." }),
       field("Comment", fKom, { full: true }));
     const syncTyp = () => {
       const t = fTyp.value === "trims";
@@ -5389,12 +5391,12 @@ import * as P from "./platform.js";
         if (!plats) { toast(trims ? "Write where the item is." : "Write where the fabric is."); fPlats.focus(); return; }
         let o;
         if (trims) {
-          o = { typ: "trims", tygId: null, tygNamn: name, farg: fFarg.value.trim(), storlek: fStorlek.value.trim(), plats, status: fStatus.value, inkoptAntal: num(fInkSt.value), antal: num(fKvarSt.value), prisPerSt: num(fPrisSt.value), prisValuta: fVal.value || null, inkopt: fInkDate.value || null, reserveradFor: fRes.value || null, kommentar: fKom.value.trim() };
+          o = { typ: "trims", tygId: null, tygNamn: name, farg: fFarg.value.trim(), storlek: fStorlek.value.trim(), plats, status: fStatus.value, inkoptAntal: num(fInkSt.value), antal: num(fKvarSt.value), prisPerSt: num(fPrisSt.value), prisValuta: fVal.value || null, inkopt: fInkDate.value || null, reserveradFor: fRes.value || null, passar: fPassar.value.trim(), kommentar: fKom.value.trim() };
         } else {
           const tygId = await resolveTyg(name, "");
           if (!tygId) return;
           const tt = byId(D.tyger, tygId);
-          o = { typ: "tyg", tygId, tygNamn: tt ? tt.namn : name, farg: fFarg.value.trim(), plats, status: fStatus.value, inkoptMeter: num(fInk.value), meter: num(fKvar.value), bredd: num(fBredd.value), prisPerMeter: num(fPris.value), prisValuta: fVal.value || null, inkopt: fInkDate.value || null, reserveradFor: fRes.value || null, kommentar: fKom.value.trim() };
+          o = { typ: "tyg", tygId, tygNamn: tt ? tt.namn : name, farg: fFarg.value.trim(), plats, status: fStatus.value, inkoptMeter: num(fInk.value), meter: num(fKvar.value), bredd: num(fBredd.value), prisPerMeter: num(fPris.value), prisValuta: fVal.value || null, inkopt: fInkDate.value || null, reserveradFor: fRes.value || null, passar: fPassar.value.trim(), kommentar: fKom.value.trim() };
         }
         const q0 = trims ? o.antal : o.meter;
         const now = new Date().toISOString();
@@ -5534,8 +5536,8 @@ import * as P from "./platform.js";
     saveFile("Rubato_Samples_" + todayISO() + ".csv", csv(["Sample ID", "Style", "Version", "Supplier", "Colour", "Tyg", "Size", "Price", "Currency", "Beställd", "Lead time (days)", "Expected delivery", "Status", "Mottagen", "Location", "Location note", "Decision", "Style status", "Changes", "Tracking", "R1 sent", "R2 sent", "Season", "Drop", "Comment"], rows));
   }
   function exportLager() {
-    const rows = D.lager.slice().sort((a, b) => (a.plats || "").localeCompare(b.plats || "", "sv") || a._id.localeCompare(b._id)).map((l) => [l._id, isTrims(l) ? "Trims" : "Tyg", lotName(l), l.farg, l.storlek, l.plats, l.status, isTrims(l) ? "pcs" : "m", isTrims(l) ? l.inkoptAntal : l.inkoptMeter, isTrims(l) ? l.antal : l.meter, l.bredd, isTrims(l) ? l.prisPerSt : l.prisPerMeter, l.prisValuta, l.inkopt, reservedName(l), l.raknad, l.kommentar]);
-    saveFile("Rubato_Lager_" + todayISO() + ".csv", csv(["Batch ID", "Type", "Item", "Colour", "Size", "Located at", "Status", "Unit", "Purchased", "Left", "Width (cm)", "Price per unit", "Currency", "Purchase date", "Reserved for", "Last counted", "Comment"], rows));
+    const rows = D.lager.slice().sort((a, b) => (a.plats || "").localeCompare(b.plats || "", "sv") || a._id.localeCompare(b._id)).map((l) => [l._id, isTrims(l) ? "Trims" : "Tyg", lotName(l), l.farg, l.storlek, l.plats, l.status, isTrims(l) ? "pcs" : "m", isTrims(l) ? l.inkoptAntal : l.inkoptMeter, isTrims(l) ? l.antal : l.meter, l.bredd, isTrims(l) ? l.prisPerSt : l.prisPerMeter, l.prisValuta, l.inkopt, reservedName(l), l.raknad, l.passar, l.kommentar]);
+    saveFile("Rubato_Lager_" + todayISO() + ".csv", csv(["Batch ID", "Type", "Item", "Colour", "Size", "Located at", "Status", "Unit", "Purchased", "Left", "Width (cm)", "Price per unit", "Currency", "Purchase date", "Reserved for", "Last counted", "Fits", "Comment"], rows));
   }
   function exportStyleEan(st) {
     saveFile("EAN_" + safeName(st.namn) + ".csv", csv(["Product", "Colour", "Size", "EAN"], (st.ean || []).map((e) => [st.namn, e.farg, e.storlek, e.ean])));

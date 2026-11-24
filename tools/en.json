@@ -1650,7 +1650,12 @@
   "Flaggan gäller": "Flag is for",
   "Flaggad – ligger överst i fliken tills den är löst": "Flagged – stays at the top of the tab until resolved",
   "Ligger överst i fliken tills det är löst": "Stays at the top of the tab until it is resolved",
-  "Flagga med kommentar – ligger överst i fliken tills det är löst": "Flag with a comment – stays at the top of the tab until resolved"
+  "Flagga med kommentar – ligger överst i fliken tills det är löst": "Flag with a comment – stays at the top of the tab until resolved",
+  "Passar": "Fits",
+  "Passar:": "Fits:",
+  "t.ex. Walking Coat, Big Coat": "e.g. Walking Coat, Big Coat",
+  "Vilka produkter partiet kan användas till. Visas i fetstil först i listan.": "Which products the batch can be used for. Shown in bold first in the list.",
+  "T.ex. varifrån metertalet kommer, eller vad som är beställt": "E.g. where the metre count comes from, or what has been ordered"
  },
  "values": {
   "Storleksset": "Size set",
