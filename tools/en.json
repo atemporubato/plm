@@ -1671,7 +1671,19 @@
   "Mått ändrade i design:": "Measurements changed in design:",
   "(utgick från": "(started from",
   "· flaggat till Carl och Alex": "· flagged to Carl and Alex",
-  "fler": "more"
+  "fler": "more",
+  "Ändrade värden markeras gult. När du sparar skrivs en kommentar med vem som ändrade och vad.": "Changed values are highlighted in yellow. When you save, a comment is added saying who changed what.",
+  "Ändrade värden markeras gult. När du sparar skrivs en kommentar med vem som ändrade och vad, och Carl och Alex får en flagga.": "Changed values are highlighted in yellow. When you save, a comment is added saying who changed what, and Carl and Alex get a flag.",
+  "Mått ändrade av": "Measurements changed by",
+  "okänd": "unknown",
+  "Egna mått (utgick från": "Own measurements (started from",
+  "Klistra in från Excel eller skriv en rad per mått, t.ex.\nBröstvidd (M) 56\nÄrmlängd 64\nRygglängd 72": "Paste from Excel or type one measurement per line, e.g.\nChest (M) 56\nSleeve length 64\nBack length 72",
+  "Egna mått – utgår från": "Own measurements – based on",
+  "· alla mått i cm": "· all measurements in cm",
+  "Måttlista som text": "Measurement list as text",
+  "Klistra in hela tabellen från Excel här – tabellen ovanför uppdateras direkt.": "Paste the whole table from Excel here – the table above updates straight away.",
+  "Klistra in eller skriv som text": "Paste or type as text",
+  "Måttlista ändrad": "Measurement list changed"
  },
  "values": {
   "Storleksset": "Size set",

@@ -4100,30 +4100,35 @@ import * as P from "./platform.js";
     return out;
   }
   // Tabellen. Med edit=true går värdena att ändra och nya mått att lägga till; get() ger den ändrade listan.
-  function mattTable(m0, edit) {
-    const m = JSON.parse(JSON.stringify(m0));
+  function mattTable(m0, edit, opts) {
+    opts = opts || {};
+    let m = JSON.parse(JSON.stringify(opts.start || m0));
     if (!m.storlekar.length) m.storlekar = [""];
+    for (const x of m0.storlekar) if (!m.storlekar.includes(x)) m.storlekar.push(x);
+    const changed = () => { if (opts.onChange) opts.onChange(); };
     const wrap = h("div");
     const draw = () => {
       const head = h("tr", null, h("th", { class: "n", text: "#" }), h("th", { class: "pom", text: "Measurements" }), m.storlekar.map((x) => h("th", { text: x || "cm" })));
       const body = m.rader.map((r, i) => h("tr", null, h("td", { class: "n", text: String(i + 1) }),
-        r.nytt && edit ? h("td", { class: "pom has-input" }, (() => { const e = h("input", { type: "text", value: r.namn, placeholder: "Measurement name", "aria-label": "Measurement name" }); e.addEventListener("input", () => { r.namn = e.value; }); return e; })()) : h("td", { class: "pom", text: pomName(r.namn) }),
+        r.nytt && edit ? h("td", { class: "pom has-input" }, (() => { const e = h("input", { type: "text", value: r.namn, placeholder: "Measurement name", "aria-label": "Measurement name" }); e.addEventListener("input", () => { r.namn = e.value; changed(); }); return e; })()) : h("td", { class: "pom", text: pomName(r.namn) }),
         m.storlekar.map((sz) => {
           if (!edit) return h("td", { class: "v", text: r.v[sz] || "–" });
           const orig = (m0.rader.find((x) => x.namn === r.namn) || { v: {} }).v[sz] || "";
           const td = h("td", { class: "v has-input" });
           const e = h("input", { type: "text", inputmode: "decimal", value: r.v[sz] || "", "aria-label": pomName(r.namn) + (sz ? " " + sz : "") });
           const mark = () => td.classList.toggle("changed", (r.v[sz] || "") !== orig || !!r.nytt && !!r.v[sz]);
-          e.addEventListener("input", () => { r.v[sz] = e.value.trim(); mark(); });
+          e.addEventListener("input", () => { r.v[sz] = e.value.trim(); mark(); changed(); });
           td.append(e); mark(); return td;
         })));
       const table = h("table", { class: "matt" }, h("thead", null, head), h("tbody", null, body.length ? body : [h("tr", null, h("td", { class: "pom matt-empty", colspan: String(m.storlekar.length + 2), text: "No measurements yet." }))]));
       wrap.replaceChildren(h("div", { class: "matt-wrap" }, table),
-        edit ? h("div", { class: "matt-foot" }, h("button", { class: "btn small", type: "button", text: "+ Add measurement", onclick: () => { m.rader.push({ namn: "", v: {}, nytt: true }); draw(); const ins = wrap.querySelectorAll("td.pom input"); if (ins.length) ins[ins.length - 1].focus(); } }), h("span", { class: "hint", text: "Changed values are highlighted in yellow. When you save, Carl and Alex get a flag with the changes." })) : null);
+        edit ? h("div", { class: "matt-foot" }, h("button", { class: "btn small", type: "button", text: "+ Add measurement", onclick: () => { m.rader.push({ namn: "", v: {}, nytt: true }); draw(); const ins = wrap.querySelectorAll("td.pom input"); if (ins.length) ins[ins.length - 1].focus(); } }), h("span", { class: "hint", text: opts.hint || "Changed values are highlighted in yellow. When you save, a comment is added saying who changed what." })) : null);
     };
     draw();
-    return { el: wrap, get: () => ({ kalla: m.kalla, noter: m.noter, storlekar: m.storlekar, rader: m.rader.filter((r) => r.namn.trim() && m.storlekar.some((x) => r.v[x])).map((r) => ({ namn: r.namn.trim(), v: r.v })) }) };
+    return { el: wrap, set: (nm) => { m = JSON.parse(JSON.stringify(nm)); if (!m.storlekar.length) m.storlekar = [""]; draw(); }, get: () => ({ kalla: m.kalla, noter: m.noter, storlekar: m.storlekar, rader: m.rader.filter((r) => r.namn.trim() && m.storlekar.some((x) => r.v[x])).map((r) => ({ namn: r.namn.trim(), v: r.v })) }) };
   }
+  // Automatisk kommentar när måtten ändras: vem och vad. Syns under Kommentarer på stylen och i historiken.
+  const mattComment = (andr) => Object.assign(logEntry("Measurements changed by " + (myName || personName(myKey()) || "unknown") + ": " + andr.slice(0, 12).join("; ") + (andr.length > 12 ? " … and " + (andr.length - 12) + " more" : "")), { kom: true });
   // Flagga till Carl och Alex från design-arket. Syns i både Idéer (Carl) och Samples (Alex) tills den är löst.
   async function designFlag(st, text) {
     const till = ["carl", "alex"].filter((k) => k !== myKey()); if (!till.length) return false;
@@ -4150,7 +4155,7 @@ import * as P from "./platform.js";
     const egen = String(st.mattlista || "").trim();
     const mattKalla = egen ? st.mattlista : refSt ? refSt.mattlista || "" : "";
     const matt0 = parseMatt(mattKalla);
-    const mattTab = mattTable(matt0, !ro);
+    const mattTab = mattTable(matt0, !ro, { hint: "Changed values are highlighted in yellow. When you save, a comment is added saying who changed what, and Carl and Alex get a flag." });
     const mattSrc = [matt0.kalla ? "From the shop: " + matt0.kalla : "", !egen && st.mattFran ? "Same measurements as " + refName(st.mattFran) + (refSt && String(refSt.mattlista || "").trim() ? "" : " – that style has no measurements entered") : "", "all measurements in cm"].filter(Boolean).join(" · ");
     const mattSec = h("section", null, h("h3", { class: "sec-title", text: "Measurements" }), h("p", { class: "matt-src", text: mattSrc }),
       matt0.noter.length ? h("p", { class: "matt-notes", text: matt0.noter.join("\n") }) : null,
@@ -4180,7 +4185,7 @@ import * as P from "./platform.js";
       if (mattAndr.length) {
         patch.mattlista = mattText(mattNy);
         if (!egen && cur.mattFran) patch.mattFran = "";
-        patch.logg = (patch.logg || cur.logg || []).concat(logEntry("Measurements changed in design: " + mattAndr.join("; ") + (!egen && cur.mattFran ? " (started from " + refName(cur.mattFran) + ")" : "")));
+        patch.logg = (patch.logg || cur.logg || []).concat(!egen && cur.mattFran ? [logEntry("Own measurements (started from " + refName(cur.mattFran) + ")")] : [], [mattComment(mattAndr)]);
       }
       const ok = await write("styles", id, patch);
       if (btn) btn.disabled = false;
@@ -4933,6 +4938,7 @@ import * as P from "./platform.js";
   }
 
   // ---------- style sheet ----------
+  const ST_LABELS_UTAN_MATT = new Proxy({}, { has: (t, k) => k !== "mattlista" && k in ST_LABELS, get: (t, k) => ST_LABELS[k] });
   const ST_LABELS = { shopifyBild: "Shopify image", ecomBilder: "E-com images", ecomPlatDatum: "E-com shoot", kampanjStatus: "Campaign shoot", kampanjDatum: "Campaign shoot date", bildId: "Main image", namn: "Name", leverantor: "Supplier", sasong: "Season", drop: "Drop", typ: "Typ", kategori: "Category", status: "Status", klartSenast: "In stock by", fotoSenast: "Photo sample by", kommentar: "Comment", farger: "Colours", storlekar: "Sizes", beskrivning: "Description", tygId: "Tyg", grund: "Base style", grundId: "Variant of", mattFran: "Measurements from", mattlista: "Measurement list", referenser: "References" };
   function openStyle(id, preset, opts) {
     const isNew = !id;
@@ -4970,8 +4976,27 @@ import * as P from "./platform.js";
       .concat(D.styles.filter((x) => x._id !== st._id && !["Kastad"].includes(styleStatusNorm(x.status))).sort((a, b) => (a.namn || "").localeCompare(b.namn || "", "sv")).map((x) => [x._id, x.namn + (x.sasong ? " · " + x.sasong : "") + " (style)"]))
       .concat(D.samples.filter((x) => x.mattGodkanda === true || x.status === "Mottagen").sort((a, b) => styleName(a).localeCompare(styleName(b), "sv")).map((x) => [x._id, styleName(x) + (x.version ? " · " + x.version : "") + " (" + x._id + ")"]));
     const fMattFran = selectEl("f_smattfran", mattOpts, st.mattFran || "");
-    const fMatt = area("f_smatt", st.mattlista, "One line per measurement, e.g.\nChest (M) 56\nSleeve length 64\nBack length 72");
+    const fMatt = area("f_smatt", st.mattlista, "Paste from Excel or type one measurement per line, e.g.\nChest (M) 56\nSleeve length 64\nBack length 72");
+    // Måtten som tabell, redigerbar för alla som får redigera. Texten (fMatt) är fortfarande det som sparas.
+    const mattEff = (fran, text) => (String(text || "").trim() ? text : fran && byId(D.styles, fran) ? byId(D.styles, fran).mattlista || "" : "");
+    const mattStart = parseMatt(mattEff(st.mattFran, st.mattlista));
+    let mattFranLast = st.mattFran || "";
+    const mattTab = mattTable(mattStart, !ro, { onChange: () => {
+      fMatt.value = mattText(mattTab.get());
+      if (!String(st.mattlista || "").trim() && fMattFran.value) { mattFranLast = fMattFran.value; fMattFran.value = ""; mattSrcEl.textContent = "Own measurements – based on " + refName(mattFranLast) + " · all measurements in cm"; }
+    } });
+    const mattSrcEl = h("p", { class: "matt-src" });
+    const syncMattSrc = () => { const m = parseMatt(mattEff(fMattFran.value, fMatt.value)); mattSrcEl.textContent = [m.kalla ? "From the shop: " + m.kalla : "", !fMatt.value.trim() && fMattFran.value ? "Same measurements as " + refName(fMattFran.value) : "", "all measurements in cm"].filter(Boolean).join(" · "); };
+    const mattNotes = h("p", { class: "matt-notes" });
+    const reMatt = () => { const m = parseMatt(mattEff(fMattFran.value, fMatt.value)); mattTab.set(m); mattNotes.textContent = m.noter.join("\n"); mattNotes.hidden = !m.noter.length; syncMattSrc(); };
+    fMatt.addEventListener("input", reMatt);
+    const mattTextWrap = h("div", { class: "field full", hidden: true }, h("label", { for: "f_smatt", text: "Measurement list as text" }), fMatt, h("span", { class: "hint", text: "Paste the whole table from Excel here – the table above updates straight away." }));
+    const mattTextBtn = ro ? null : h("button", { class: "btn small", type: "button", text: "Paste or type as text", onclick: () => { mattTextWrap.hidden = !mattTextWrap.hidden; if (!mattTextWrap.hidden) fMatt.focus(); } });
+    const mattField = h("div", { class: "field full" }, mattSrcEl, mattNotes, mattTab.el, mattTextBtn ? h("div", { class: "matt-foot" }, mattTextBtn) : null);
+    { const m = parseMatt(mattEff(st.mattFran, st.mattlista)); mattNotes.textContent = m.noter.join("\n"); mattNotes.hidden = !m.noter.length; }
     const fRef = area("f_sref", st.referenser, "Reference garments, links, inspiration …");
+    fMattFran.addEventListener("change", () => { if (!fMatt.value.trim()) reMatt(); else syncMattSrc(); });
+    syncMattSrc();
     const fShop = inp("f_sshop", shopUrl(st), { placeholder: "https://cdn.shopify.com/… or the product page's image URL" });
     const dropHint = h("span", { class: "hint" });
     const syncDropHint = () => { const d = dropOf({ sasong: fSas.value.trim(), drop: fDrop.value.trim() }); dropHint.textContent = fDrop.value.trim() ? (d ? (isISO(d.lansering) ? "Launch " + fmtDate(d.lansering) + " · in stock by " + fmtDate(d.klartSenast) : isISO(d.klartSenast) ? "In stock by " + fmtDate(d.klartSenast) : "The drop has no launch date under Launches yet") : "Not a drop in " + (fSas.value.trim() || "the season") + " – set it up under Collection or Launches") : "Optional. Choose only a season if the drop is not decided."; };
@@ -4991,7 +5016,7 @@ import * as P from "./platform.js";
       h("h3", { class: "sec-title full", text: "Measurements" }),
       field("Use measurements from", fMattFran, { full: true, hint: "Refer to a garment whose measurements should be used, or write your own measurement list." }),
       hostedMattField(fMatt, fMattFran),
-      field("Measurement list", fMatt, { full: true }),
+      mattField, mattTextWrap,
       h("h3", { class: "sec-title full", text: "References" }),
       field("References and links", fRef, { full: true }),
       lean ? null : field("Image from Shopify (URL)", fShop, { full: true, hint: st.shopifyBild ? "Fetched from " + shopTitle(st) + (st.shopifyBild.handle ? " – atemporubato.com/products/" + st.shopifyBild.handle : "") + ". Used when the style has no images of its own; clear the field to remove." : "Paste an image URL from Shopify as a placeholder until there are own images." }),
@@ -5302,10 +5327,12 @@ import * as P from "./platform.js";
           return null;
         }
         const cur = current();
-        const changes = describeChanges(Object.assign({}, cur, { status: styleStatusNorm(cur.status) }), o, ST_LABELS);
+        const changes = describeChanges(Object.assign({}, cur, { status: styleStatusNorm(cur.status) }), o, ST_LABELS_UTAN_MATT);
         await saveShopFields();
-        if (!changes.length) { if (after) return after(cur._id); closeSheet(); return cur._id; }
-        if (await write("styles", cur._id, Object.assign({}, o, { andrad: now, logg: (cur.logg || []).concat(changes.map(logEntry)) }))) { if (after) return after(cur._id); toast("Saved"); closeSheet(); return cur._id; }
+        const mattAndr = mattChanges(parseMatt(mattEff(cur.mattFran, cur.mattlista)), parseMatt(mattEff(o.mattFran, o.mattlista)));
+        const extra = mattAndr.length ? [mattComment(mattAndr)] : String(cur.mattlista || "") !== String(o.mattlista || "") ? [logEntry("Measurement list changed")] : [];
+        if (!changes.length && !extra.length) { if (after) return after(cur._id); closeSheet(); return cur._id; }
+        if (await write("styles", cur._id, Object.assign({}, o, { andrad: now, logg: (cur.logg || []).concat(changes.map(logEntry), extra) }))) { if (after) return after(cur._id); toast("Saved"); closeSheet(); return cur._id; }
         return null;
       } finally { if (btn) btn.disabled = false; }
     }

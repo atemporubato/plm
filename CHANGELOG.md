@@ -6,6 +6,15 @@ och importeras med `node tools/import-dokument.js`, och main går live på plm.a
 
 Versionsnumrering: små ändringar ger punktversion (v9.1, v9.2 …). Nytt heltal (v10) bara vid stora ändringar.
 
+## v10.21 (2026-11-24)
+
+Måtten redigerbara för alla, med automatisk kommentar. Inget nytt fält; måtten sparas som förut i mattlista.
+- Stylens ark visar måtten som samma tabell som i Conors design-ark, redigerbar för alla som får redigera: ändra värden, lägg till mått. Ändrade värden markeras gult tills man sparar.
+- Textrutan finns kvar bakom knappen "Klistra in eller skriv som text" – klistrar man in från Excel uppdateras tabellen direkt. Butikens måttabeller ("Mått från butiken") fyller också tabellen.
+- När måtten ändras skrivs en automatisk kommentar: "Mått ändrade av <namn>: Bröstvidd: 126,5 → 127; …". Den syns under Kommentarer på stylen och i historiken. Gäller både stylens ark och Conors design-ark (där får Carl och Alex dessutom en flagga, som i v10.20).
+- Ändrar man i en lista som bara hänvisar till "samma mått som" en annan style blir måtten stylens egna och hänvisningen tas bort, så att originalet inte påverkas.
+- Den tidigare loggraden "Måttlista: <hela texten>" ersätts av kommentaren.
+
 ## v10.20 (2026-11-24)
 
 Conors design-ark: måtten som tabell, och kommentarer och måttändringar blir flaggor hos Carl och Alex. Inget nytt fält; måtten sparas som förut i mattlista.
