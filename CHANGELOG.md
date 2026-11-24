@@ -6,6 +6,17 @@ och importeras med `node tools/import-dokument.js`, och main går live på plm.a
 
 Versionsnumrering: små ändringar ger punktversion (v9.1, v9.2 …). Nytt heltal (v10) bara vid stora ändringar.
 
+## v10.20 (2026-11-24)
+
+Conors design-ark: måtten som tabell, och kommentarer och måttändringar blir flaggor hos Carl och Alex. Inget nytt fält; måtten sparas som förut i mattlista.
+- Måtten har en egen sektion under briefen, som tabell: nummer, mått och värde, en kolumn per storlek när måtten finns per storlek. Excel-inklistrade rader, butikens format ("S: Chest 54 · Length 70") och "Bröstvidd (M) 56" läses alla. Rader som inte är mått visas som noteringar ovanför. VERSALER från Excel visas som vanlig text (förkortningar som CB står kvar).
+- Har stylen "samma mått som" en annan style och inga egna mått visas den stylens tabell.
+- Conor kan ändra värden direkt i tabellen och lägga till mått. Ändrade värden markeras gult. När han sparar skrivs måtten tillbaka till stylens måttlista (vid "samma mått som" blir de stylens egna) och Carl och Alex får en flagga med ändringarna.
+- En ny kommentar i "Kommentar till Carl och Alex" blir en flagga hos Carl och Alex.
+- Flaggor från design-arket syns i både Idéer (Carl) och Samples (Alex) – nytt fält tabs på flaggan; äldre flaggor med bara tab fungerar som förut.
+- Den allmänna kommentarssektionen är borttagen ur design-arket, så det finns bara en kommentarsruta.
+- Måttraden i briefen är borttagen (ersatt av tabellen).
+
 ## v10.19 (2026-11-24)
 
 Lager: nytt fält "Passar" på varje parti (nytt fält passar; inget befintligt fält ändras).

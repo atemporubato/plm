@@ -529,6 +529,26 @@ table.ledger { width: 100%; border-collapse: collapse; min-width: 960px; }
 .brief-row { display: grid; grid-template-columns: 170px 1fr; gap: 12px; padding: 9px 0; border-bottom: 1px solid var(--line); }
 .brief-row .k { font-family: var(--f-label); font-size: 10px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); padding-top: 3px; }
 .brief-row .v { white-space: pre-wrap; overflow-wrap: anywhere; }
+/* Måtttabell i Conors design-ark */
+.matt-src { margin: 0 0 10px; color: var(--muted); font-size: 14px; }
+.matt-notes { margin: 0 0 10px; white-space: pre-wrap; font-size: 14px; }
+.matt-wrap { overflow-x: auto; border: 1px solid var(--line); }
+.matt { border-collapse: collapse; width: 100%; font-size: 15px; }
+.matt th { font-family: var(--f-label); font-size: 10px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); font-weight: 400; text-align: right; padding: 8px 10px; border-bottom: 1px solid var(--ink); background: var(--surface); white-space: nowrap; position: sticky; top: 0; }
+.matt th.n, .matt th.pom { text-align: left; }
+.matt td { padding: 0; border-bottom: 1px solid var(--line); vertical-align: middle; }
+.matt tr:nth-child(even) td { background: color-mix(in srgb, var(--surface) 55%, transparent); }
+.matt td.n { width: 34px; padding: 8px 6px 8px 10px; color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.matt td.pom { padding: 8px 10px; min-width: 200px; }
+.matt td.v { text-align: right; padding: 8px 10px; font-variant-numeric: tabular-nums; white-space: nowrap; width: 1%; }
+.matt td.v input, .matt td.pom input { width: 100%; min-width: 64px; border: 1px solid transparent; background: transparent; padding: 7px 10px; font: inherit; text-align: right; font-variant-numeric: tabular-nums; border-radius: 0; }
+.matt td.pom input { text-align: left; min-width: 180px; }
+.matt td.v input:hover, .matt td.pom input:hover { border-color: var(--line-strong); }
+.matt td.v input:focus, .matt td.pom input:focus { border-color: var(--ink); background: var(--paper); outline: none; }
+.matt td.v.has-input, .matt td.pom.has-input { padding: 1px 2px; }
+.matt td.changed input { background: #f6ecc9; }
+.matt-foot { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-top: 10px; }
+.matt-empty { color: var(--muted); }
 @media (max-width: 640px) { .brief-row { grid-template-columns: 1fr; gap: 2px; } .flagrow { grid-template-columns: 1fr; } }
 .inbox { border: 1px solid var(--ink); background: var(--indigo-soft); }
 .flagbox.ready { border-color: var(--ink); background: var(--indigo-soft); margin-top: 12px; }

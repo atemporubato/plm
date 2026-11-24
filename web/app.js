@@ -4043,6 +4043,96 @@ import * as P from "./platform.js";
         card("Designed", "Sent on to sampling", done, "No designed ideas yet.", true));
     }
   };
+  // ---------- Måtttabell ----------
+  // Måtten sparas som text i stylens mattlista (Carl skriver eller klistrar in den). Här läses texten som en tabell:
+  // tabbseparerade rader (från Excel), butikens format "S: Chest 54 · Length 70", eller "Bröstvidd (M) 56".
+  // Det som inte går att läsa som mått visas som noteringar ovanför tabellen.
+  const MATT_NUM = /^-?\d+(?:[.,]\d+)?$/;
+  const MATT_SIZE = /^(xxs|xs|s|m|l|xl|xxl|xxxl|2xl|3xl|one size|\d{2}(?:[.,]5)?|\d{2}[rls]|\d{1,2}\s?1\/2)$/i;
+  function parseMatt(text) {
+    const m = { kalla: "", noter: [], storlekar: [], rader: [] };
+    const byName = new Map();
+    const put = (namn, size, v) => { const k = namn.trim(); if (!k) return; let r = byName.get(k); if (!r) { r = { namn: k, v: {} }; byName.set(k, r); m.rader.push(r); } r.v[size] = v; if (!m.storlekar.includes(size)) m.storlekar.push(size); };
+    let header = null;
+    for (const raw of String(text || "").split(/\r?\n/)) {
+      const line = raw.replace(/\s+$/, ""); if (!line.trim()) continue;
+      const src = /^(?:Mått från butiken|Measurements from the shop):\s*(.+?)\s*(?:\(cm\))?$/i.exec(line.trim()); if (src) { m.kalla = src[1]; continue; }
+      if (line.includes("\t")) {
+        const cells = line.split(/\t+/).map((c) => c.trim()).filter((c) => c !== "");
+        if (cells.length >= 2 && !byName.size && !header && /^(pom|mått|matt|measurement|measurements|size|sizes|storlek|sizing|point)s?$/i.test(cells[0]) && cells.slice(1).every((c) => MATT_SIZE.test(c) || !MATT_NUM.test(c))) { header = cells.slice(1); continue; }
+        if (header) { const pos = line.split("\t").map((c) => c.trim()); const vals = pos.slice(1); if (pos[0] && vals.some(Boolean) && vals.every((c) => !c || MATT_NUM.test(c))) { vals.forEach((v, i) => { if (v) put(pos[0], header[i] || String(i + 1), v); }); continue; } }
+        if (cells.length >= 2 && cells.slice(1).every((c) => MATT_NUM.test(c))) { cells.slice(1).forEach((v, i) => put(cells[0], header ? header[i] || String(i + 1) : cells.length > 2 ? String(i + 1) : "", v)); continue; }
+        m.noter.push(line.trim()); continue;
+      }
+      const shop = /^([^:]{1,14}):\s*(.+)$/.exec(line.trim());
+      if (shop) {
+        const segs = shop[2].split(/\s+·\s+/).map((x) => /^(.*?)\s+(-?\d+(?:[.,]\d+)?)$/.exec(x.trim()));
+        if (segs.length && segs.every(Boolean)) { segs.forEach((x) => put(x[1], shop[1].trim(), x[2])); continue; }
+      }
+      const sp = /^(.+?)\s+(-?\d+(?:[.,]\d+)?)\s*(?:cm)?$/i.exec(line.trim());
+      if (sp) { const sz = /^(.*?)\s*\(([^)]+)\)$/.exec(sp[1]); if (sz && MATT_SIZE.test(sz[2].trim())) put(sz[1], sz[2].trim().toUpperCase(), sp[2]); else put(sp[1], "", sp[2]); continue; }
+      m.noter.push(line.trim());
+    }
+    return m;
+  }
+  function mattText(m) {
+    const out = [];
+    if (m.kalla) out.push("Measurements from the shop: " + m.kalla + " (cm)");
+    out.push(...m.noter);
+    const sizes = m.storlekar;
+    const enkel = sizes.length === 1 && sizes[0] === "";
+    if (sizes.length > 1 && sizes.includes("")) { // både mått per storlek och mått utan storlek: en rad per värde, "Bröstvidd (M) 56"
+      for (const r of m.rader) for (const x of sizes) if (r.namn.trim() && r.v[x]) out.push(r.namn + (x ? " (" + x + ")" : "") + " " + r.v[x]);
+      return out.join("\n");
+    }
+    if (!enkel && sizes.length) out.push("Measurements\t" + sizes.join("\t"));
+    for (const r of m.rader) { const vs = sizes.map((x) => r.v[x] || ""); if (!r.namn.trim() || vs.every((v) => !v)) continue; out.push(enkel ? r.namn + "\t\t" + vs[0] : r.namn + "\t" + vs.join("\t")); }
+    return out.join("\n");
+  }
+  // Visning: VERSALER från Excel blir vanlig text, förkortningar (CB, CF) står kvar.
+  const pomName = (s) => { const t = String(s || "").trim(); const ws = t.split(/\s+/); const caps = (w) => w.length >= 3 && /[A-ZÅÄÖ]/.test(w) && w === w.toUpperCase(); if (ws.filter(caps).length < Math.min(2, ws.length)) return t; const o = ws.map((w) => (caps(w) || /^(AT|OF|TO|IN|ON|BY|OR|AND|THE|FROM)$/.test(w) ? w.toLowerCase() : w)).join(" "); return o.charAt(0).toUpperCase() + o.slice(1); };
+  function mattChanges(a, b) {
+    const out = [];
+    for (const r of b.rader) {
+      const o = a.rader.find((x) => x.namn === r.namn);
+      for (const sz of b.storlekar) { const was = o ? o.v[sz] || "" : "", now = r.v[sz] || ""; if (was !== now) out.push(pomName(r.namn) + (sz ? " (" + sz + ")" : "") + ": " + (was || "–") + " → " + (now || "–")); }
+    }
+    return out;
+  }
+  // Tabellen. Med edit=true går värdena att ändra och nya mått att lägga till; get() ger den ändrade listan.
+  function mattTable(m0, edit) {
+    const m = JSON.parse(JSON.stringify(m0));
+    if (!m.storlekar.length) m.storlekar = [""];
+    const wrap = h("div");
+    const draw = () => {
+      const head = h("tr", null, h("th", { class: "n", text: "#" }), h("th", { class: "pom", text: "Measurements" }), m.storlekar.map((x) => h("th", { text: x || "cm" })));
+      const body = m.rader.map((r, i) => h("tr", null, h("td", { class: "n", text: String(i + 1) }),
+        r.nytt && edit ? h("td", { class: "pom has-input" }, (() => { const e = h("input", { type: "text", value: r.namn, placeholder: "Measurement name", "aria-label": "Measurement name" }); e.addEventListener("input", () => { r.namn = e.value; }); return e; })()) : h("td", { class: "pom", text: pomName(r.namn) }),
+        m.storlekar.map((sz) => {
+          if (!edit) return h("td", { class: "v", text: r.v[sz] || "–" });
+          const orig = (m0.rader.find((x) => x.namn === r.namn) || { v: {} }).v[sz] || "";
+          const td = h("td", { class: "v has-input" });
+          const e = h("input", { type: "text", inputmode: "decimal", value: r.v[sz] || "", "aria-label": pomName(r.namn) + (sz ? " " + sz : "") });
+          const mark = () => td.classList.toggle("changed", (r.v[sz] || "") !== orig || !!r.nytt && !!r.v[sz]);
+          e.addEventListener("input", () => { r.v[sz] = e.value.trim(); mark(); });
+          td.append(e); mark(); return td;
+        })));
+      const table = h("table", { class: "matt" }, h("thead", null, head), h("tbody", null, body.length ? body : [h("tr", null, h("td", { class: "pom matt-empty", colspan: String(m.storlekar.length + 2), text: "No measurements yet." }))]));
+      wrap.replaceChildren(h("div", { class: "matt-wrap" }, table),
+        edit ? h("div", { class: "matt-foot" }, h("button", { class: "btn small", type: "button", text: "+ Add measurement", onclick: () => { m.rader.push({ namn: "", v: {}, nytt: true }); draw(); const ins = wrap.querySelectorAll("td.pom input"); if (ins.length) ins[ins.length - 1].focus(); } }), h("span", { class: "hint", text: "Changed values are highlighted in yellow. When you save, Carl and Alex get a flag with the changes." })) : null);
+    };
+    draw();
+    return { el: wrap, get: () => ({ kalla: m.kalla, noter: m.noter, storlekar: m.storlekar, rader: m.rader.filter((r) => r.namn.trim() && m.storlekar.some((x) => r.v[x])).map((r) => ({ namn: r.namn.trim(), v: r.v })) }) };
+  }
+  // Flagga till Carl och Alex från design-arket. Syns i både Idéer (Carl) och Samples (Alex) tills den är löst.
+  async function designFlag(st, text) {
+    const till = ["carl", "alex"].filter((k) => k !== myKey()); if (!till.length) return false;
+    const id = "F" + Date.now().toString(36).toUpperCase() + Math.random().toString(36).slice(2, 5).toUpperCase(); const now = new Date().toISOString();
+    const body = { typ: "style", ref: st._id, titel: st.namn + (st.sasong ? " · " + st.sasong : ""), tab: "bibliotek", tabs: ["bibliotek", "samples"], text, till, av: myId, avNamn: myName || personName(myKey()) || "", t: now, status: "Öppen", kalla: "design" };
+    if (!(await create("flaggor", id, body))) return false;
+    if (!byId(D.flaggor, id)) D.flaggor.push(Object.assign({}, body, { _id: id }));
+    return true;
+  }
   function openDesign(id) {
     const st = byId(D.styles, id);
     if (!st) { toast("Cannot find the idea."); return; }
@@ -4053,8 +4143,18 @@ import * as P from "./platform.js";
     const row = (k, v) => (String(v || "").trim() ? h("div", { class: "brief-row" }, h("span", { class: "k", text: k }), h("div", { class: "v", text: String(v).trim() })) : null);
     const brief = h("section", null, h("h3", { class: "sec-title", text: "Brief from Carl" }), h("div", { class: "brief" },
       row("Description", st.beskrivning), row("Category", styleKategori(st)), row("Season", [st.sasong, st.drop].filter(Boolean).join(" · ")), row("Tyg", styleTyg(st)),
-      row("Sizes", sizesOf(st).join(", ")), row("Builds on", g ? g.namn : ""), row("Measurements", [st.mattFran ? "Same measurements as " + refName(st.mattFran) : "", st.mattlista].filter(Boolean).join("\n")),
+      row("Sizes", sizesOf(st).join(", ")), row("Builds on", g ? g.namn : ""),
       row("References and links", st.referenser), row("Comment", st.kommentar)));
+    // Måtten: egen sektion med tabell. Har stylen inga egna mått men "samma mått som" en annan style, visas den stylens mått.
+    const refSt = st.mattFran ? byId(D.styles, st.mattFran) : null;
+    const egen = String(st.mattlista || "").trim();
+    const mattKalla = egen ? st.mattlista : refSt ? refSt.mattlista || "" : "";
+    const matt0 = parseMatt(mattKalla);
+    const mattTab = mattTable(matt0, !ro);
+    const mattSrc = [matt0.kalla ? "From the shop: " + matt0.kalla : "", !egen && st.mattFran ? "Same measurements as " + refName(st.mattFran) + (refSt && String(refSt.mattlista || "").trim() ? "" : " – that style has no measurements entered") : "", "all measurements in cm"].filter(Boolean).join(" · ");
+    const mattSec = h("section", null, h("h3", { class: "sec-title", text: "Measurements" }), h("p", { class: "matt-src", text: mattSrc }),
+      matt0.noter.length ? h("p", { class: "matt-notes", text: matt0.noter.join("\n") }) : null,
+      matt0.rader.length || !ro ? mattTab.el : h("p", { class: "hint", text: "Carl has not entered any measurements." }));
     const refImgs = styleAllImages(st);
     const refSec = h("section", null, h("h3", { class: "sec-title", text: "Images and references" + (refImgs.length ? " (" + refImgs.length + ")" : "") }), refImgs.length ? gallery(refImgs, {}) : h("p", { class: "hint", text: "No images from Carl yet." }));
     const dz = () => current().design || {};
@@ -4066,23 +4166,35 @@ import * as P from "./platform.js";
     const syncState = () => { const d = dz(); state.textContent = waiting() ? "Waiting for design." : d.klar ? "Design done " + fmtDate(String(d.klar).slice(0, 10)) + " – sent to sampling." : "The style is no longer in design."; };
     const form = h("form", { class: "form", autocomplete: "off", onsubmit: (e) => e.preventDefault() },
       h("div", { class: "field full" }, h("label", { for: "f_dlank", text: "Link to design file" }), fLank),
-      h("div", { class: "field full" }, h("label", { for: "f_dkom", text: "Comment to Carl and Alex" }), fKom), state);
+      h("div", { class: "field full" }, h("label", { for: "f_dkom", text: "Comment to Carl and Alex" }), fKom, h("span", { class: "hint", text: "Every new comment becomes a flag for Carl and Alex. It stays at the top of their tabs until they resolve it." })), state);
     if (ro) lock(form);
     const save = async (done, btn) => {
       const cur = current(); const now = new Date().toISOString(); const d = Object.assign({}, cur.design || {}, { lank: fLank.value.trim(), kommentar: fKom.value.trim() });
+      const nyKom = d.kommentar && d.kommentar !== ((cur.design || {}).kommentar || "") ? d.kommentar : "";
+      const mattNy = ro ? null : mattTab.get(); const mattAndr = mattNy ? mattChanges(matt0, mattNy) : [];
       if (done && !(d.bilder || []).length && !d.lank) { toast("Upload the design or add a link before you send it on."); return; }
       if (btn) btn.disabled = true;
       const patch = { design: d, andrad: now };
       if (done) { d.klar = now; d.av = myId; patch.status = ST_KANBEST; patch.overlamnad = { till: "Alex", t: now, av: myId, fran: "design" }; patch.logg = (cur.logg || []).concat(logEntry("Design done – sent to sampling, sample can be ordered")); }
       else if (d.lank !== ((cur.design || {}).lank || "") || d.kommentar !== ((cur.design || {}).kommentar || "")) patch.logg = (cur.logg || []).concat(logEntry("Design updated"));
+      if (mattAndr.length) {
+        patch.mattlista = mattText(mattNy);
+        if (!egen && cur.mattFran) patch.mattFran = "";
+        patch.logg = (patch.logg || cur.logg || []).concat(logEntry("Measurements changed in design: " + mattAndr.join("; ") + (!egen && cur.mattFran ? " (started from " + refName(cur.mattFran) + ")" : "")));
+      }
       const ok = await write("styles", id, patch);
       if (btn) btn.disabled = false;
-      if (ok) { toast(done ? "Sent to sampling – Alex can order a sample" : "Saved"); closeSheet(); }
+      if (!ok) return;
+      const flaggor = [];
+      if (nyKom) flaggor.push(nyKom);
+      if (mattAndr.length) flaggor.push("Measurements changed: " + mattAndr.slice(0, 8).join("; ") + (mattAndr.length > 8 ? " … and " + (mattAndr.length - 8) + " more" : ""));
+      let flaggat = 0; for (const t of flaggor) if (await designFlag(current(), t)) flaggat++;
+      toast((done ? "Sent to sampling – Alex can order a sample" : "Saved") + (flaggat ? " · flagged to Carl and Alex" : "")); scheduleRefresh(); closeSheet();
     };
     const right = h("div", { class: "foot-right" }, h("button", { class: "btn", type: "button", text: ro ? "Close" : "Cancel", onclick: closeSheet }));
     if (!ro) { right.append(h("button", { class: "btn" + (waiting() ? "" : " primary"), type: "button", text: "Save", onclick: (e) => save(false, e.target) })); if (waiting()) right.append(h("button", { class: "btn primary", type: "button", text: "Design done – send to sampling", onclick: (e) => save(true, e.target) })); }
     openSheet({ flagRef: { typ: "style", ref: id, titel: st.namn + (st.sasong ? " · " + st.sasong : ""), tab: "design" }, tag: "Design", title: st.namn, sub: [styleKategori(st), st.sasong, st.drop].filter(Boolean).join(" · "),
-      body: [brief, refSec, designSec, h("section", null, h("h3", { class: "sec-title", text: "To Carl and Alex" }), form), commentsSection("styles", current, "f_dnote", ro)], foot: [h("div"), right],
+      body: [brief, mattSec, refSec, designSec, h("section", null, h("h3", { class: "sec-title", text: "To Carl and Alex" }), form)], foot: [h("div"), right],
       ctx: { refresh: () => { if (!byId(D.styles, id)) { closeSheet(); return; } designSec.render(); syncState(); } } });
     syncState();
   }
@@ -4370,7 +4482,8 @@ import * as P from "./platform.js";
   const TAB_OWNER = { bibliotek: ["carl"], design: ["conor", "carl"], samples: ["alex"], ref: ["alex"], kollektion: ["carl"], produktion: ["elliot"], foto: ["oliver"], ecom: ["jakob"], shopify: ["jakob"], coo: ["jakob"], tyglager: ["alex"], leverantorer: ["elliot", "jakob"] };
   const personName = (k) => (FLAG_PEOPLE.find((p) => p[0] === k) || [k, k])[1];
   const myKey = () => { const n = norm(myName); const k = n === "alexander" ? "alex" : n; return FLAG_PEOPLE.some((p) => p[0] === k) ? k : ""; };
-  const flagsOpen = (tab) => D.flaggor.filter((f) => f.status !== "Löst" && (!tab || f.tab === tab)).sort((a, b) => String(b.t || "").localeCompare(String(a.t || "")));
+  const flagTabs = (f) => (Array.isArray(f.tabs) && f.tabs.length ? f.tabs : [f.tab]);
+  const flagsOpen = (tab) => D.flaggor.filter((f) => f.status !== "Löst" && (!tab || flagTabs(f).includes(tab))).sort((a, b) => String(b.t || "").localeCompare(String(a.t || "")));
   const flagsFor = (typ, ref) => D.flaggor.filter((f) => f.status !== "Löst" && f.typ === typ && f.ref === ref);
   const latePos = () => D.po.map((p) => ({ p, l: poLate(p) })).filter((x) => x.l).sort((a, b) => b.l.dagar - a.l.dagar);
   function openFlagTarget(f) {
@@ -4527,7 +4640,7 @@ import * as P from "./platform.js";
       for (const x of late) card.append(lateRow(x));
       box.replaceChildren(...[card].concat(ready.length ? [readyCard(ready)] : [])); box.hidden = false;
     }
-    const perTab = {}; for (const f of flagsOpen()) perTab[f.tab] = (perTab[f.tab] || 0) + 1;
+    const perTab = {}; for (const f of flagsOpen()) for (const t of flagTabs(f)) perTab[t] = (perTab[t] || 0) + 1;
     if (!designOnly() && latePos().length) perTab.produktion = (perTab.produktion || 0) + latePos().length;
     if (readyToOrder().length) perTab.produktion = (perTab.produktion || 0) + readyToOrder().length;
     document.querySelectorAll("#tabs .tab").forEach((b) => { const tn = b.querySelector(".tn"); if (tn) tn.dataset.flags = perTab[b.dataset.tab] ? String(perTab[b.dataset.tab]) : ""; });
