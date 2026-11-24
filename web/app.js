@@ -7,13 +7,14 @@ import * as P from "./platform.js";
   const $ = (id) => document.getElementById(id);
   const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
-  const SAMPLE_STATUS = ["Beställd", "Skickad", "Mottagen", "Problem", "Returnerad"];
+  const ST_REDO = "Redo för sampling"; // steget före Beställd: samplen är klar att beställas men inte lagd
+  const SAMPLE_STATUS = [ST_REDO, "Beställd", "Skickad", "Mottagen", "Problem", "Returnerad"];
   const WAITING = ["Beställd", "Skickad"];
-  const ACTIVE = ["Beställd", "Skickad", "Problem"];
+  const ACTIVE = [ST_REDO, "Beställd", "Skickad", "Problem"];
   const VERSIONS = ["Proto 1", "Proto 2", "Proto 3", "Proto 4", "Proto 5", "Fotosample", "Produktionssample", "Storleksset"];
   const PLATSER = ["Hängare", "Fotohäng", "På plåtning", "Testas", "Utlånad", "Gåva", "Såld", "Hos leverantör", "Arkiv"];
   const PO_PLACED = ["Inskickad", "PO bekräftad", "I produktion", "Skickad", "Inlevererad", "Problem"];
-  const FOTOSAMPLE_PO = [["", "– not ordered (ordered automatically when the PO is placed)"], ["Beställd", "Beställd"], ["Inne", "Physically in"], ["Ej aktuell", "Not applicable (restock/NOOS)"]];
+  const FOTOSAMPLE_PO = [["", "– not ordered (ordered automatically when the PO is placed)"], ["Beställd", "Beställd"], ["Inne", "Physically in"], ["Ej aktuell", "Existing product – no photo sample"]];
   const fotoPoNorm = (v) => { const x = String(v || "").trim(); if (!x) return ""; if (/^inne$|finns|inne|mottag/i.test(x)) return "Inne"; if (/ej aktuell|saknas|nej/i.test(x)) return "Ej aktuell"; return "Beställd"; };
   const BESLUT = ["Godkänd", "Ny runda", "Pausad", "Kastad"];
   const beslutNorm = (b) => (b === "Underkänd" ? "Kastad" : (b || ""));
@@ -82,7 +83,7 @@ import * as P from "./platform.js";
   // ---------- DOM helpers ----------
   // Engelsk visning av värden som sparas på svenska i databasen (status, kategori, plats …). Listan är tom i källan;
   // den engelska byggen (tools/i18n.mjs) fyller i den. Datan skrivs aldrig om – bara det som visas.
-  const EN_VAL = {"Storleksset":"Size set","På plåtning":"At photo shoot","Testas":"Being tested","Utlånad":"On loan","Gåva":"Gift","Såld":"Sold","Hos leverantör":"At supplier","Arkiv":"Archive","Ej aktuell":"Not applicable","Idé ej redo för design":"Idea – not ready for design","Idé redo att designa":"Idea – ready for design","Sample kan beställas":"Sample can be ordered","Delvis slut":"Partly sold out","Utgått":"Discontinued","Rubato (eget lager)":"Rubato (own stock)","Accessoarer":"Accessories","Hög":"High","Låg":"Low","Hos fabrik":"Fabric already at producer","Beställt":"Ordered","På väg":"On its way","Saknas":"Missing","Eget lager":"Own stock","Hängare":"Hanger","Planerade":"Planned","Bokad":"Booked","Planerad":"Planned","Tyg":"Fabric","Producent":"Manufacturer","Övrigt":"Other","Okända":"Unknown","Nej":"No","Ja":"Yes","Ej betalt":"Not paid","Betalt":"Paid","Skickat":"Sent","Hos leverantören":"At the supplier","På väg tillbaka":"On its way back","Förlorat":"Lost","Mottagen":"Received","Beställd":"Ordered","Skickad":"Shipped","Returnerad":"Returned","Fotosample":"Photo sample","Produktionssample":"Production sample","Fotohäng":"Photo rail","Inskickad":"Submitted","PO bekräftad":"PO confirmed","I produktion":"In production","Inlevererad":"Delivered","Inne":"In","Godkänd":"Approved","Ny runda":"New round","Pausad":"Paused","Kastad":"Dropped","Underkänd":"Rejected","Skippad":"Dropped","PO lagd":"PO placed","Levererad":"Delivered","Nyhet":"New","Slut":"Sold out","I lager":"In stock","Förbrukad":"Used up","Byxor":"Trousers","Skrädderi":"Tailoring","Skjortor":"Shirts","Stickat & Jersey":"Knitwear & Jersey","Ytterplagg":"Outerwear","Avbruten":"Cancelled","Utkast":"Draft","Inställd":"Cancelled","Fotade":"Shot","Retuscherade":"Retouched","Publicerade":"Published","Fotad":"Shot","Klar":"Done","Utan säsong":"No season","Okategoriserat":"Uncategorised","Bekräftade":"Confirmed","Att förhandla":"To negotiate","Tillbaka hos Rubato":"Back at Rubato","Pågår":"Ongoing","Förfallet":"Overdue","Senare":"Later","Löst":"Resolved","Öppen":"Open","beräknad":"estimated","Produktidé":"Idea – not ready for design","Idé under utveckling":"Sample can be ordered","Restock":"Re-stock"};
+  const EN_VAL = {"Storleksset":"Size set","På plåtning":"At photo shoot","Testas":"Being tested","Utlånad":"On loan","Gåva":"Gift","Såld":"Sold","Hos leverantör":"At supplier","Arkiv":"Archive","Ej aktuell":"Not applicable","Idé ej redo för design":"Idea – not ready for design","Idé redo att designa":"Idea – ready for design","Sample kan beställas":"Sample can be ordered","Delvis slut":"Partly sold out","Utgått":"Discontinued","Rubato (eget lager)":"Rubato (own stock)","Accessoarer":"Accessories","Hög":"High","Låg":"Low","Hos fabrik":"Fabric already at producer","Beställt":"Ordered","På väg":"On its way","Saknas":"Missing","Eget lager":"Own stock","Hängare":"Hanger","Planerade":"Planned","Bokad":"Booked","Planerad":"Planned","Tyg":"Fabric","Producent":"Manufacturer","Övrigt":"Other","Okända":"Unknown","Nej":"No","Ja":"Yes","Ej betalt":"Not paid","Betalt":"Paid","Skickat":"Sent","Hos leverantören":"At the supplier","På väg tillbaka":"On its way back","Förlorat":"Lost","Mottagen":"Received","Beställd":"Ordered","Skickad":"Shipped","Returnerad":"Returned","Fotosample":"Photo sample","Produktionssample":"Production sample","Fotohäng":"Photo rail","Inskickad":"Submitted","PO bekräftad":"PO confirmed","I produktion":"In production","Inlevererad":"Delivered","Inne":"In","Godkänd":"Approved","Ny runda":"New round","Pausad":"Paused","Kastad":"Dropped","Underkänd":"Rejected","Skippad":"Dropped","PO lagd":"PO placed","Levererad":"Delivered","Nyhet":"New","Slut":"Sold out","I lager":"In stock","Förbrukad":"Used up","Byxor":"Trousers","Skrädderi":"Tailoring","Skjortor":"Shirts","Stickat & Jersey":"Knitwear & Jersey","Ytterplagg":"Outerwear","Avbruten":"Cancelled","Utkast":"Draft","Inställd":"Cancelled","Fotade":"Shot","Retuscherade":"Retouched","Publicerade":"Published","Fotad":"Shot","Klar":"Done","Utan säsong":"No season","Okategoriserat":"Uncategorised","Bekräftade":"Confirmed","Att förhandla":"To negotiate","Tillbaka hos Rubato":"Back at Rubato","Pågår":"Ongoing","Förfallet":"Overdue","Senare":"Later","Löst":"Resolved","Öppen":"Open","beräknad":"estimated","Produktidé":"Idea – not ready for design","Idé under utveckling":"Sample can be ordered","Restock":"Re-stock","Redo för sampling":"Ready for sampling"};
   const tv = (s) => { if (typeof s !== "string" || !s) return s; const v = EN_VAL[s]; if (v != null) return v; if (s.includes(" · ")) return s.split(" · ").map(tv).join(" · "); const m = /^(.*\D) (\d+[a-z]?)$/.exec(s); return m && EN_VAL[m[1]] != null ? EN_VAL[m[1]] + " " + m[2] : s; };
   function h(tag, props, ...kids) {
     const e = document.createElement(tag);
@@ -516,6 +517,17 @@ import * as P from "./platform.js";
   const grundStyles = () => D.styles.filter(isGrund).sort((a, b) => (a.namn || "").localeCompare(b.namn || "", "sv"));
   const styleTyg = (st) => { const t = st && st.tygId ? byId(D.tyger, st.tygId) : null; return t ? t.namn : (st && st.tygNamn) || ""; };
   const refName = (id) => { if (!id) return ""; const st = byId(D.styles, id); if (st) return st.namn; const s = byId(D.samples, id); return s ? styleName(s) + (s.version ? " · " + s.version : "") + " (" + s._id + ")" : String(id); };
+  // Fotosample tas i 50 (siffer-storlekar), L (XS–XXL) och 33 (midjemått). Gäller från SS27; äldre visas bara om storleken är ifylld.
+  const FOTO_STD_FROM = "SS27";
+  function fotoStdSize(st) {
+    const sz = (sizesOf(st) || []).map((x) => String(x).trim()).filter(Boolean); if (!sz.length) return "";
+    if (sz.some((x) => /^(xxs|xs|s|m|l|xl|xxl)$/i.test(x))) return sz.find((x) => /^l$/i.test(x)) || "L";
+    const nums = sz.map((x) => parseFloat(x.replace(",", "."))).filter((n) => !isNaN(n)); if (!nums.length) return "";
+    const target = nums.every((n) => n >= 42 && n <= 62) ? 50 : nums.every((n) => n >= 26 && n <= 42) ? 33 : null; if (target == null) return "";
+    return String(nums.slice().sort((a, b) => Math.abs(a - target) - Math.abs(b - target))[0]).replace(".", ",");
+  }
+  const fotoSize = (x, st) => (x && x.storlek) || (st && seasonRank(st.sasong) >= seasonRank(FOTO_STD_FROM) ? fotoStdSize(st) : "");
+  const isNewStyle = (st) => (st.typ || "Nyhet") === "Nyhet";
   const fotoSamplesOf = (st) => samplesOfStyle(st._id).filter((x) => (x.version === "Fotosample" || x.version === "Produktionssample") && !isArchived(x));
   function fotoState(st) {
     const xs = fotoSamplesOf(st);
@@ -528,6 +540,8 @@ import * as P from "./platform.js";
     if (po) return { key: "finns", label: "Physically in (per PO " + (po.nr || "") + ")", sample: null, all: [], onRack: false };
     const po2 = pos.find((p) => fotoPoNorm(p.fotosample) === "Beställd");
     if (po2) return { key: "vantas", label: "Ordered via PO " + (po2.nr || "") + (isISO(po2.fotosampleLeverans) ? " · expected " + fmtDate(po2.fotosampleLeverans) : ""), sample: null, all: [] };
+    // Bara nyheter behöver fotosample. Restock och NOOS finns redan fotade.
+    if (!isNewStyle(st)) return { key: "befintlig", label: "Existing product", sample: null, all: [] };
     const any = samplesOfStyle(st._id).find((x) => x.status === "Mottagen" && beslutNorm(x.beslut) === "Godkänd" && !isArchived(x));
     if (any) return { key: "godkand", label: "Not ordered · an approved sample can be photographed", sample: any, all: [] };
     return { key: "saknas", label: "Not ordered", sample: null, all: [] };
@@ -547,7 +561,7 @@ import * as P from "./platform.js";
     const made = [];
     for (const farg of (colours.length ? colours : [""])) {
       const nid = await freshId("samples", D.samples, "S", 3);
-      const body = { id: nid, styleId: st._id, produkt: st.namn, version: "Fotosample", leverantor: lev, farg, tygId: st.tygId || (last ? last.tygId : null) || null, material: "", storlek: "", sasong: st.sasong || (p0 && p0.sasong) || "", prisBelopp: null, prisValuta: null, status: "Beställd", bestalld: start, ledtid: sl, forvantad: forv, mottagen: null, tracking: "", p1Skickad: null, p2Skickad: null, platsTyp: "", hangare: "", platsNotering: "", beslut: "", utvarderad: false, markt: false, mattGodkanda: null, mattKommentar: "", andringar: "", kommentar: p0 ? "Photo sample for PO " + (p0.nr || p0._id) : "Fotosample", bilder: [], fotosampleViaPo: p0 ? (p0.nr || p0._id) : "", logg: [logEntry("Photo sample ordered" + (p0 ? " via PO " + (p0.nr || p0._id) : "") + (who ? " – initiated by " + who : ""))], andrad: new Date().toISOString() };
+      const body = { id: nid, styleId: st._id, produkt: st.namn, version: "Fotosample", leverantor: lev, farg, tygId: st.tygId || (last ? last.tygId : null) || null, material: "", storlek: fotoStdSize(st), sasong: st.sasong || (p0 && p0.sasong) || "", prisBelopp: null, prisValuta: null, status: "Beställd", bestalld: start, ledtid: sl, forvantad: forv, mottagen: null, tracking: "", p1Skickad: null, p2Skickad: null, platsTyp: "", hangare: "", platsNotering: "", beslut: "", utvarderad: false, markt: false, mattGodkanda: null, mattKommentar: "", andringar: "", kommentar: p0 ? "Photo sample for PO " + (p0.nr || p0._id) : "Fotosample", bilder: [], fotosampleViaPo: p0 ? (p0.nr || p0._id) : "", logg: [logEntry("Photo sample ordered" + (p0 ? " via PO " + (p0.nr || p0._id) : "") + (who ? " – initiated by " + who : ""))], andrad: new Date().toISOString() };
       if (await create("samples", nid, body)) { if (!byId(D.samples, nid)) D.samples.push(Object.assign({}, body, { _id: nid })); made.push(nid); }
     }
     if (made.length) await write("styles", st._id, { andrad: new Date().toISOString(), logg: (st.logg || []).concat(logEntry("Photo sample ordered: " + made.join(", ") + (p0 ? " (PO " + (p0.nr || p0._id) + ")" : ""))) });
@@ -933,7 +947,7 @@ import * as P from "./platform.js";
       this.fLev = filterSelect("f_s_lev", "All suppliers", st, "lev", upd);
       this.fSeason = filterSelect("f_s_season", "All seasons", st, "season", upd);
       this.fPlats = filterSelect("f_s_plats", "All locations", st, "plats", upd);
-      this.seg = makeSeg([["aktiva", "Active"], ["Beställd", "Beställd"], ["Skickad", "Skickad"], ["Problem", "Problem"], ["Mottagen", "Mottagen"], ["hangare", "Collection rail"], ["produktion", "Gone to production"], ["arkiv", "Arkiv"], ["alla", "All"]], st, "status", upd);
+      this.seg = makeSeg([["aktiva", "Active"], [ST_REDO, "Redo för sampling"], ["Beställd", "Beställd"], ["Skickad", "Skickad"], ["Problem", "Problem"], ["Mottagen", "Mottagen"], ["hangare", "Collection rail"], ["produktion", "Gone to production"], ["arkiv", "Arkiv"], ["alla", "All"]], st, "status", upd);
       const grp = selectEl("f_s_group", [["kategori", "Group by category"], ["style", "Group by style"], ["sasong", "Group by season"], ["lev", "Group by supplier"], ["none", "No grouping"]], st.group);
       grp.addEventListener("change", () => { st.group = grp.value; upd(); });
       this.count = h("span", { class: "count" });
@@ -1077,7 +1091,7 @@ import * as P from "./platform.js";
       td("Select", "c-check", box),
       idCell,
       td("Style", "c-main", h("div", { class: "prod", text: styleName(s) }), subBits.length ? h("div", { class: "sub" }, subBits) : null),
-      td("Version", null, chip(s.version || "–")),
+      td("Version", null, chip(s.version || "–"), s.version === "Fotosample" && fotoSize(s, styleOf(s)) ? h("div", { class: "sub", text: "Size " + fotoSize(s, styleOf(s)) }) : null),
       placeCell,
       td("Supplier", null, s.leverantor || ""),
       td("Colour", null, sampleColours(s).length ? h("div", { class: "swatches" }, colourChips(s)) : ""),
@@ -2025,6 +2039,7 @@ import * as P from "./platform.js";
 
     const logUl = h("ul", { class: "log" });
     async function save() {
+      const varInlev = poStatusNorm(((!isNew && current()) || po).status) === "Inlevererad"; // läses innan något sparas
       const o = { nr: fNr.value.trim(), leverantor: fLev.value.trim(), sasong: fSas.value.trim(), drop: poDropChoice().drop, dropEgen: poDropChoice().egen, status: fStatus.value, prioritet: po.prioritet || "Normal", produktionstid: prodDagar() != null && prodDagar() >= 0 ? prodDagar() : num(po.produktionstid), fotosample: fFoto.value, fotosampleLeverans: fFotoD.value || null, tygstatus: fTygS.value, orderBekraftad: fBek.value === "1", planeradEx: fPlan.value || null, bekraftadEx: fBekEx.value || null, etaLager: etaNu(), valuta: fVal.value || "SEK", kommentar: fKom.value.trim(),
         orderDatum: fOrdD.value || null, leveransOnskad: fLevO.value || null, labelInstructions: fLabel.value.trim(),
         forskottBelopp: num(fFskB.value), forskottDatum: fFskD.value || null, forskottBetald: fFskP.value === "1", slutBelopp: num(fSlutB.value), slutDatum: fSlutD.value || null, slutBetald: fSlutP.value === "1" };
@@ -2094,7 +2109,8 @@ import * as P from "./platform.js";
           }
           if (made.length) { const c2 = byId(D.po, pid) || curPo; await write("po", pid, { fotosample: "Beställd", andrad: now, logg: (c2.logg || []).concat(logEntry("Photo samples ordered automatically: " + made.join(", "))) }); toast(made.length + (made.length === 1 ? " photo sample ordered" : " photo samples ordered") + " – shown under Samples and Photo"); }
         }
-        if (isNew) openPo(pid); else closeSheet();
+        const blevInlev = !isNew && o.status === "Inlevererad" && !varInlev;
+        if (isNew) openPo(pid); else { closeSheet(); if (blevInlev) openDeduct(pid); }
       } finally { if (btn) btn.disabled = false; }
     }
     const kvs = [];
@@ -2345,6 +2361,7 @@ import * as P from "./platform.js";
           for (const p of pos) poCell.append(h("div", { style: "display:flex;gap:6px;align-items:center;flex-wrap:wrap" }, h("button", { class: "linkish", type: "button", text: p.nr || p._id, onclick: (e) => { e.stopPropagation(); openPo(p._id); } }), poStatusPill(p)));
           poCell.append(es[0] ? h("div", null, h("span", { class: "mono", text: "Delivery " + fmtDate(es[0]) }), h("span", { class: "days " + (diffDays(es[0]) < 0 ? "late" : diffDays(es[0]) <= 14 ? "soon" : ""), text: " · " + fmtDays(diffDays(es[0])) })) : h("div", { class: "muted", text: "ETA missing" }));
           const fotoCell = td("Fotosample", null, h("div", null, h("span", { class: "pill fs-" + (f.key === "godkand" ? "saknas" : f.key), text: f.label })));
+          if (f.key === "vantas" || f.key === "finns") { const strl = uniq((f.all && f.all.length ? f.all : [f.sample]).map((x) => fotoSize(x, s)).filter(Boolean)).join(", "); fotoCell.append(h("div", { class: "sub" }, "Size: ", h("b", { text: strl || "not set" }))); }
           if (f.all && f.all.length) fotoCell.append(h("div", { class: "sub" }, f.all.map((x, i) => h("button", { class: "linkish", type: "button", text: (i ? " · " : "") + x._id + (sampleFarg(x) ? " " + sampleFarg(x) : "") + (x.status === "Mottagen" && platsText(x) ? " (" + platsText(x) + ")" : ""), onclick: (e) => { e.stopPropagation(); openSample(x._id); } }))));
           else if (f.sample) fotoCell.append(h("div", { class: "sub" }, h("button", { class: "linkish", type: "button", text: f.sample._id + (platsText(f.sample) ? " · " + platsText(f.sample) : ""), onclick: (e) => { e.stopPropagation(); openSample(f.sample._id); } })));
           if (!ro) {
@@ -2380,7 +2397,7 @@ import * as P from "./platform.js";
     const card = h("section", { class: "card hanger-card" });
     card.append(h("div", { class: "card-head" }, h("h3", { text: "The photo rail" + (season ? " – " + season : "") }), h("span", { class: "sub", text: inSeason.length ? inSeason.length + " samples hang on the photo rail" + (items.length > inSeason.length ? " (" + (items.length - inSeason.length) + " from other seasons)" : "") : "Empty – set the location of photo samples to \"Photo rail\" and they are listed here" })));
     if (!inSeason.length) return card;
-    const { t, tb } = table([["Hook"], ["Product"], ["Colour"], ["Sample"], ["E-com images"], ["Image"]]);
+    const { t, tb } = table([["Hook"], ["Product"], ["Colour"], ["Size"], ["Sample"], ["E-com images"], ["Image"]]);
     for (const s of inSeason) {
       const st = styleOf(s);
       const imgs = sampleImages(s);
@@ -2388,6 +2405,7 @@ import * as P from "./platform.js";
         td("Hook", null, h("span", { class: "hanger", text: "Fotohäng" + (s.hangare ? " " + s.hangare : "") })),
         td("", "c-main", h("div", { class: "prod", text: styleName(s) }), h("div", { class: "sub", text: [st ? st.sasong : seasonOf(s), st ? st.drop : "", s.version].filter(Boolean).join(" · ") })),
         td("Colour", null, sampleColours(s).length ? h("div", { class: "swatches" }, colourChips(s)) : "–"),
+        td("Size", null, fotoSize(s, st) || "–"),
         td("Sample", null, tag(s._id), h("span", { class: "sub", text: " " + (s.status || "") })),
         td("E-com images", null, st ? h("span", { class: "pill es-" + slug(st.ecomBilder || "x"), text: st.ecomBilder || "not planned" }) : ""),
         td("Image", null, imgs.length ? h("img", { class: "rowthumb", style: "margin-top:0", src: imgUrl(imgs[0]), alt: "", loading: "lazy", onclick: (e) => { e.stopPropagation(); openLightbox(imgs, imgs[0]); } }) : h("span", { class: "muted", text: "–" }))));
@@ -2398,6 +2416,31 @@ import * as P from "./platform.js";
   }
 
   // ---------- REF-PLAGG (Alex) ----------
+  // Läser in ordrar taggade #reference i Shopify som ref-plagg: en rad per orderrad. Redan inlästa hoppas över;
+  // saknade spårningsuppgifter fylls i om ordern har fått dem sedan sist.
+  async function importRefs(btn) {
+    if (btn) btn.disabled = true;
+    try {
+      const res = await hostedRefShopify();
+      if (!res || res.error) { toast("Could not read from Shopify" + (res && res.error ? ": " + String(res.error).slice(0, 160) : "")); return; }
+      const rows = res.rader || []; let nya = 0, upd = 0;
+      for (const x of rows) {
+        const old = D.ref.find((r) => r.shopifyRad === x.key);
+        if (old) {
+          const patch = {}; for (const k of ["tracking", "trackingUrl", "fraktbolag", "sent"]) if (!old[k] && x[k]) patch[k] = x[k];
+          if (Object.keys(patch).length) { patch.andrad = new Date().toISOString(); patch.logg = (old.logg || []).concat(logEntry("Tracking updated from Shopify order " + x.order)); if (await write("refplagg", old._id, patch)) { Object.assign(old, patch); upd++; } }
+          continue;
+        }
+        const st = D.styles.filter((s) => s.namn && norm(x.produkt).includes(norm(s.namn))).sort((a, b) => b.namn.length - a.namn.length)[0];
+        const nid = await freshId("refplagg", D.ref, "R", 3); const now = new Date().toISOString();
+        const body = { id: nid, plagg: x.plagg, styleNamn: st ? st.namn : "", agare: "Rubato", skickadTill: x.till || "", skickad: x.skickad || null, fraktbolag: x.fraktbolag || "", tracking: x.tracking || "", trackingUrl: x.trackingUrl || "", status: "Skickat", aterSenast: null, tillbaka: null, varde: x.varde == null ? null : x.varde,
+          kommentar: "Shopify order " + x.order + (x.datum ? " (" + x.datum + ")" : "") + (x.valuta && x.valuta !== "SEK" && x.varde != null ? " · value in " + x.valuta : "") + (x.note ? "\n" + x.note : ""), shopifyOrder: x.order, shopifyRad: x.key, bilder: [], skapad: now, andrad: now, logg: [logEntry("Imported from Shopify order " + x.order + " (#reference)")] };
+        if (await create("refplagg", nid, body)) { if (!byId(D.ref, nid)) D.ref.push(Object.assign({}, body, { _id: nid })); nya++; }
+      }
+      toast(!rows.length ? "No orders tagged #reference in Shopify" : nya || upd ? nya + " new reference garments" + (upd ? ", " + upd + " updated" : "") : "Nothing new – all #reference orders are already imported");
+      scheduleRefresh();
+    } finally { if (btn) btn.disabled = false; }
+  }
   const REF_STATUS = ["Skickat", "Hos leverantören", "På väg tillbaka", "Tillbaka hos Rubato", "Förlorat"];
   const RefView = {
     mount(root) {
@@ -2800,7 +2843,7 @@ import * as P from "./platform.js";
       td("Reserved for", null, reservedName(l) || ""),
       td("Updated", "mono", isISO(upd) ? fmtDate(upd) : ""),
       td("Status", "c-status", h("span", { class: "pill ls-" + slug(l.status || "x"), text: l.status || "–" })),
-      td("Comment", "note", l.passar ? h("span", { class: "fits", text: "Fits: " + l.passar }) : null, l.kommentar || "")
+      td("Comment", "note", l.passar ? h("span", { class: "fits", text: "Fits: " + l.passar + (isTrims(l) && num(l.atgang) ? " · " + num(l.atgang) + " per unit" : "") }) : null, l.kommentar || "")
     );
     return tr;
   }
@@ -2828,7 +2871,7 @@ import * as P from "./platform.js";
         if (p.inne && (st.typ || "Nyhet") === "Nyhet") add(Object.assign({}, base, { key: "s-inne-" + st._id, typ: "kollektion", titel: "Sample in by: " + st.namn, datum: p.inne, agare: "Alex", klar: xs.some((x) => x.status === "Mottagen") }));
         add(Object.assign({}, base, { key: "s-po-" + st._id, typ: "inkop", titel: "PO by: " + st.namn, datum: p.po, agare: "Elliot", klar: hasPlacedPo(st) }));
       }
-      if (isISO(st.fotoSenast)) add(Object.assign({}, base, { key: "s-foto-" + st._id, typ: "innehall", titel: "Photo sample by: " + st.namn, datum: st.fotoSenast, agare: "Oliver", klar: fotoState(st).key === "finns" }));
+      if (isISO(st.fotoSenast) && isNewStyle(st)) add(Object.assign({}, base, { key: "s-foto-" + st._id, typ: "innehall", titel: "Photo sample by: " + st.namn, datum: st.fotoSenast, agare: "Oliver", klar: fotoState(st).key === "finns" }));
       if (isISO(st.kampanjDatum)) add(Object.assign({}, base, { key: "s-kamp-" + st._id, typ: "innehall", titel: "Campaign shoot: " + st.namn, datum: st.kampanjDatum, agare: "Oliver", klar: ["Fotad", "Klar"].includes(st.kampanjStatus) }));
       if (isISO(st.ecomPlatDatum)) add(Object.assign({}, base, { key: "s-ecom-" + st._id, typ: "innehall", titel: "E-com shoot: " + st.namn, datum: st.ecomPlatDatum, agare: "Oliver", klar: ["Fotade", "Retuscherade", "Publicerade"].includes(st.ecomBilder) }));
       if (isISO(st.ecomLansering)) add(Object.assign({}, base, { key: "s-lans-" + st._id, typ: "drop", titel: "Launch: " + st.namn, datum: st.ecomLansering, agare: "Jakob", klar: st.ecomBilder === "Publicerade" && !!st.ecomShopify }));
@@ -3526,6 +3569,14 @@ import * as P from "./platform.js";
     if (!res.ok) { let info = "HTTP " + res.status; try { info = (await res.json()).error || info; } catch (e) {} return { skickat: 0, info }; }
     return res.json();
   }
+  // Ref-plagg: hämtar ordrar taggade #reference i Shopify. Appen skapar ref-plaggen själv (importRefs).
+  async function hostedRefShopify() {
+    const { data: { session } } = await P.supabase.auth.getSession();
+    const res = await fetch("/api/ref", { headers: { Authorization: "Bearer " + (session ? session.access_token : "") } });
+    if (!res.ok) return { error: "HTTP " + res.status };
+    return res.json();
+  }
+
   // ---------- SHOPIFY-BILD: hämtas direkt, annars via servern (bara hostad) ----------
   // Webbläsaren får inte alltid läsa bilder från Shopify (CORS), och en produktsida är ingen bild. Då hämtar /api/bild den i stället.
   async function hostedBild(url) {
@@ -4359,6 +4410,7 @@ import * as P from "./platform.js";
     if (t === "samples") { if (downloads) add("Export CSV", exportSamples); if (w) add("+ New style", () => openStyle(null)); if (w) add("+ New sample", () => openSample(null), true); }
     if (t === "kollektion" && w) { add("+ New drop", () => openDrop(null, { sasong: KollView.seasonInView() || "" })); add("+ New sample", () => openSample(null)); add("+ New idea", () => openStyle(null, { status: ST_IDE, sasong: KollView.seasonInView() || "" })); add("+ New style", () => openStyle(null, { sasong: KollView.seasonInView() || "" }), true); }
     if (t === "foto" && w) add("+ New sample", () => openSample(null, { version: "Fotosample" }), true);
+    if (t === "ref" && w && typeof hostedRefShopify === "function") add("Fetch from Shopify", (e) => importRefs(e && e.target));
     if (t === "ref" && w) add("+ New reference garment", () => openRef(null), true);
     if (t === "produktion") { if (downloads) add("Export CSV", exportPo); if (w) add("+ New PO", () => openPo(null, { sasong: ProdView.seasonInView() || "", leverantor: UI.prod.lev || "" }), true); }
     if (t === "tyglager") { if (downloads) add("Export CSV", exportLager); if (w) add("+ New fabric", () => openTyg(null)); if (w) add("+ New batch", () => openLager(null, UI.lager.typ === "trims" ? { typ: "trims" } : null), true); }
@@ -4614,6 +4666,50 @@ import * as P from "./platform.js";
     return h("div", { class: "flagrow" }, h("span", { class: "pill s-Problem", text: "Flag" }), h("div", null, h("div", { class: "ft" }, h("b", { text: f.titel || f.ref }), " – ", f.text || ""), h("div", { class: "fm", text: [f.avNamn ? "flagged by " + f.avNamn : "", when, (f.till || []).length ? "to " + f.till.map(personName).join(", ") : ""].filter(Boolean).join(" · ") })), acts);
   }
   // Försenad PO: flaggan är automatisk. "PO i lager" sätter PO:n som inlevererad (och stylarna på raderna som levererade), och då försvinner flaggan.
+  // ---------- Lageravdrag ----------
+  // När en PO kommer in i lager föreslås avdrag på trims-partier som har "Åtgång per plagg" och där PO:ns produkter står under Passar.
+  // Inget dras förrän man har bekräftat, och antalet går att ändra.
+  const fitsNames = (l) => String(l.passar || "").split(/[,;\n]/).map((x) => norm(x)).filter((x) => x.length >= 3);
+  const lotFitsLine = (l, r) => { const st = r.styleId ? byId(D.styles, r.styleId) : null; const ps = [norm(r.produkt), st ? norm(st.namn) : ""].filter(Boolean); return fitsNames(l).some((n) => ps.some((p) => p.includes(n) || n.includes(p))); };
+  function stockDeductions(po) {
+    const out = [];
+    for (const l of D.lager) {
+      if (!isTrims(l) || !(num(l.atgang) > 0) || !(num(l.antal) > 0) || l.status === "Förbrukad" || l.status === "Beställd") continue;
+      const units = (po.rader || []).filter((r) => lotFitsLine(l, r)).reduce((a, r) => a + (num(r.antal) || 0), 0);
+      if (units > 0) out.push({ lot: l, units, n: Math.min(num(l.antal), units * num(l.atgang)) });
+    }
+    return out.sort((a, b) => lotName(a.lot).localeCompare(lotName(b.lot), "sv"));
+  }
+  function openDeduct(poId) {
+    const po = byId(D.po, poId); if (!po || po.lagerAvdrag || !canWrite || !db) return false;
+    const items = stockDeductions(po); if (!items.length) return false;
+    const nr = po.nr || po._id;
+    const grid = h("div", { class: "deduct" }, h("div", { class: "dh", text: "Batch" }), h("div", { class: "dh num", text: "Left now" }), h("div", { class: "dh num", text: "Deduct" }), h("div", { class: "dh num", text: "Left after" }));
+    for (const it of items) {
+      const l = it.lot; const after = h("div", { class: "num" });
+      const inpN = h("input", { type: "number", min: "0", max: String(num(l.antal)), step: "1", value: String(it.n), "aria-label": "Deduct" });
+      const sync = () => { it.n = Math.max(0, Math.min(num(l.antal), Math.round(num(inpN.value) || 0))); after.textContent = String(num(l.antal) - it.n) + " pcs"; };
+      inpN.addEventListener("input", sync); sync();
+      grid.append(h("div", null, h("div", { class: "prod", text: lotName(l) }), h("div", { class: "sub", text: [l._id, l.farg, l.storlek, l.plats].filter(Boolean).join(" · ") + " · " + it.units + " garments × " + num(l.atgang) })),
+        h("div", { class: "num", text: num(l.antal) + " pcs" }), h("div", null, inpN), after);
+    }
+    const skip = async () => { const cur = byId(D.po, poId) || po; await write("po", poId, { lagerAvdrag: new Date().toISOString(), logg: (cur.logg || []).concat(logEntry("Stock deduction skipped")) }); closeSheet(); };
+    const go = async (btn) => {
+      btn.disabled = true; const now = new Date().toISOString(); const done = [];
+      for (const it of items) {
+        if (!(it.n > 0)) continue; const l = byId(D.lager, it.lot._id) || it.lot; const kvar = Math.max(0, num(l.antal) - it.n);
+        const patch = { antal: kvar, andrad: now, logg: (l.logg || []).concat(logEntry("−" + it.n + " pcs: PO " + nr + " delivered (" + it.units + " garments × " + num(l.atgang) + "). Left " + kvar + " pcs")) };
+        if (kvar === 0) patch.status = "Förbrukad";
+        if (await write("tyglager", l._id, patch)) { Object.assign(l, patch); done.push(lotName(l) + (l.farg ? " " + l.farg : "") + " −" + it.n); }
+      }
+      const cur = byId(D.po, poId) || po;
+      await write("po", poId, { lagerAvdrag: now, logg: (cur.logg || []).concat(logEntry(done.length ? "Stock deduction: " + done.join("; ") : "Stock deduction: nothing deducted")) });
+      toast(done.length ? "Stock updated: " + done.length + (done.length === 1 ? " batch" : " batches") : "Nothing was deducted"); scheduleRefresh(); closeSheet();
+    };
+    openSheet({ tag: "PO " + nr, title: "Stock deduction", sub: "The PO is in the warehouse. These batches fit the products on the PO – check the quantities before they are deducted.", body: [grid],
+      foot: [h("button", { class: "btn", type: "button", text: "Skip", onclick: skip }), h("div", { class: "right" }, h("button", { class: "btn primary", type: "button", text: "Deduct from stock", onclick: (e) => go(e.target) }))] });
+    return true;
+  }
   async function markPoInWarehouse(p) {
     const cur = byId(D.po, p._id) || p; const now = new Date().toISOString(); const nr = cur.nr || cur._id;
     if (!(await write("po", cur._id, { status: "Inlevererad", andrad: now, logg: (cur.logg || []).concat(logEntry("Status: " + tv(poStatusNorm(cur.status)) + " → " + tv("Inlevererad") + " (PO in warehouse)")) }))) return;
@@ -4624,6 +4720,7 @@ import * as P from "./platform.js";
       if (await write("styles", st._id, patch)) Object.assign(st, patch);
     }
     toast("PO " + nr + " is in the warehouse"); scheduleRefresh();
+    openDeduct(cur._id);
   }
   function lateRow(x) {
     const acts = h("div", { class: "fa" });
@@ -4748,7 +4845,9 @@ import * as P from "./platform.js";
     const fP1 = inp("f_p1", s.p1Skickad, { type: "date" });
     const fP2 = inp("f_p2", s.p2Skickad, { type: "date" });
     const fPlats = selectEl("f_plats", [["", "–"]].concat(PLATSER), s.platsTyp || "");
-    const fHang = inp("f_hangare", s.hangare, { inputmode: "numeric", placeholder: "e.g. 12" });
+    // Hängarna är numrerade 1–5. Ett äldre nummer utanför 1–5 står kvar som val så att inget försvinner.
+    const HANG_NR = ["1", "2", "3", "4", "5"];
+    const fHang = selectEl("f_hangare", [["", "– choose –"]].concat(HANG_NR.map((n) => [n, "Hanger " + n]), s.hangare && !HANG_NR.includes(String(s.hangare)) ? [[String(s.hangare), "Hanger " + s.hangare]] : []), s.hangare ? String(s.hangare) : "");
     const fPNot = inp("f_platsnot", s.platsNotering, { placeholder: "Who or where, e.g. Carl is testing" });
     const fBeslut = selectEl("f_beslut", [["", "–"]].concat(BESLUT), s.beslut || "");
     const fMarkt = selectEl("f_markt", [["", "No – not labelled yet"], ["1", "Yes, labelled with ID"]], s.markt ? "1" : "");
@@ -4757,15 +4856,15 @@ import * as P from "./platform.js";
     const fAndr = area("f_andringar", s.andringar, "What should be corrected for the next round");
     const fKom = area("f_kommentar", s.kommentar);
     const ledHint = h("span", { class: "hint" });
-    const hangWrap = field("Hanger / hook no.", fHang);
+    const hangWrap = field("Hanger no.", fHang, { hint: "Hanger 1–5. The photo hanger has no number." });
     const syncLedHint = () => { const n = fLev.value.trim(); const sl = levNum(n, "sampleLedtid"); const a = actualLead(n); ledHint.textContent = n ? "Standard " + (sl != null ? sl + " d" : "saknas") + (a ? " · actual average " + a.avg + " d (" + a.n + ")" : "") : ""; };
     const fillLead = () => { const sl = levNum(fLev.value.trim(), "sampleLedtid"); if (sl != null && !fLed.value) fLed.value = sl; if (!fForv.value && fBest.value && Number(fLed.value) > 0) fForv.value = addDays(fBest.value, Number(fLed.value)); };
-    const syncPlats = () => { const isH = fPlats.value === "Hängare" || fPlats.value === "Fotohäng"; fHang.disabled = ro || !isH; hangWrap.classList.toggle("dim", !isH); };
+    const syncPlats = () => { const isH = fPlats.value === "Hängare"; fHang.disabled = ro || !isH; hangWrap.classList.toggle("dim", !isH); };
     fStyle.addEventListener("change", () => { newWrap.hidden = fStyle.value !== "__ny"; if (!newWrap.hidden) fNewStyle.focus(); const x = byId(D.styles, fStyle.value); if (x && !fLev.value.trim()) { fLev.value = x.leverantor || ""; syncLedHint(); if (isNew) fillLead(); } });
     fLev.addEventListener("change", () => { syncLedHint(); if (isNew) fillLead(); });
     fLed.addEventListener("change", () => { if (fBest.value && Number(fLed.value) > 0 && !fForv.value) fForv.value = addDays(fBest.value, Number(fLed.value)); });
-    fStatus.addEventListener("change", () => { if (fStatus.value === "Mottagen" && !fMott.value) fMott.value = todayISO(); });
-    fPlats.addEventListener("change", () => { syncPlats(); if (fPlats.value === "Hängare" || fPlats.value === "Fotohäng") fHang.focus(); });
+    fStatus.addEventListener("change", () => { if (fStatus.value === "Mottagen" && !fMott.value) fMott.value = todayISO(); if (fStatus.value === ST_REDO && isNew) { fBest.value = ""; fForv.value = ""; } if (fStatus.value === "Beställd" && !fBest.value) fBest.value = todayISO(); });
+    fPlats.addEventListener("change", () => { syncPlats(); if (fPlats.value === "Hängare") fHang.focus(); });
 
     const form = h("form", { class: "form", id: "sampleForm", autocomplete: "off", onsubmit: (e) => e.preventDefault() },
       h("h3", { class: "sec-title full", text: "Product" }),
@@ -4836,6 +4935,7 @@ import * as P from "./platform.js";
       quick.hidden = false;
       const add = (label, fn, primary) => quick.append(h("button", { class: "btn small" + (primary ? " primary" : ""), type: "button", text: label, onclick: fn }));
       if (isWaiting(cur) || cur.status === "Problem") add("Received today", () => quickUpdate(cur, { status: "Mottagen", mottagen: todayISO() }, "Marked received. Enter the hanger below."), true);
+      if (cur.status === ST_REDO) add("Ordered today", () => quickUpdate(cur, { status: "Beställd", bestalld: todayISO() }, "Marked as ordered"), true);
       if (cur.status === "Beställd") add("Skickad", () => quickUpdate(cur, { status: "Skickad" }, "Marked shipped"));
       const r = remindDue(cur);
       if (r) add("Reminder " + r + " sent", () => quickUpdate(cur, r === 1 ? { p1Skickad: todayISO() } : { p2Skickad: todayISO() }, "Reminder " + r + " noted"));
@@ -4893,9 +4993,9 @@ import * as P from "./platform.js";
         const tygId = await resolveTyg(fTyg.value.trim(), lev);
         const o = {
           styleId: styleId || null, produkt: st ? st.namn : (s.produkt || ""), version: fVersion.value, leverantor: lev, farg: fFarg.get().join(", "), farger: fFarg.get(), tygId, storlek: fStorlek.value.trim(), sasong: fSas.value.trim(),
-          prisBelopp: num(fPris.value), prisValuta: fValuta.value || null, status: fStatus.value, bestalld: fBest.value || null, ledtid: num(fLed.value), forvantad: fForv.value || null,
+          prisBelopp: num(fPris.value), prisValuta: fValuta.value || null, status: fStatus.value, bestalld: fStatus.value === ST_REDO ? null : fBest.value || null, ledtid: num(fLed.value), forvantad: fStatus.value === ST_REDO ? null : fForv.value || null,
           mottagen: fMott.value || null, tracking: fTrack.value.trim(), p1Skickad: fP1.value || null, p2Skickad: fP2.value || null,
-          platsTyp: fPlats.value, hangare: fPlats.value === "Hängare" || fPlats.value === "Fotohäng" ? fHang.value.trim() : "", platsNotering: fPNot.value.trim(), beslut: fBeslut.value, andringar: fAndr.value.trim(), kommentar: fKom.value.trim(),
+          platsTyp: fPlats.value, hangare: fPlats.value === "Hängare" ? fHang.value.trim() : fPlats.value === "Fotohäng" && s.platsTyp === "Fotohäng" ? s.hangare || "" : "", platsNotering: fPNot.value.trim(), beslut: fBeslut.value, andringar: fAndr.value.trim(), kommentar: fKom.value.trim(),
           markt: fMarkt.value === "1", mattGodkanda: fMatt.value === "1" ? true : fMatt.value === "0" ? false : null, mattKommentar: fMattKom.value.trim()
         };
         if (!o.forvantad && o.bestalld && o.ledtid > 0) o.forvantad = addDays(o.bestalld, o.ledtid);
@@ -5430,7 +5530,7 @@ import * as P from "./platform.js";
   }
 
   // ---------- fabric lot sheet ----------
-  const L_LABELS = { passar: "Fits", tygId: "Tyg", farg: "Colour", plats: "Location", status: "Status", inkoptMeter: "Purchased (m)", meter: "Left (m)", bredd: "Width (cm)", prisPerMeter: "Price per metre", prisValuta: "Currency", inkopt: "Purchased", reserveradFor: "Reserved for", kommentar: "Comment", typ: "Typ", tygNamn: "Item", storlek: "Size", inkoptAntal: "Purchased (pcs)", antal: "Left (pcs)", prisPerSt: "Price per pc" };
+  const L_LABELS = { atgang: "Used per garment", passar: "Fits", tygId: "Tyg", farg: "Colour", plats: "Location", status: "Status", inkoptMeter: "Purchased (m)", meter: "Left (m)", bredd: "Width (cm)", prisPerMeter: "Price per metre", prisValuta: "Currency", inkopt: "Purchased", reserveradFor: "Reserved for", kommentar: "Comment", typ: "Typ", tygNamn: "Item", storlek: "Size", inkoptAntal: "Purchased (pcs)", antal: "Left (pcs)", prisPerSt: "Price per pc" };
   function openLager(id, preset) {
     if (designOnly()) return;
     const isNew = !id;
@@ -5452,6 +5552,7 @@ import * as P from "./platform.js";
     const fTyp = selectEl("f_ltyp", [["tyg", "Fabric (metres)"], ["trims", "Trims (quantity)"]], isTrims(l) ? "trims" : "tyg");
     const fStorlek = inp("f_lstorlek", l.storlek, { placeholder: "e.g. 32L" });
     const fInkSt = inp("f_linkst", l.inkoptAntal, { type: "number", min: "0", step: "1", inputmode: "numeric" });
+    const fAtgang = inp("f_latgang", l.atgang, { type: "number", min: "0", step: "1", inputmode: "numeric", placeholder: "t.ex. 1" });
     const fKvarSt = inp("f_lkvarst", l.antal, { type: "number", min: "0", step: "1", inputmode: "numeric", placeholder: "antal" });
     const fPrisSt = inp("f_lprisst", l.prisPerSt, { type: "number", min: "0", step: "0.0001", inputmode: "decimal" });
     fInkSt.addEventListener("change", () => { if (isNew && !fKvarSt.value && fInkSt.value) fKvarSt.value = fInkSt.value; });
@@ -5462,7 +5563,7 @@ import * as P from "./platform.js";
     fInk.addEventListener("change", () => { if (isNew && !fKvar.value && fInk.value) fKvar.value = fInk.value; });
     const fArt = field("Tyg", fTyg, { full: true, hint: "Type freely or choose a fabric that already exists." });
     const fsTyg = [h("h3", { class: "sec-title full", text: "Metres" }), field("Purchased (m)", fInk), field("Left (m, approx.)", fKvar, { hint: "Empty = not known yet" }), field("Width (cm)", fBredd), field("Price per metre", fPris)];
-    const fsTrims = [h("h3", { class: "sec-title full", text: "Quantity" }), field("Size", fStorlek), field("Purchased (pcs)", fInkSt), field("Left (pcs)", fKvarSt, { hint: "Empty = not known yet" }), field("Price per pc", fPrisSt)];
+    const fsTrims = [h("h3", { class: "sec-title full", text: "Quantity" }), field("Size", fStorlek), field("Purchased (pcs)", fInkSt), field("Left (pcs)", fKvarSt, { hint: "Empty = not known yet" }), field("Price per pc", fPrisSt), field("Used per garment", fAtgang, { hint: "Deducted when a PO with a product listed under Fits arrives in the warehouse. Empty = never deducted." })];
     const form = h("form", { class: "form", id: "lagerForm", autocomplete: "off", onsubmit: (e) => e.preventDefault() },
       field("Type", fTyp), field("Status", fStatus),
       fArt,
@@ -5531,7 +5632,7 @@ import * as P from "./platform.js";
         if (!plats) { toast(trims ? "Write where the item is." : "Write where the fabric is."); fPlats.focus(); return; }
         let o;
         if (trims) {
-          o = { typ: "trims", tygId: null, tygNamn: name, farg: fFarg.value.trim(), storlek: fStorlek.value.trim(), plats, status: fStatus.value, inkoptAntal: num(fInkSt.value), antal: num(fKvarSt.value), prisPerSt: num(fPrisSt.value), prisValuta: fVal.value || null, inkopt: fInkDate.value || null, reserveradFor: fRes.value || null, passar: fPassar.value.trim(), kommentar: fKom.value.trim() };
+          o = { typ: "trims", tygId: null, tygNamn: name, farg: fFarg.value.trim(), storlek: fStorlek.value.trim(), plats, status: fStatus.value, inkoptAntal: num(fInkSt.value), antal: num(fKvarSt.value), atgang: num(fAtgang.value), prisPerSt: num(fPrisSt.value), prisValuta: fVal.value || null, inkopt: fInkDate.value || null, reserveradFor: fRes.value || null, passar: fPassar.value.trim(), kommentar: fKom.value.trim() };
         } else {
           const tygId = await resolveTyg(name, "");
           if (!tygId) return;

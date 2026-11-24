@@ -21,3 +21,11 @@
     if (!res.ok) { let info = "HTTP " + res.status; try { info = (await res.json()).error || info; } catch (e) {} return { skickat: 0, info }; }
     return res.json();
   }
+  // Ref-plagg: hämtar ordrar taggade #reference i Shopify. Appen skapar ref-plaggen själv (importRefs).
+  async function hostedRefShopify() {
+    const { data: { session } } = await P.supabase.auth.getSession();
+    const res = await fetch("/api/ref", { headers: { Authorization: "Bearer " + (session ? session.access_token : "") } });
+    if (!res.ok) return { error: "HTTP " + res.status };
+    return res.json();
+  }
+

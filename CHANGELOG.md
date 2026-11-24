@@ -6,6 +6,16 @@ och importeras med `node tools/import-dokument.js`, och main går live på plm.a
 
 Versionsnumrering: små ändringar ger punktversion (v9.1, v9.2 …). Nytt heltal (v10) bara vid stora ändringar.
 
+## v10.22 (2026-11-24)
+
+Sample-steg, hängare, fotosample-storlek, befintlig produkt, lageravdrag och ref-plagg från Shopify. Nya fält: atgang (lagerparti), lagerAvdrag (PO), shopifyOrder/shopifyRad (ref-plagg). Inget befintligt fält ändras.
+- Sample-status "Redo för sampling" som steg före Beställd, med egen filterknapp och snabbknappen "Beställd idag". En sample i det läget har inget beställningsdatum och ingen förväntad leverans.
+- Hängare är en rullista: Hängare 1–5. Fotohänget har inget nummer. Ett äldre nummer utanför 1–5 står kvar som val på just den samplen.
+- Fotosample visar storlek: i Foto-fliken, på fotohänget och i sample-listan. Nya fotosamples får 50 (siffer-storlekar), L (XS–XXL) eller 33 (midjemått) ifyllt. För fotosamples från SS27 och framåt utan ifylld storlek visas samma standard; storleken ändras på samplen.
+- Bara nyheter behöver fotosample. Restock och NOOS visas som "Befintlig produkt" i Foto-fliken, utan beställ-knapp och utan "fotosample senast" i tidsplanen.
+- Lageravdrag: trims-partier har fältet "Åtgång per plagg". När en PO sätts som inlevererad (i PO:n eller med "PO i lager") visas en lista över partier där PO:ns produkter står under Passar, med föreslaget avdrag (antal plagg × åtgång). Antalen går att ändra, och inget dras förrän man bekräftar. Avdraget loggas på partiet och på PO:n, och frågan ställs bara en gång per PO. Partier utan åtgång dras aldrig av. Gäller bara trims.
+- Ref-plagg från Shopify: knappen "Hämta från Shopify" i Referensplagg läser ordrar taggade reference eller #reference (ny endpoint /api/ref, läser bara). Varje orderrad blir ett ref-plagg med produkt och variant, mottagare från leveransadressen, skickat-datum, fraktbolag, spårningsnummer och länk, värde, ordernummer och orderns anteckning. Redan inlästa rader hoppas över; saknad spårning fylls i när ordern fått den.
+
 ## v10.21 (2026-11-24)
 
 Måtten redigerbara för alla, med automatisk kommentar. Inget nytt fält; måtten sparas som förut i mattlista.

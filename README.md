@@ -20,6 +20,7 @@ Princip: artefakten är kod, appen är data. Elliot utvecklar koden i Claude-art
 - `api/mejltest.js` testar mejlet: skickar ett testmejl till den inloggade (eller NOTISER_TEST_TILL) och visar vilka inställningar som finns (bara namn) och om Microsoft-inloggningen fungerar.
 - `api/bild.js` hämtar en Shopify-bild åt den inloggade när webbläsaren inte får läsa den (bara Rubatos Shopify-adresser).
 - `api/matt.js` listar butikens måttabeller (Shopify-metaobjekt size_chart) som måttreferens på en style.
+- `api/ref.js` läser ordrar taggade `reference`/`#reference` i Shopify så att PLM kan lägga in dem som ref-plagg (knappen "Fetch from Shopify" i Ref garments). Kräver att Shopify-appen får läsa ordrar.
 - `api/redo.js` direktmejl till Elliot när en style blir godkänd och är redo att beställa (samma Microsoft-nycklar).
 - Språk: källan är på svenska, appen byggs på engelska. `node tools/build.mjs artifact/vN.html` kör `tools/i18n.mjs` sist och översätter enligt `tools/en.json`; `--sv` ger svensk bygge. Kräver `npm install` (acorn).
 - `api/notiser.js` dagligt notismejl kl. 10 (Vercel cron). Miljövariabler: MS_TENANT_ID, MS_CLIENT_ID, MS_CLIENT_SECRET, MAIL_FROM, CRON_SECRET, valfri NOTISER_TEST_TILL. Admin kan förhandsvisa: /api/notiser?preview=jakob&token=<Supabase-token>.
