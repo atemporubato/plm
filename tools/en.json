@@ -1643,7 +1643,14 @@
   "Ändrar droppen överallt. Urbockad = bara den här PO:n, t.ex. en restock.": "Changes the drop everywhere. Unticked = only this PO, e.g. a restock.",
   "Kommentarer": "Comments",
   "Inga kommentarer ännu.": "No comments yet.",
-  "Skriv @ och förnamn, t.ex. @Carl, så får personen kommentaren som mejl direkt.": "Type @ and a first name, e.g. @Carl, and that person gets the comment by email straight away."
+  "Skriv @ och förnamn, t.ex. @Carl, så får personen kommentaren som mejl direkt.": "Type @ and a first name, e.g. @Carl, and that person gets the comment by email straight away.",
+  "Kommentar – skriv @ för att tagga någon": "Comment – type @ to tag someone",
+  "Kommentar sparad – taggat:": "Comment saved – tagged:",
+  "Skriv @ och förnamn, t.ex. @Carl, för att tagga någon. Inget mejl skickas.": "Type @ and a first name, e.g. @Carl, to tag someone. No email is sent.",
+  "Flaggan gäller": "Flag is for",
+  "Flaggad – ligger överst i fliken tills den är löst": "Flagged – stays at the top of the tab until resolved",
+  "Ligger överst i fliken tills det är löst": "Stays at the top of the tab until it is resolved",
+  "Flagga med kommentar – ligger överst i fliken tills det är löst": "Flag with a comment – stays at the top of the tab until resolved"
  },
  "values": {
   "Storleksset": "Size set",

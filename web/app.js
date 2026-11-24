@@ -4384,7 +4384,10 @@ import * as P from "./platform.js";
   // Skriv @ i en kommentar (Historik på sample, style, PO och lager) så föreslås teamet. Den som taggas får ett
   // direktmejl (bara hostad, /api/omnamn); går det inte kommer taggningen med i mejlet kl. 10.
   // De taggade sparas på loggraden (fältet till); texten sparas precis som den skrevs.
-  const NOTE_PH = "Comment – type @ to tag someone (they get an email)";
+  // Mejl är avstängt tills vidare (Elliot 24 nov 2026): inga mejl skickas, flaggor och taggar syns bara i appen.
+  // Slås på igen genom att sätta MEJL_PA = true här och MEJL_PA=1 i Vercel.
+  const MEJL_PA = false;
+  const NOTE_PH = MEJL_PA ? "Comment – type @ to tag someone (they get an email)" : "Comment – type @ to tag someone";
   const MENTION_ALIAS = { alexander: "alex", calle: "carl", karl: "carl" };
   function mentionKeys(text) {
     const out = [];
@@ -4432,7 +4435,8 @@ import * as P from "./platform.js";
     if (till.length) {
       const names = till.map(personName).join(", ");
       const res = await notifyMention(coll, cur._id, e.t);
-      toast((res && res.skickat ? "Comment saved – email sent to " + names : "Comment saved – " + names + " will get it in the 10:00 email") + (res && res.info ? " (" + res.info + ")" : ""));
+      if (!MEJL_PA) toast("Comment saved – tagged: " + names);
+      else toast((res && res.skickat ? "Comment saved – email sent to " + names : "Comment saved – " + names + " will get it in the 10:00 email") + (res && res.info ? " (" + res.info + ")" : ""));
     }
     return e;
   }
@@ -4452,7 +4456,7 @@ import * as P from "./platform.js";
     draw();
     return h("section", { class: "comments-sec" }, h("h3", { class: "sec-title", text: "Comments" }),
       ro ? null : h("div", { class: "add-note" }, input, h("button", { class: "btn small", type: "button", text: "Add", onclick: add })),
-      ro ? null : h("span", { class: "hint", text: "Type @ and a first name, e.g. @Carl, and that person gets the comment by email straight away." }), ul);
+      ro ? null : h("span", { class: "hint", text: MEJL_PA ? "Type @ and a first name, e.g. @Carl, and that person gets the comment by email straight away." : "Type @ and a first name, e.g. @Carl, to tag someone. No email is sent." }), ul);
   }
   function openFlag(o) {
     const fText = h("textarea", { id: "f_flagtext", rows: 4, placeholder: "What is the problem, and what needs to happen?" });
@@ -4460,7 +4464,7 @@ import * as P from "./platform.js";
     const boxes = FLAG_PEOPLE.filter((p) => p[0] !== me).map(([k, n]) => { const cb = h("input", { type: "checkbox", value: k }); cb.checked = pre.includes(k); return h("label", null, cb, n); });
     const form = h("form", { class: "form", autocomplete: "off", onsubmit: (e) => e.preventDefault() },
       h("div", { class: "field full" }, h("label", { for: "f_flagtext", text: "Comment (required)" }), fText),
-      h("div", { class: "field full" }, h("label", { text: "Email directly to" }), h("div", { class: "checks" }, boxes), h("span", { class: "hint", text: "The flag stays at the top of the tab until someone marks it as resolved." })));
+      h("div", { class: "field full" }, h("label", { text: MEJL_PA ? "Email directly to" : "Flag is for" }), h("div", { class: "checks" }, boxes), h("span", { class: "hint", text: "The flag stays at the top of the tab until someone marks it as resolved." })));
     const back = () => openFlagTarget(o);
     const save = async (btn) => {
       const text = fText.value.trim(); const till = boxes.map((b) => b.querySelector("input")).filter((c) => c.checked).map((c) => c.value);
@@ -4473,11 +4477,11 @@ import * as P from "./platform.js";
       if (!byId(D.flaggor, id)) D.flaggor.push(Object.assign({}, body, { _id: id }));
       if (o.after) { try { await o.after(text); } catch (e) { console.error(e); } }
       const res = await notifyFlag(id);
-      toast(res && res.skickat ? "Flagged – email sent to " + till.map(personName).join(", ") : "Flagged – " + till.map(personName).join(", ") + " will get it in the 10:00 email");
+      toast(!MEJL_PA ? "Flagged – stays at the top of the tab until resolved" : res && res.skickat ? "Flagged – email sent to " + till.map(personName).join(", ") : "Flagged – " + till.map(personName).join(", ") + " will get it in the 10:00 email");
       closeSheet(); scheduleRefresh();
     };
-    openSheet({ tag: "Flag", title: o.titel, sub: "Sent as a direct email and stays at the top of the tab until it is resolved", body: [form],
-      foot: [h("div"), h("div", { class: "foot-right" }, h("button", { class: "btn", type: "button", text: "Back", onclick: back }), h("button", { class: "btn primary", type: "button", text: "Flag and email", onclick: (e) => save(e.target) }))], focus: "f_flagtext" });
+    openSheet({ tag: "Flag", title: o.titel, sub: MEJL_PA ? "Sent as a direct email and stays at the top of the tab until it is resolved" : "Stays at the top of the tab until it is resolved", body: [form],
+      foot: [h("div"), h("div", { class: "foot-right" }, h("button", { class: "btn", type: "button", text: "Back", onclick: back }), h("button", { class: "btn primary", type: "button", text: MEJL_PA ? "Flag and email" : "Flag", onclick: (e) => save(e.target) }))], focus: "f_flagtext" });
   }
   async function resolveFlag(f, text) {
     const now = new Date().toISOString();
@@ -4537,7 +4541,7 @@ import * as P from "./platform.js";
   function openSheet(o) {
     if (o.flagRef && o.flagRef.ref) {
       const note = flagNote(o.flagRef.typ, o.flagRef.ref); if (note) o.body = [note].concat(o.body);
-      if (canWrite && db && o.foot && o.foot[0]) o.foot[0].append(h("button", { class: "btn small", type: "button", text: "⚑ Flag", title: "Send a flag with a comment – direct email to the people you choose", onclick: () => openFlag(o.flagRef) }));
+      if (canWrite && db && o.foot && o.foot[0]) o.foot[0].append(h("button", { class: "btn small", type: "button", text: "⚑ Flag", title: MEJL_PA ? "Send a flag with a comment – direct email to the people you choose" : "Flag with a comment – stays at the top of the tab until resolved", onclick: () => openFlag(o.flagRef) }));
     }
     $("sheetTag").textContent = tv(o.tag || ""); $("sheetTag").hidden = !o.tag;
     $("sheetTitle").textContent = o.title || "";

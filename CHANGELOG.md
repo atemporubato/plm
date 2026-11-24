@@ -6,6 +6,15 @@ och importeras med `node tools/import-dokument.js`, och main går live på plm.a
 
 Versionsnumrering: små ändringar ger punktversion (v9.1, v9.2 …). Nytt heltal (v10) bara vid stora ändringar.
 
+## v10.18 (2026-11-24)
+
+Mejl avstängt tills vidare (Elliot 24 nov). Flaggning är kvar, i appen.
+- Inga mejl skickas: varken 10-mejlet, flagg-mejl, tagg-mejl eller Ready to order-mejl. Servern skickar bara om MEJL_PA=1 är satt i Vercel; utan den gör alla mejl-endpoints ingenting.
+- Flaggor fungerar som förut i appen: kommentar krävs, ligger i Flaggat-rutan överst i fliken tills de är lösta.
+- Kommentarer och @-taggar sparas och visas som förut, men utan mejl.
+- Texterna i appen lovar inte längre mejl ("Flagga" i stället för "Flagga och mejla", osv.).
+- Slås på igen: MEJL_PA = true i appen (artifact) och MEJL_PA=1 i Vercel. Ingen kod är borttagen.
+
 ## v10.17 (2026-11-24)
 
 - Ready to order: raden under stylens namn visar stylens kommentar när den finns, annars som förut tidsplanen ("Produktionstid saknas …" osv.).

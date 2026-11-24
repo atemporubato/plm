@@ -28,7 +28,8 @@ async function verifyUser(req) {
   const u = await res.json();
   return u && /@atemporubato\.com$/i.test(u.email || "") ? u : null;
 }
-const mailReady = () => ["MS_TENANT_ID", "MS_CLIENT_ID", "MS_CLIENT_SECRET", "MAIL_FROM"].every((k) => !!process.env[k]);
+// All mail is switched off unless MEJL_PA=1 is set in Vercel (off since 24 Nov 2026 – flags and tags are shown in the app only).
+const mailReady = () => process.env.MEJL_PA === "1" && ["MS_TENANT_ID", "MS_CLIENT_ID", "MS_CLIENT_SECRET", "MAIL_FROM"].every((k) => !!process.env[k]);
 async function graphToken() {
   const body = new URLSearchParams({ client_id: env("MS_CLIENT_ID"), client_secret: env("MS_CLIENT_SECRET"), scope: "https://graph.microsoft.com/.default", grant_type: "client_credentials" });
   const res = await fetch("https://login.microsoftonline.com/" + env("MS_TENANT_ID") + "/oauth2/v2.0/token", { method: "POST", body });
@@ -85,7 +86,7 @@ module.exports = async (req, res) => {
     const mark = "omn-" + coll + "-" + id + "-" + t;
     const done = await sb("dokument?select=id&collection=eq._notiser&id=eq." + encodeURIComponent(mark));
     if (done && done.length) return res.status(200).json({ ok: true, skickat: 0, info: "already mailed" });
-    if (!mailReady()) return res.status(200).json({ ok: true, skickat: 0, info: "mail not configured – goes out with the 10:00 digest" });
+    if (!mailReady()) return res.status(200).json({ ok: true, skickat: 0, info: "mail is switched off" });
 
     const me = users.find((x) => x.id === u.id) || {};
     const from = (me.namn || "").split(/\s+/)[0] || (author ? NAMN[author.key] : "") || "Someone";
