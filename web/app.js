@@ -1428,7 +1428,7 @@ import * as P from "./platform.js";
       const mk = () => openPo(null, { leverantor: st.leverantor || "", sasong: st.sasong || ProdView.seasonInView() || "", rader: (cols.length ? cols : [""]).map((farg) => ({ styleId: st._id, produkt: st.namn, farg, typ: st.typ || "Nyhet", storlekar: (st.storlekar || []).slice() })) });
       const bits = [[st.sasong, st.drop].filter(Boolean).join(" "), st.leverantor, cols.length ? cols.length + (cols.length === 1 ? " colour" : " colours") : "colours not set"].filter(Boolean).join(" · ");
       card.append(h("div", { class: "flagrow", dataset: { style: st._id } }, h("span", { class: "pill", text: "Godkänd" }),
-        h("div", null, h("div", { class: "ft" }, h("b", { text: st.namn }), " – ", bits), h("div", { class: "fm", text: (p && p.note) || "No PO schedule yet." })),
+        h("div", null, h("div", { class: "ft" }, h("b", { text: st.namn }), " – ", bits), h("div", { class: "fm", text: (st.kommentar || "").trim() || (p && p.note) || "No PO schedule yet." })),
         h("div", { class: "fa" }, h("button", { class: "btn small", type: "button", text: "Open style", onclick: () => openStyle(st._id, null, { full: true }) }),
           canWrite && db && ph ? h("button", { class: "btn small", type: "button", text: "Open " + (ph.nr || "placeholder"), onclick: () => openPo(ph._id) }) : null,
           canWrite && db ? h("button", { class: "btn small primary", type: "button", text: "Create PO", onclick: mk }) : null)));

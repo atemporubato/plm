@@ -6,6 +6,10 @@ och importeras med `node tools/import-dokument.js`, och main går live på plm.a
 
 Versionsnumrering: små ändringar ger punktversion (v9.1, v9.2 …). Nytt heltal (v10) bara vid stora ändringar.
 
+## v10.17 (2026-11-24)
+
+- Ready to order: raden under stylens namn visar stylens kommentar när den finns, annars som förut tidsplanen ("Produktionstid saknas …" osv.).
+
 ## Måttabeller ur produktbeskrivningarna (2026-11-23)
 
 Bara servern, artefakten oförändrad (v10.15).
