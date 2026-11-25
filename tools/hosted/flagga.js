@@ -28,4 +28,10 @@
     if (!res.ok) return { error: "HTTP " + res.status };
     return res.json();
   }
-
+  // Emballage: ordrarna som påsar och kartonger räknas av mot. Appen räknar och skriver själv (syncPackaging).
+  async function hostedPackShopify(since) {
+    const { data: { session } } = await P.supabase.auth.getSession();
+    const res = await fetch("/api/pack?since=" + encodeURIComponent(since), { headers: { Authorization: "Bearer " + (session ? session.access_token : "") } });
+    if (!res.ok) { let msg = "HTTP " + res.status; try { msg = (await res.json()).error || msg; } catch (e) {} return { error: msg }; }
+    return res.json();
+  }

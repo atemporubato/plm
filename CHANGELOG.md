@@ -6,6 +6,17 @@ och importeras med `node tools/import-dokument.js`, och main går live på plm.a
 
 Versionsnumrering: små ändringar ger punktversion (v9.1, v9.2 …). Nytt heltal (v10) bara vid stora ändringar.
 
+## v10.24 (2026-11-25)
+
+Emballage i Lager, avräknat mot ordrarna i Shopify. Nya fält på lagerparti: typ "packaging", packRegel, packFran. Inget befintligt fält ändras.
+- Lager har en tredje typ utöver tyg och trims: Emballage (antal). Egen filterknapp; "Tyg + trims" heter nu "Alla".
+- Ett emballageparti har fältet "Dras av": 1 per order utom Tailoring och Outerwear (e-com-påsar), 1 per plagg i Tailoring och Outerwear (kartonger), eller inget automatiskt avdrag. Regeln och hur långt ordrarna är räknade visas i fetstil i listan.
+- Avräkningen går mot Shopify-ordrar skapade efter att partiet lades upp (packFran). En order med både en tröja och en jacka drar en påse och en kartong. Avbrutna ordrar, testordrar och rader som inte skickas räknas inte. Produkttypen i Shopify avgör vad som är Tailoring/Outerwear.
+- Körs automatiskt när lagret har laddats (högst var 30:e minut per webbläsare) och med knappen "Uppdatera emballage" i Lager. Varje avdrag loggas på partiet med antal och ordernummer; vid 0 blir partiet Förbrukad.
+- Justerar man antalet för hand börjar räkningen om från den tidpunkten.
+- Ny endpoint /api/pack (läser bara från Shopify, skriver ingenting). Appen räknar och uppdaterar partierna själv; resultatet beror bara på partiets antal och packFran, så två webbläsare som räknar samtidigt kommer till samma svar.
+- Rutan "Trims kvar" räknar bara trims, inte emballage.
+
 ## v10.23 (2026-11-25)
 
 Rättning i Produktion. Ingen data ändras.

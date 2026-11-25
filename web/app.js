@@ -350,11 +350,19 @@ import * as P from "./platform.js";
   }
   const lotsOf = (tygId) => (tygId ? D.lager.filter((l) => l.tygId === tygId) : []);
   const lotName = (l) => { const t = tygOf(l); return t ? t.namn : (l.tygNamn || "Unknown fabric"); };
-  // Lager: partier är antingen tyg (meter) eller trims (antal st). Partier utan typ är tyg.
+  // Lager: partier är tyg (meter), trims (antal st) eller emballage (antal st). Partier utan typ är tyg.
   const isTrims = (l) => !!l && l.typ === "trims";
-  const lotQty = (l) => num(isTrims(l) ? l.antal : l.meter);
+  const isPack = (l) => !!l && l.typ === "packaging";
+  const isPcs = (l) => isTrims(l) || isPack(l); // räknas i antal, inte meter
+  const lotTyp = (l) => (isPack(l) ? "packaging" : isTrims(l) ? "trims" : "tyg");
+  const LOT_TYP_LABEL = { tyg: "Tyg", trims: "Trims", packaging: "Packaging" };
+  // Emballage dras av från Shopify-ordrar: en per order (utom plagg som har egen kartong), eller en per plagg med egen kartong.
+  const PACK_BOX_TYPES = ["tailoring", "outerwear"]; // produkttyper i Shopify som skickas i egen kartong
+  const PACK_REGLER = [["", "Not deducted automatically"], ["order", "1 per order – except Tailoring and Outerwear"], ["plagg", "1 per garment in Tailoring and Outerwear"]];
+  const PACK_REGEL_TEXT = { order: "1 per order, except Tailoring and Outerwear", plagg: "1 per garment in Tailoring and Outerwear" };
+  const lotQty = (l) => num(isPcs(l) ? l.antal : l.meter);
   const fmtSt = (n) => Math.round(Number(n)).toLocaleString("sv-SE") + " pcs";
-  const fmtQty = (l, n) => (isTrims(l) ? fmtSt(n) : "approx. " + fmtM(n) + " m");
+  const fmtQty = (l, n) => (isPcs(l) ? fmtSt(n) : "approx. " + fmtM(n) + " m");
   const reservedName = (l) => { const st = l.reserveradFor ? byId(D.styles, l.reserveradFor) : null; return st ? st.namn : ""; };
   function stockSummary(tygId) {
     const lots = lotsOf(tygId).filter((l) => l.status === "I lager");
@@ -826,6 +834,8 @@ import * as P from "./platform.js";
     if (k === "mattFran") return refName(v);
     if (k === "shopifyBild") return v && v.url ? v.url : "";
     if (k === "tygId") { const t = byId(D.tyger, v); return t ? t.namn : String(v); }
+    if (k === "packRegel") return PACK_REGEL_TEXT[v] || "";
+    if (k === "typ" && LOT_TYP_LABEL[v]) return tv(LOT_TYP_LABEL[v]);
     if (typeof v === "boolean") return v ? "yes" : "no";
     if (isISO(v)) return fmtDate(v);
     return String(v);
@@ -2751,7 +2761,7 @@ import * as P from "./platform.js";
       this.seg = makeSeg([["I lager", "I lager"], ["Beställd", "Beställd"], ["Förbrukad", "Förbrukad"], ["alla", "All"]], st, "status", upd);
       if (!st.typ) st.typ = "alla";
       const typState = { get typ() { return st.typ; }, set typ(v) { st.typ = v; }, view: null };
-      this.segTyp = makeSeg([["tyg", "Tyg"], ["trims", "Trims"], ["alla", "Fabric + trims"]], typState, "typ", upd);
+      this.segTyp = makeSeg([["tyg", "Tyg"], ["trims", "Trims"], ["packaging", "Packaging"], ["alla", "All"]], typState, "typ", upd);
       this.segTyp.el.setAttribute("aria-label", "Typ");
       const grp = selectEl("f_l_group", [["plats", "Group by location"], ["tyg", "Group by fabric"], ["none", "No grouping"]], st.group);
       grp.addEventListener("change", () => { st.group = grp.value; upd(); });
@@ -2761,15 +2771,15 @@ import * as P from "./platform.js";
       tb.addEventListener("click", (e) => { if (e.target.closest("button")) return; const tr = e.target.closest("tr[data-id]"); if (tr) openLager(tr.dataset.id); });
       tb.addEventListener("keydown", (e) => { if (e.key !== "Enter" || e.target.closest("button")) return; const tr = e.target.closest("tr[data-id]"); if (tr) openLager(tr.dataset.id); });
       this.empty = h("div", { class: "empty", hidden: true });
-      root.append(h("p", { class: "lede", text: "Fabric and trims that Rubato owns: where it is and how much is left – metres for fabric, quantity for trims (buttons, zips, labels …). Update when an order has been sewn or when the supplier has counted." }), this.strip.el, h("section", { class: "filters", "aria-label": "Filter" }, q, this.segTyp.el, this.fPlats.el, this.seg.el, grp, this.count), h("section", { class: "ledger-wrap" }, t, this.empty));
+      root.append(h("p", { class: "lede", text: "Fabric, trims and packaging that Rubato owns: where it is and how much is left – metres for fabric, quantity for trims (buttons, zips, labels …) and packaging (bags, boxes). Update when an order has been sewn or when the supplier has counted. Packaging is deducted from the orders in Shopify." }), this.strip.el, h("section", { class: "filters", "aria-label": "Filter" }, q, this.segTyp.el, this.fPlats.el, this.seg.el, grp, this.count), h("section", { class: "ledger-wrap" }, t, this.empty));
     },
     update() {
       const st = UI.lager, q = norm(st.q);
-      const typOk = (l) => !st.typ || st.typ === "alla" || (st.typ === "trims") === isTrims(l);
+      const typOk = (l) => !st.typ || st.typ === "alla" || st.typ === lotTyp(l);
       this.segTyp.sync();
       const inStock = D.lager.filter((l) => l.status === "I lager" && typOk(l));
       this.strip.set({
-        meter: Math.round(inStock.filter((l) => !isTrims(l)).reduce((a, l) => a + (num(l.meter) || 0), 0)),
+        meter: Math.round(inStock.filter((l) => !isPcs(l)).reduce((a, l) => a + (num(l.meter) || 0), 0)),
         antal: inStock.filter(isTrims).reduce((a, l) => a + (num(l.antal) || 0), 0),
         partier: inStock.length,
         saknar: inStock.filter((l) => lotQty(l) == null).length,
@@ -2780,7 +2790,7 @@ import * as P from "./platform.js";
       this.fPlats.fill(uniq(D.lager.map((l) => l.plats)));
       const list = D.lager.filter((l) => {
         switch (st.view) {
-          case "meter": if (!(l.status === "I lager" && !isTrims(l) && num(l.meter) != null)) return false; break;
+          case "meter": if (!(l.status === "I lager" && !isPcs(l) && num(l.meter) != null)) return false; break;
           case "antal": if (!(l.status === "I lager" && isTrims(l) && num(l.antal) != null)) return false; break;
           case "partier": if (l.status !== "I lager") return false; break;
           case "saknar": if (!(l.status === "I lager" && lotQty(l) == null)) return false; break;
@@ -2790,7 +2800,7 @@ import * as P from "./platform.js";
         }
         if (!typOk(l)) return false;
         if (st.plats && l.plats !== st.plats) return false;
-        if (q && ![l._id, lotName(l), l.farg, l.storlek, isTrims(l) ? "trims" : "tyg", l.plats, l.passar, l.kommentar, reservedName(l), l.status].join(" ").toLowerCase().includes(q)) return false;
+        if (q && ![l._id, lotName(l), l.farg, l.storlek, tv(LOT_TYP_LABEL[lotTyp(l)]), LOT_TYP_LABEL[lotTyp(l)], lotTyp(l), l.plats, l.passar, l.kommentar, reservedName(l), l.status].join(" ").toLowerCase().includes(q)) return false;
         return true;
       });
       const keyOf = st.group === "plats" ? (l) => l.plats || "No location" : st.group === "tyg" ? (l) => lotName(l) : () => "";
@@ -2803,8 +2813,8 @@ import * as P from "./platform.js";
           last = k;
           const grpLots = list.filter((x) => keyOf(x) === k);
           const inL = grpLots.filter((x) => x.status === "I lager");
-          const knownM = inL.filter((x) => !isTrims(x) && num(x.meter) != null);
-          const knownS = inL.filter((x) => isTrims(x) && num(x.antal) != null);
+          const knownM = inL.filter((x) => !isPcs(x) && num(x.meter) != null);
+          const knownS = inL.filter((x) => isPcs(x) && num(x.antal) != null);
           const unknown = inL.filter((x) => lotQty(x) == null).length;
           const bits = [k, grpLots.length + (grpLots.length === 1 ? " batch" : " batches")];
           if (knownM.length) bits.push("approx. " + fmtM(knownM.reduce((a, x) => a + num(x.meter), 0)) + " m");
@@ -2820,16 +2830,17 @@ import * as P from "./platform.js";
         this.empty.replaceChildren(...(!loaded.has("lager")
           ? [h("strong", { text: db ? "Loading stock …" : "No stock to show" })]
           : D.lager.length ? [h("strong", { text: "Nothing matches the filter" }), h("span", { text: "Change status or location, or clear the search." })]
-          : [h("strong", { text: "No batches yet" }), h("span", { text: "Add the first one with \"+ New batch\": fabric or trims, where it is and how much." })]));
+          : [h("strong", { text: "No batches yet" }), h("span", { text: "Add the first one with \"+ New batch\": fabric, trims or packaging, where it is and how much." })]));
       }
       this.count.textContent = list.length + " of " + D.lager.length + " batches";
     }
   };
+  const packTill = (l) => { const t = Date.parse(l.packFran || ""); if (!t) return ""; const d = new Date(t); const p = (n) => String(n).padStart(2, "0"); return fmtDate(d.getFullYear() + "-" + p(d.getMonth() + 1) + "-" + p(d.getDate())) + " " + p(d.getHours()) + ":" + p(d.getMinutes()); };
   function lagerRow(l) {
     const tr = h("tr", { tabIndex: 0, dataset: { id: l._id } });
     const t = tygOf(l);
-    const trm = isTrims(l);
-    const sub = [l._id, trm ? "Trims" : "", l.farg, trm ? l.storlek : (num(l.bredd) != null ? l.bredd + " cm" : "")].filter(Boolean).join(" · ");
+    const trm = isPcs(l);
+    const sub = [l._id, isPack(l) ? "Packaging" : trm ? "Trims" : "", l.farg, trm ? l.storlek : (num(l.bredd) != null ? l.bredd + " cm" : "")].filter(Boolean).join(" · ");
     const kvar = h("td", { "data-label": "Left", class: "c-exp" });
     const qn = lotQty(l), qi = num(trm ? l.inkoptAntal : l.inkoptMeter);
     if (qn != null) kvar.append(h("div", { class: "mono", text: fmtQty(l, qn) }));
@@ -2844,7 +2855,7 @@ import * as P from "./platform.js";
       td("Reserved for", null, reservedName(l) || ""),
       td("Updated", "mono", isISO(upd) ? fmtDate(upd) : ""),
       td("Status", "c-status", h("span", { class: "pill ls-" + slug(l.status || "x"), text: l.status || "–" })),
-      td("Comment", "note", l.passar ? h("span", { class: "fits", text: "Fits: " + l.passar + (isTrims(l) && num(l.atgang) ? " · " + num(l.atgang) + " per unit" : "") }) : null, l.kommentar || "")
+      td("Comment", "note", isPack(l) ? (PACK_REGEL_TEXT[l.packRegel] ? h("span", { class: "fits", text: "Deducted: " + PACK_REGEL_TEXT[l.packRegel] + (packTill(l) ? " · orders up to " + packTill(l) : "") }) : null) : l.passar ? h("span", { class: "fits", text: "Fits: " + l.passar + (isTrims(l) && num(l.atgang) ? " · " + num(l.atgang) + " per unit" : "") }) : null, l.kommentar || "")
     );
     return tr;
   }
@@ -3577,7 +3588,13 @@ import * as P from "./platform.js";
     if (!res.ok) return { error: "HTTP " + res.status };
     return res.json();
   }
-
+  // Emballage: ordrarna som påsar och kartonger räknas av mot. Appen räknar och skriver själv (syncPackaging).
+  async function hostedPackShopify(since) {
+    const { data: { session } } = await P.supabase.auth.getSession();
+    const res = await fetch("/api/pack?since=" + encodeURIComponent(since), { headers: { Authorization: "Bearer " + (session ? session.access_token : "") } });
+    if (!res.ok) { let msg = "HTTP " + res.status; try { msg = (await res.json()).error || msg; } catch (e) {} return { error: msg }; }
+    return res.json();
+  }
   // ---------- SHOPIFY-BILD: hämtas direkt, annars via servern (bara hostad) ----------
   // Webbläsaren får inte alltid läsa bilder från Shopify (CORS), och en produktsida är ingen bild. Då hämtar /api/bild den i stället.
   async function hostedBild(url) {
@@ -4414,7 +4431,7 @@ import * as P from "./platform.js";
     if (t === "ref" && w && typeof hostedRefShopify === "function") add("Fetch from Shopify", (e) => importRefs(e && e.target));
     if (t === "ref" && w) add("+ New reference garment", () => openRef(null), true);
     if (t === "produktion") { if (downloads) add("Export CSV", exportPo); if (w) add("+ New PO", () => openPo(null, { sasong: ProdView.seasonInView() || "", leverantor: UI.prod.lev || "" }), true); }
-    if (t === "tyglager") { if (downloads) add("Export CSV", exportLager); if (w) add("+ New fabric", () => openTyg(null)); if (w) add("+ New batch", () => openLager(null, UI.lager.typ === "trims" ? { typ: "trims" } : null), true); }
+    if (t === "tyglager") { if (downloads) add("Export CSV", exportLager); if (w) add("+ New fabric", () => openTyg(null)); if (w && typeof hostedPackShopify === "function") add("Update packaging", () => syncPackaging(true)); if (w) add("+ New batch", () => openLager(null, ["trims", "packaging"].includes(UI.lager.typ) ? { typ: UI.lager.typ } : null), true); }
     if (t === "leverantorer" && w) add("+ New supplier", () => openLev(null), true);
     if (t === "ean" && downloads) add("Export all EAN", exportAllEan);
     a.append(h("button", { class: "btn", type: "button", text: "Sign out", title: P.user.email(), onclick: P.signOut }));
@@ -4667,6 +4684,46 @@ import * as P from "./platform.js";
     return h("div", { class: "flagrow" }, h("span", { class: "pill s-Problem", text: "Flag" }), h("div", null, h("div", { class: "ft" }, h("b", { text: f.titel || f.ref }), " – ", f.text || ""), h("div", { class: "fm", text: [f.avNamn ? "flagged by " + f.avNamn : "", when, (f.till || []).length ? "to " + f.till.map(personName).join(", ") : ""].filter(Boolean).join(" · ") })), acts);
   }
   // Försenad PO: flaggan är automatisk. "PO i lager" sätter PO:n som inlevererad (och stylarna på raderna som levererade), och då försvinner flaggan.
+  // ---------- Emballage: dras av från ordrarna i Shopify ----------
+  // Servern (api/pack) läser bara ordrarna; appen räknar och skriver. Bara ordrar skapade efter partiets packFran räknas.
+  // Resultatet beror bara på partiets (antal, packFran) och ordrarna – två webbläsare som räknar samtidigt kommer till samma svar.
+  function packUse(l, o) {
+    let box = 0, other = 0;
+    for (const [typ, n] of Object.entries(o.typer || {})) { if (PACK_BOX_TYPES.includes(norm(typ))) box += num(n) || 0; else other += num(n) || 0; }
+    return l.packRegel === "plagg" ? box : l.packRegel === "order" ? (other > 0 ? 1 : 0) : 0;
+  }
+  let packKor = false;
+  async function syncPackaging(manual) {
+    if (packKor || typeof hostedPackShopify !== "function" || !canWrite || !db || designOnly() || ME.leverantor) return;
+    const lots = D.lager.filter((l) => isPack(l) && l.packRegel && Date.parse(l.packFran || "") && l.status === "I lager" && num(l.antal) != null);
+    if (!lots.length) { if (manual) toast("No packaging with automatic deduction in stock."); return; }
+    if (!manual) { try { const t = Number(localStorage.getItem("plmPackSync") || 0); if (Date.now() - t < 30 * 60 * 1000) return; localStorage.setItem("plmPackSync", String(Date.now())); } catch (e) {} }
+    packKor = true;
+    try {
+      const since = lots.map((l) => l.packFran).sort((a, b) => Date.parse(a) - Date.parse(b))[0];
+      const res = await hostedPackShopify(since);
+      if (!res || res.error) { if (manual) toast("Could not read orders from Shopify" + (res && res.error ? ": " + String(res.error).slice(0, 160) : "")); return; }
+      const done = []; const now = new Date().toISOString();
+      for (const l0 of lots) {
+        const l = byId(D.lager, l0._id) || l0;
+        const os = (res.ordrar || []).filter((o) => Date.parse(o.tid) > Date.parse(l.packFran)).sort((a, b) => Date.parse(a.tid) - Date.parse(b.tid));
+        if (!os.length) continue;
+        const used = os.filter((o) => packUse(l, o) > 0);
+        const n = used.reduce((a, o) => a + packUse(l, o), 0);
+        const patch = { packFran: os[os.length - 1].tid };
+        if (n > 0) {
+          const kvar = Math.max(0, num(l.antal) - n);
+          const vilka = used.length > 3 ? used[0].order + "–" + used[used.length - 1].order : used.map((o) => o.order).join(", ");
+          Object.assign(patch, { antal: kvar, raknad: todayISO(), andrad: now, logg: (l.logg || []).concat(logEntry("−" + n + " pcs: " + (l.packRegel === "plagg" ? n + " garments in Tailoring/Outerwear" : used.length + (used.length === 1 ? " order" : " orders")) + " in Shopify (" + vilka + "). Left " + kvar + " pcs")) });
+          if (kvar === 0) patch.status = "Förbrukad";
+        }
+        if (await write("tyglager", l._id, patch)) { Object.assign(l, patch); if (n > 0) done.push(lotName(l) + " −" + n); }
+      }
+      if (done.length) { toast("Packaging updated: " + done.join(", ")); scheduleRefresh(); }
+      else if (manual) toast("No new orders to deduct.");
+    } finally { packKor = false; }
+  }
+
   // ---------- Lageravdrag ----------
   // När en PO kommer in i lager föreslås avdrag på trims-partier som har "Åtgång per plagg" och där PO:ns produkter står under Passar.
   // Inget dras förrän man har bekräftat, och antalet går att ändra.
@@ -5531,7 +5588,7 @@ import * as P from "./platform.js";
   }
 
   // ---------- fabric lot sheet ----------
-  const L_LABELS = { atgang: "Used per garment", passar: "Fits", tygId: "Tyg", farg: "Colour", plats: "Location", status: "Status", inkoptMeter: "Purchased (m)", meter: "Left (m)", bredd: "Width (cm)", prisPerMeter: "Price per metre", prisValuta: "Currency", inkopt: "Purchased", reserveradFor: "Reserved for", kommentar: "Comment", typ: "Typ", tygNamn: "Item", storlek: "Size", inkoptAntal: "Purchased (pcs)", antal: "Left (pcs)", prisPerSt: "Price per pc" };
+  const L_LABELS = { packRegel: "Deducted", atgang: "Used per garment", passar: "Fits", tygId: "Tyg", farg: "Colour", plats: "Location", status: "Status", inkoptMeter: "Purchased (m)", meter: "Left (m)", bredd: "Width (cm)", prisPerMeter: "Price per metre", prisValuta: "Currency", inkopt: "Purchased", reserveradFor: "Reserved for", kommentar: "Comment", typ: "Typ", tygNamn: "Item", storlek: "Size", inkoptAntal: "Purchased (pcs)", antal: "Left (pcs)", prisPerSt: "Price per pc" };
   function openLager(id, preset) {
     if (designOnly()) return;
     const isNew = !id;
@@ -5550,7 +5607,8 @@ import * as P from "./platform.js";
     const fPris = inp("f_lpris", l.prisPerMeter, { type: "number", min: "0", step: "0.01", inputmode: "decimal" });
     const fVal = selectEl("f_lval", [["", "–"], "SEK", "EUR", "JPY", "GBP", "USD"], l.prisValuta || "");
     const fInkDate = inp("f_linkopt", l.inkopt, { type: "date" });
-    const fTyp = selectEl("f_ltyp", [["tyg", "Fabric (metres)"], ["trims", "Trims (quantity)"]], isTrims(l) ? "trims" : "tyg");
+    const fTyp = selectEl("f_ltyp", [["tyg", "Fabric (metres)"], ["trims", "Trims (quantity)"], ["packaging", "Packaging (quantity)"]], lotTyp(l));
+    const fRegel = selectEl("f_lregel", PACK_REGLER, l.packRegel || "");
     const fStorlek = inp("f_lstorlek", l.storlek, { placeholder: "e.g. 32L" });
     const fInkSt = inp("f_linkst", l.inkoptAntal, { type: "number", min: "0", step: "1", inputmode: "numeric" });
     const fAtgang = inp("f_latgang", l.atgang, { type: "number", min: "0", step: "1", inputmode: "numeric", placeholder: "t.ex. 1" });
@@ -5564,23 +5622,27 @@ import * as P from "./platform.js";
     fInk.addEventListener("change", () => { if (isNew && !fKvar.value && fInk.value) fKvar.value = fInk.value; });
     const fArt = field("Tyg", fTyg, { full: true, hint: "Type freely or choose a fabric that already exists." });
     const fsTyg = [h("h3", { class: "sec-title full", text: "Metres" }), field("Purchased (m)", fInk), field("Left (m, approx.)", fKvar, { hint: "Empty = not known yet" }), field("Width (cm)", fBredd), field("Price per metre", fPris)];
-    const fsTrims = [h("h3", { class: "sec-title full", text: "Quantity" }), field("Size", fStorlek), field("Purchased (pcs)", fInkSt), field("Left (pcs)", fKvarSt, { hint: "Empty = not known yet" }), field("Price per pc", fPrisSt), field("Used per garment", fAtgang, { hint: "Deducted when a PO with a product listed under Fits arrives in the warehouse. Empty = never deducted." })];
+    const fsTrims = [h("h3", { class: "sec-title full", text: "Quantity" }), field("Size", fStorlek), field("Purchased (pcs)", fInkSt), field("Left (pcs)", fKvarSt, { hint: "Empty = not known yet" }), field("Price per pc", fPrisSt)];
+    const fdAtgang = field("Used per garment", fAtgang, { hint: "Deducted when a PO with a product listed under Fits arrives in the warehouse. Empty = never deducted." });
+    const fdRegel = field("Deducted", fRegel, { full: true, hint: "Counted against the orders in Shopify from now on. Cancelled orders are not counted. If you change the quantity by hand, counting restarts from there." });
+    const fdPassar = field("Fits", fPassar, { full: true, hint: "Which products the batch can be used for. Shown in bold first in the list." });
     const form = h("form", { class: "form", id: "lagerForm", autocomplete: "off", onsubmit: (e) => e.preventDefault() },
       field("Type", fTyp), field("Status", fStatus),
       fArt,
       field("Colour / shade", fFarg), field("Located at", fPlats),
       field("Reserved for", fRes), field("Purchase date", fInkDate),
-      ...fsTyg, ...fsTrims,
+      ...fsTyg, ...fsTrims, fdAtgang,
       field("Currency", fVal),
-      field("Fits", fPassar, { full: true, hint: "Which products the batch can be used for. Shown in bold first in the list." }),
+      fdPassar, fdRegel,
       field("Comment", fKom, { full: true }));
     const syncTyp = () => {
-      const t = fTyp.value === "trims";
+      const t = fTyp.value !== "tyg", pk = fTyp.value === "packaging";
       fsTyg.forEach((e) => (e.hidden = t));
       fsTrims.forEach((e) => (e.hidden = !t));
-      const lab = fArt.querySelector("label"); if (lab) lab.textContent = t ? "Item" : "Tyg";
-      const hint = fArt.querySelector(".hint"); if (hint) hint.textContent = t ? "Supplier + item, e.g. Fenili 11072 Corno 4F (button)." : "Type freely or choose a fabric that already exists.";
-      fTyg.placeholder = t ? "e.g. Fenili 11072 Corno 4F" : "e.g. Olmetex – C993950";
+      fdAtgang.hidden = fTyp.value !== "trims"; fdPassar.hidden = pk; fdRegel.hidden = !pk;
+      const lab = fArt.querySelector("label"); if (lab) lab.textContent = t ? "Item" : tv("Tyg");
+      const hint = fArt.querySelector(".hint"); if (hint) hint.textContent = pk ? "What it is, e.g. E-com bags." : t ? "Supplier + item, e.g. Fenili 11072 Corno 4F (button)." : "Type freely or choose a fabric that already exists.";
+      fTyg.placeholder = pk ? "e.g. E-com bags" : t ? "e.g. Fenili 11072 Corno 4F" : "e.g. Olmetex – C993950";
       if (t) fTyg.removeAttribute("list"); else fTyg.setAttribute("list", "dlTyg");
     };
     fTyp.addEventListener("change", syncTyp); syncTyp();
@@ -5599,19 +5661,20 @@ import * as P from "./platform.js";
       if (isNew || ro) { quick.hidden = true; return; }
       quick.hidden = false;
       const add = (label, fn, primary) => quick.append(h("button", { class: "btn small" + (primary ? " primary" : ""), type: "button", text: label, onclick: fn }));
-      if (cur.status === "I lager") add(isTrims(cur) ? "Adjust quantity" : "Adjust metres", () => adjustMeters(cur), true);
+      if (cur.status === "I lager") add(isPcs(cur) ? "Adjust quantity" : "Adjust metres", () => adjustMeters(cur), true);
       if (cur.status === "Beställd") add("Delivered", () => quickUpdate(cur, { status: "I lager" }, "Marked as in stock"), true);
-      if (cur.status !== "Förbrukad") add("Used up", () => quickUpdate(cur, Object.assign({ status: "Förbrukad", raknad: todayISO() }, isTrims(cur) ? { antal: 0 } : { meter: 0 }), "Marked as used up"));
+      if (cur.status !== "Förbrukad") add("Used up", () => quickUpdate(cur, Object.assign({ status: "Förbrukad", raknad: todayISO() }, isPcs(cur) ? { antal: 0 } : { meter: 0 }), "Marked as used up"));
       if (cur.tygId && byId(D.tyger, cur.tygId)) add("Open fabric", () => openTyg(cur.tygId));
     }
     function adjustMeters(cur) {
-      const trm = isTrims(cur), key = trm ? "antal" : "meter", fmtU = (n) => (trm ? fmtSt(n) : fmtM(n) + " m");
+      const trm = isPcs(cur), key = trm ? "antal" : "meter", fmtU = (n) => (trm ? fmtSt(n) : fmtM(n) + " m");
       const i = inp("f_ladj", cur[key], { type: "number", min: "0", step: trm ? "1" : "0.5", inputmode: trm ? "numeric" : "decimal", "aria-label": trm ? "New quantity" : "New metres" });
       const row = h("div", { class: "admin-row" }, h("span", { text: trm ? "Left now (pcs):" : "Left now (m):" }), i,
         h("button", { class: "btn small primary", type: "button", text: "Save", onclick: async () => {
           const n = num(i.value); if (n == null || n < 0) { toast(trm ? "Enter a quantity." : "Enter a metre figure."); return; }
           const before = num(cur[key]);
           const patch = { [key]: n, raknad: todayISO() };
+          if (isPack(cur) && cur.packRegel) patch.packFran = new Date().toISOString();
           const body = Object.assign({}, patch, { andrad: new Date().toISOString(), logg: (cur.logg || []).concat(logEntry("Left: " + (before == null ? "unknown" : fmtU(before)) + " → " + fmtU(n))) });
           if (await write("tyglager", cur._id, body)) { toast(trm ? "Quantity updated" : "Metres updated"); (trm ? fKvarSt : fKvar).value = n; renderQuick(); }
         } }),
@@ -5628,12 +5691,13 @@ import * as P from "./platform.js";
     async function save() {
       const btn = $("btnSave"); if (btn) btn.disabled = true;
       try {
-        const name = fTyg.value.trim(), plats = fPlats.value.trim(), trims = fTyp.value === "trims";
+        const name = fTyg.value.trim(), plats = fPlats.value.trim(), trims = fTyp.value !== "tyg", pack = fTyp.value === "packaging";
         if (!name) { toast(trims ? "Write which item it is." : "Write which fabric it is."); fTyg.focus(); return; }
         if (!plats) { toast(trims ? "Write where the item is." : "Write where the fabric is."); fPlats.focus(); return; }
         let o;
         if (trims) {
-          o = { typ: "trims", tygId: null, tygNamn: name, farg: fFarg.value.trim(), storlek: fStorlek.value.trim(), plats, status: fStatus.value, inkoptAntal: num(fInkSt.value), antal: num(fKvarSt.value), atgang: num(fAtgang.value), prisPerSt: num(fPrisSt.value), prisValuta: fVal.value || null, inkopt: fInkDate.value || null, reserveradFor: fRes.value || null, passar: fPassar.value.trim(), kommentar: fKom.value.trim() };
+          o = { typ: pack ? "packaging" : "trims", tygId: null, tygNamn: name, farg: fFarg.value.trim(), storlek: fStorlek.value.trim(), plats, status: fStatus.value, inkoptAntal: num(fInkSt.value), antal: num(fKvarSt.value), atgang: pack ? null : num(fAtgang.value), prisPerSt: num(fPrisSt.value), prisValuta: fVal.value || null, inkopt: fInkDate.value || null, reserveradFor: fRes.value || null, passar: pack ? "" : fPassar.value.trim(), kommentar: fKom.value.trim() };
+          if (pack) o.packRegel = fRegel.value;
         } else {
           const tygId = await resolveTyg(name, "");
           if (!tygId) return;
@@ -5644,7 +5708,8 @@ import * as P from "./platform.js";
         const now = new Date().toISOString();
         if (isNew) {
           const nid = await freshId("tyglager", D.lager, "TL-", 3);
-          const body = Object.assign({ id: nid, raknad: q0 != null ? todayISO() : null, logg: [logEntry("Batch created (" + (trims ? "trims, " : "") + o.status + (q0 != null ? ", " + fmtQty(o, q0) : "") + ")")], andrad: now }, o);
+          if (pack && o.packRegel) o.packFran = now;
+          const body = Object.assign({ id: nid, raknad: q0 != null ? todayISO() : null, logg: [logEntry("Batch created (" + (pack ? "packaging, " : trims ? "trims, " : "") + o.status + (q0 != null ? ", " + fmtQty(o, q0) : "") + ")")], andrad: now }, o);
           if (await create("tyglager", nid, body)) { if (!byId(D.lager, nid)) D.lager.push(Object.assign({}, body, { _id: nid })); toast(nid + " saved"); closeSheet(); }
         } else {
           const cur = current();
@@ -5652,6 +5717,7 @@ import * as P from "./platform.js";
           if (!changes.length) { closeSheet(); return; }
           const body = Object.assign({}, o, { andrad: now, logg: (cur.logg || []).concat(changes.map(logEntry)) });
           if (num(cur[trims ? "antal" : "meter"]) !== q0) body.raknad = todayISO();
+          if (pack && o.packRegel && (num(cur.antal) !== q0 || cur.packRegel !== o.packRegel || !cur.packFran)) body.packFran = now;
           if (await write("tyglager", cur._id, body)) { toast("Saved"); closeSheet(); }
         }
       } finally { if (btn) btn.disabled = false; }
@@ -5660,8 +5726,8 @@ import * as P from "./platform.js";
     if (!isNew) body.push(commentsSection("tyglager", current, "f_lnote", ro), h("section", null, h("h3", { class: "sec-title", text: "History" }), logUl));
     openSheet({
       tag: isNew ? "New" : l._id,
-      title: isNew ? "New batch" : lotName(l) + (l.farg ? " · " + l.farg : "") + (isTrims(l) && l.storlek ? " · " + l.storlek : ""),
-      sub: isNew ? "" : [isTrims(l) ? "Trims" : "Tyg", l.plats, lotQty(l) != null ? fmtQty(l, lotQty(l)) + " left" : (isTrims(l) ? "quantity missing" : "metres missing"), l.status].filter(Boolean).join(" · "),
+      title: isNew ? "New batch" : lotName(l) + (l.farg ? " · " + l.farg : "") + (isPcs(l) && l.storlek ? " · " + l.storlek : ""),
+      sub: isNew ? "" : [tv(LOT_TYP_LABEL[lotTyp(l)]), l.plats, lotQty(l) != null ? fmtQty(l, lotQty(l)) + " left" : (isPcs(l) ? "quantity missing" : "metres missing"), l.status].filter(Boolean).join(" · "),
       body,
       foot: footButtons({ del: "Delete stock lot", onDelete: isNew ? null : async () => { if (await remove("tyglager", l._id)) { toast("Removed"); closeSheet(); } }, canDelete: true, onSave: save }),
       ctx: { refresh: () => { if (!isNew && !byId(D.lager, l._id)) { closeSheet(); return; } renderQuick(); if (!isNew) renderLogInto(logUl, current().logg); } },
@@ -5778,7 +5844,7 @@ import * as P from "./platform.js";
     saveFile("Rubato_Samples_" + todayISO() + ".csv", csv(["Sample ID", "Style", "Version", "Supplier", "Colour", "Tyg", "Size", "Price", "Currency", "Beställd", "Lead time (days)", "Expected delivery", "Status", "Mottagen", "Location", "Location note", "Decision", "Style status", "Changes", "Tracking", "R1 sent", "R2 sent", "Season", "Drop", "Comment"], rows));
   }
   function exportLager() {
-    const rows = D.lager.slice().sort((a, b) => (a.plats || "").localeCompare(b.plats || "", "sv") || a._id.localeCompare(b._id)).map((l) => [l._id, isTrims(l) ? "Trims" : "Tyg", lotName(l), l.farg, l.storlek, l.plats, l.status, isTrims(l) ? "pcs" : "m", isTrims(l) ? l.inkoptAntal : l.inkoptMeter, isTrims(l) ? l.antal : l.meter, l.bredd, isTrims(l) ? l.prisPerSt : l.prisPerMeter, l.prisValuta, l.inkopt, reservedName(l), l.raknad, l.passar, l.kommentar]);
+    const rows = D.lager.slice().sort((a, b) => (a.plats || "").localeCompare(b.plats || "", "sv") || a._id.localeCompare(b._id)).map((l) => [l._id, tv(LOT_TYP_LABEL[lotTyp(l)]), lotName(l), l.farg, l.storlek, l.plats, l.status, isPcs(l) ? "pcs" : "m", isPcs(l) ? l.inkoptAntal : l.inkoptMeter, isPcs(l) ? l.antal : l.meter, l.bredd, isPcs(l) ? l.prisPerSt : l.prisPerMeter, l.prisValuta, l.inkopt, reservedName(l), l.raknad, l.passar, l.kommentar]);
     saveFile("Rubato_Lager_" + todayISO() + ".csv", csv(["Batch ID", "Type", "Item", "Colour", "Size", "Located at", "Status", "Unit", "Purchased", "Left", "Width (cm)", "Price per unit", "Currency", "Purchase date", "Reserved for", "Last counted", "Fits", "Comment"], rows));
   }
   function exportStyleEan(st) {
@@ -5928,7 +5994,7 @@ import * as P from "./platform.js";
       if (key === "po" || key === "styles" || key === "lev") derivePo();
       loaded.add(key); scheduleRefresh(); openFromHash(); if (after) after();
     }, subError);
-    sub("samples", "samples"); sub("styles", "styles", null, () => { probeExternalImages(); renderDiag(); setTimeout(hostedAutoShopify, 1500); }); sub("tyger", "tyger"); sub("tyglager", "lager"); sub("leverantorer", "lev"); sub("drops", "drops"); sub("po", "po", (p) => !ME.leverantor || norm(p.leverantor) === norm(ME.leverantor)); sub("budget", "budget"); sub("refplagg", "ref"); sub("handelser", "handelser"); sub("flaggor", "flaggor"); sub("shopifypriser", "shopify");
+    sub("samples", "samples"); sub("styles", "styles", null, () => { probeExternalImages(); renderDiag(); setTimeout(hostedAutoShopify, 1500); }); sub("tyger", "tyger"); sub("tyglager", "lager", null, () => setTimeout(() => syncPackaging(false), 3000)); sub("leverantorer", "lev"); sub("drops", "drops"); sub("po", "po", (p) => !ME.leverantor || norm(p.leverantor) === norm(ME.leverantor)); sub("budget", "budget"); sub("refplagg", "ref"); sub("handelser", "handelser"); sub("flaggor", "flaggor"); sub("shopifypriser", "shopify");
     db.doc("ean/pool").onSnapshot((snap) => { D.pool = snap.exists ? snap.data() : null; loaded.add("pool"); scheduleRefresh(); }, subError);
     db.doc("installningar/app").onSnapshot((snap) => { if (snap.exists) Object.assign(D.settings, snap.data()); deriveDrops(); scheduleRefresh(); }, subError);
     db.collection("eanLogg").orderBy("t", "desc").limit(50).onSnapshot((snap) => { D.logg = snap.docs.map((doc) => Object.assign({}, doc.data(), { _id: doc.id })); scheduleRefresh(); }, subError);

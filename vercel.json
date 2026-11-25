@@ -29,6 +29,9 @@
   "functions": {
     "api/matt.js": {
       "maxDuration": 30
+    },
+    "api/pack.js": {
+      "maxDuration": 30
     }
   }
 }
