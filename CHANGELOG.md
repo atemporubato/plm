@@ -6,6 +6,11 @@ och importeras med `node tools/import-dokument.js`, och main går live på plm.a
 
 Versionsnumrering: små ändringar ger punktversion (v9.1, v9.2 …). Nytt heltal (v10) bara vid stora ändringar.
 
+## v10.25 (2026-11-25)
+
+Texträttning i den hostade appen. Ingen data ändras, ingen ändring i artifact-källan (byggs från v10.24).
+- Användare: när sökningen "Lägg till person" inte hittar någon stod det att personen måste finnas i Rubatos Claude-organisation. Det gäller bara sandlådan. På live står nu att personen syns efter första inloggningen med sitt Rubato-konto, och att standardrollen gäller tills dess.
+
 ## v10.24 (2026-11-25)
 
 Emballage i Lager, avräknat mot ordrarna i Shopify. Nya fält på lagerparti: typ "packaging", packRegel, packFran. Inget befintligt fält ändras.

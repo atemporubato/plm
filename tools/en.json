@@ -1745,7 +1745,8 @@
   "i Shopify (": "in Shopify (",
   "emballage,": "packaging,",
   "t.ex. E-com bags": "e.g. E-com bags",
-  "st:": "pcs:"
+  "st:": "pcs:",
+  "Ingen träff. Personen syns här efter att ha loggat in i PLM en gång med sitt Rubato-konto. Tills dess gäller standardrollen.": "No match. The person appears here after signing in to PLM once with their Rubato account. Until then the default role applies."
  },
  "values": {
   "Storleksset": "Size set",

@@ -4304,7 +4304,7 @@ import * as P from "./platform.js";
         try { ps = await user.search(q.value); } catch (e) {}
         ps = ps.filter((p) => p.id !== myId);
         hits.replaceChildren(...ps.map((p) => h("button", { type: "button", onclick: async () => { hits.hidden = true; q.value = ""; await setRole(p.id, userDoc(p.id) ? userDoc(p.id).roll : "team"); } }, h("img", { class: "avatar", src: p.avatarUrl, alt: "" }), h("span", { text: p.name || "Someone" }), p.guest ? h("span", { class: "sub", text: "guest" }) : null, userDoc(p.id) ? h("span", { class: "sub", text: "already has the role: " + roleDef(userDoc(p.id).roll).namn }) : null)));
-        if (!ps.length) hits.replaceChildren(h("span", { class: "hint", style: "padding:8px 12px", text: q.value ? "No match. The person must be in Rubato's Claude organisation, or open the app once after you have shared it." : "Type a name." }));
+        if (!ps.length) hits.replaceChildren(h("span", { class: "hint", style: "padding:8px 12px", text: q.value ? "No match. The person appears here after signing in to PLM once with their Rubato account. Until then the default role applies." : "Type a name." }));
         hits.hidden = false;
       };
       q.addEventListener("focus", run); q.addEventListener("input", run);

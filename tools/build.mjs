@@ -46,6 +46,7 @@ if (!js.includes('db.doc("installningar/app").onSnapshot')) throw new Error("ins
 js = rep(js, 'text: "Vem ser vad. Alla loggar in med sitt eget Claude-konto; här styr du vilken roll de får i appen och vilka flikar rollen ser. Bjud in nya personer via Dela-menyn uppe till höger: Contributor för att kunna redigera, Editor för att även kunna hantera användare. Personer utanför Rubatos Claude-organisation kan bara läsa."',
   'text: "Vem ser vad. Alla loggar in med sitt Rubato-konto (Microsoft) och dyker upp här efter första besöket; här styr du vilken roll de får i appen och vilka flikar rollen ser. Admin (kan hantera användare) sätts i databasen av Jakob."');
 js = rep(js, 'text: "Bara Editor/ägare kan hantera användare."', 'text: "Bara admin kan hantera användare."');
+js = rep(js, '"Ingen träff. Personen måste finnas i Rubatos Claude-organisation, eller öppna appen en gång efter att du delat den."', '"Ingen träff. Personen syns här efter att ha loggat in i PLM en gång med sitt Rubato-konto. Tills dess gäller standardrollen."');
 js = rep(js, '"Du har läsbehörighet. Be Elliot om Contributor-behörighet för att uppdatera."', '"Du har läsbehörighet. Be Elliot om en roll som får redigera."');
 
 // ---- hosted-only: Shopify-sektion på stylen och Shopify-flik ----
