@@ -1756,7 +1756,10 @@
   "Visualisering –": "Visualisation –",
   "plagg valda": "garments selected",
   "Markera alla": "Select all",
-  "Avmarkera alla": "Clear"
+  "Avmarkera alla": "Clear",
+  "Kollektionen i bild, från idé redo att designa och framåt. Bocka i säsong, drop, steg, kategori och typ – och enskilda plagg under Välj plagg – för att se hur en drop kan se ut. Board visar bara bilderna. Urvalet är ditt eget och ändrar ingenting för andra.": "The collection in pictures, from idea ready for design onwards. Tick season, drop, stage, category and type – and single garments under Choose garments – to see what a drop could look like. Board shows only the images. The selection is your own and changes nothing for anyone else.",
+  "Inga plagg med de här valen.": "No garments with these choices.",
+  "Steg": "Stage"
  },
  "values": {
   "Storleksset": "Size set",

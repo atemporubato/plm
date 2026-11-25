@@ -387,8 +387,14 @@ table.ledger { width: 100%; border-collapse: collapse; min-width: 960px; }
 .vis-head strong { font-family: var(--f-label); font-weight: 400; font-size: 10px; letter-spacing: .14em; text-transform: uppercase; }
 .vis-head .n { color: var(--muted); font-size: 14px; }
 .vis-head .linkish { margin-left: auto; } .vis-head .linkish + .linkish { margin-left: 0; }
-.vis-steg { display: flex; flex-wrap: wrap; gap: 8px; padding: 12px 16px 14px; }
-.vbox { display: inline-flex; align-items: center; gap: 9px; border: 1px solid var(--line-strong); padding: 8px 12px 8px 10px; cursor: pointer; background: var(--paper); min-height: 40px; }
+.vis-rows { display: grid; padding: 6px 16px 10px; }
+.vis-row { display: grid; grid-template-columns: 92px 1fr; gap: 6px 12px; align-items: start; padding: 8px 0; border-top: 1px solid var(--line); }
+.vis-row:first-child { border-top: 0; }
+.vis-row .rl { font-family: var(--f-label); font-size: 10px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); padding-top: 12px; }
+.vis-row .rb { display: flex; flex-wrap: wrap; gap: 6px 8px; align-items: center; }
+.vis-row .rb .linkish { font-size: 13px; color: var(--muted); margin-left: 6px; }
+@media (max-width: 640px) { .vis-row { grid-template-columns: 1fr; } .vis-row .rl { padding-top: 0; } }
+.vbox { display: inline-flex; align-items: center; gap: 8px; border: 1px solid var(--line-strong); padding: 6px 11px 6px 9px; cursor: pointer; background: var(--paper); min-height: 36px; }
 .vbox input, .vitem input { width: 16px; height: 16px; accent-color: var(--ink); margin: 0; flex: none; }
 .vbox .t { font-family: var(--f-label); font-size: 10px; letter-spacing: .1em; text-transform: uppercase; }
 .vbox .c { color: var(--muted); font-size: 13px; }

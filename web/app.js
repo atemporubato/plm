@@ -2219,17 +2219,16 @@ import * as P from "./platform.js";
       const st = UI.koll;
       if (!st.steg || typeof st.steg !== "object") st.steg = Object.assign({}, VIS_STEG_STD);
       if (!Array.isArray(st.av)) st.av = [];
+      for (const k of ["seasons", "avDrop", "avKat", "avTyp"]) if (!Array.isArray(st[k])) st[k] = [];
+      st.kat = ""; st.typ = "alla"; // de gamla rullistorna är ersatta av rutorna
       const upd = () => { this.update(); persist(); };
-      this.fSeason = filterSelect("f_k_season", "All seasons", st, "season", upd);
       this.seg = makeSeg([["drop", "By drop"], ["kategori", "By category"], ["helhet", "Overall"], ["board", "Board"]], st, "mode", upd);
       this.vis = h("section", { class: "vis-filter", "aria-label": "In the visualisation" });
-      this.fKat = filterSelect("f_k_kat", "All categories", st, "kat", upd);
-      this.segTyp = makeSeg([["alla", "All"], ["Nyhet", "New"], ["Restock", "Re-stock"], ["NOOS", "NOOS"]], st, "typ", upd);
       this.count = h("span", { class: "count" });
       this.stats = h("div", { class: "koll-stats" });
       this.body = h("div", { style: "display:grid;gap:26px" });
-      root.append(h("p", { class: "lede", text: "The collection in pictures, from idea ready for design onwards. Tick which stages and which garments to include to see what a drop could look like. Board shows only the images. The selection is your own and changes nothing for anyone else." }),
-        h("section", { class: "filters", "aria-label": "Filter" }, this.fSeason.el, this.seg.el, this.segTyp.el, this.fKat.el, this.count), this.vis, this.stats, this.body);
+      root.append(h("p", { class: "lede", text: "The collection in pictures, from idea ready for design onwards. Tick season, drop, stage, category and type – and single garments under Choose garments – to see what a drop could look like. Board shows only the images. The selection is your own and changes nothing for anyone else." }),
+        h("section", { class: "filters", "aria-label": "Filter" }, this.seg.el, this.count), this.vis, this.stats, this.body);
     },
     seasonInView() {
       const st = UI.koll;
@@ -2241,19 +2240,23 @@ import * as P from "./platform.js";
     },
     update() {
       const st = UI.koll;
-      const seasons = uniq(D.styles.map((s) => s.sasong)).sort((a, b) => seasonRank(b) - seasonRank(a) || b.localeCompare(a, "sv"));
-      this.fSeason.fill(seasons);
-      this.fKat.fill(KATEGORIER);
-      this.seg.sync(); this.segTyp.sync();
-      const season = this.seasonInView();
-      let kand = D.styles.filter((s) => norm(s.sasong) === norm(season) && visSteg(s));
-      if (st.kat) kand = kand.filter((s) => styleKategori(s) === st.kat);
-      if (st.typ && st.typ !== "alla") kand = kand.filter((s) => (s.typ || "Nyhet") === st.typ);
-      kand.sort((a, b) => (a.namn || "").localeCompare(b.namn || "", "sv"));
+      const seasons = uniq(D.styles.map((s) => s.sasong)).filter(Boolean).sort((a, b) => seasonRank(b) - seasonRank(a) || b.localeCompare(a, "sv"));
+      this.seg.sync();
+      // Säsonger: de ibockade, annars den aktuella. Flera säsonger kan visas samtidigt.
+      const valda = st.seasons.filter((x) => seasons.some((y) => norm(y) === norm(x)));
+      const sasonger = (valda.length ? valda : [this.seasonInView()].filter(Boolean)).sort((a, b) => seasonRank(a) - seasonRank(b) || a.localeCompare(b, "sv"));
+      const season = sasonger.join(" + ");
+      const dk = (s) => dropKey(s.sasong, s.drop && dropsOfSeason(s.sasong).some((d) => norm(d.namn) === norm(s.drop)) ? s.drop : "");
+      const katOf = (s) => styleKategori(s) || "Okategoriserat", typOf = (s) => s.typ || "Nyhet";
+      const kand = D.styles.filter((s) => sasonger.some((x) => norm(x) === norm(s.sasong)) && visSteg(s)).sort((a, b) => (a.namn || "").localeCompare(b.namn || "", "sv"));
+      const avDrop = new Set(st.avDrop), avKat = new Set(st.avKat), avTyp = new Set(st.avTyp);
+      // pass(s, utom): klarar plagget alla rader – utom den som räknas, så att varje ruta visar hur många den själv ger
+      const pass = (s, utom) => (utom === "drop" || !avDrop.has(dk(s))) && (utom === "steg" || !!st.steg[visSteg(s)]) && (utom === "kat" || !avKat.has(katOf(s))) && (utom === "typ" || !avTyp.has(typOf(s)));
       const av = new Set(st.av);
-      const iSteg = kand.filter((s) => st.steg[visSteg(s)]);
+      const iSteg = kand.filter((s) => pass(s));
       let items = iSteg.filter((s) => !av.has(s._id));
-      this.renderVis(kand, iSteg, items, season);
+      this.renderVis({ seasons, sasonger, kand, iSteg, items, pass, dk, katOf, typOf });
+      const smalt = !!(st.avKat.length || st.avTyp.length || st.av.length || VIS_STEG.some(([k]) => !!st.steg[k] !== VIS_STEG_STD[k])); // tomma drops visas bara när inget är bortvalt
       const order = { [ST_IDE]: -3, [ST_DESIGN]: -2, [ST_KANBEST]: -1, Sampling: 0, "Godkänd": 1, "PO lagd": 2, "I produktion": 3, Levererad: 4, Pausad: 5 };
       items.sort((a, b) => (order[styleStatusNorm(a.status)] ?? 9) - (order[styleStatusNorm(b.status)] ?? 9) || (a.namn || "").localeCompare(b.namn || "", "sv"));
       const units = (s) => poLinesOf(s._id).reduce((a, x) => a + (num(x.r.antal) || 0), 0);
@@ -2269,11 +2272,11 @@ import * as P from "./platform.js";
       const board = st.mode === "board";
       if (st.mode === "drop" || board) {
         const placed = new Set();
-        for (const d of dropsOfSeason(season)) { const m = items.filter((s) => dropKey(s.sasong, s.drop) === dropKey(d.sasong, d.namn)); m.forEach((x) => placed.add(x._id)); groups.push({ title: "Visualisation – " + season + " " + d.namn, drop: d, sub: [isISO(d.lansering) ? "Launch " + fmtDate(d.lansering) : "", isISO(d.klartSenast) ? "In stock by " + fmtDate(d.klartSenast) : ""].filter(Boolean).join(" · "), items: m }); }
-        const rest = items.filter((s) => !placed.has(s._id)); if (rest.length) groups.push({ title: "No drop – " + season, sub: "", items: rest });
+        for (const se of sasonger) for (const d of dropsOfSeason(se)) { if (avDrop.has(dropKey(se, d.namn))) continue; const m = items.filter((s) => dk(s) === dropKey(se, d.namn)); if (!m.length && smalt) continue; m.forEach((x) => placed.add(x._id)); groups.push({ title: "Visualisation – " + se + " " + d.namn, drop: d, sub: [isISO(d.lansering) ? "Launch " + fmtDate(d.lansering) : "", isISO(d.klartSenast) ? "In stock by " + fmtDate(d.klartSenast) : ""].filter(Boolean).join(" · "), items: m }); }
+        for (const se of sasonger) { const rest = items.filter((s) => !placed.has(s._id) && norm(s.sasong) === norm(se)); if (rest.length) groups.push({ title: "No drop – " + se, sub: "", items: rest }); }
       } else if (st.mode === "kategori") {
         for (const k of KATEGORIER.concat(["Okategoriserat"])) { const m = items.filter((s) => (styleKategori(s) || "Okategoriserat") === k); if (m.length) groups.push({ title: k, sub: "", items: m }); }
-      } else groups.push({ title: "Visualisation – " + season, sub: "", items });
+      } else for (const se of sasonger) groups.push({ title: "Visualisation – " + se, sub: "", items: items.filter((s) => norm(s.sasong) === norm(se)) });
       for (const g of groups) {
         const sec = h("section", { class: "koll-sec" });
         const gu = g.items.reduce((a, s) => a + units(s), 0);
@@ -2290,23 +2293,44 @@ import * as P from "./platform.js";
       }
       this.count.textContent = (items.length < iSteg.length ? items.length + " of " + iSteg.length : items.length) + " products in " + season;
     },
-    // Rutorna: steg överst, och under "Välj plagg" varje plagg för sig. Det som bockas ur försvinner ur bilden, inget annat ändras.
-    renderVis(kand, iSteg, items, season) {
+    // Rutorna: en rad per sak att välja på – säsong, drop, steg, kategori, typ – och under "Välj plagg" varje plagg för sig.
+    // Det som bockas ur försvinner ur bilden, inget annat ändras. Siffran i en ruta är hur många plagg rutan ger med övriga val.
+    renderVis({ seasons, sasonger, kand, iSteg, items, pass, dk, katOf, typOf }) {
       const st = UI.koll;
       const upd = () => { this.update(); persist(); };
       const av = new Set(st.av);
       const setAv = (ids, on) => { const x = new Set(st.av); ids.forEach((id) => (on ? x.delete(id) : x.add(id))); st.av = [...x].filter((id) => byId(D.styles, id)); };
-      const andrat = st.av.length || VIS_STEG.some(([k]) => !!st.steg[k] !== VIS_STEG_STD[k]);
+      const toggle = (key, v, on) => { const x = new Set(st[key]); if (on) x.delete(v); else x.add(v); st[key] = [...x]; };
+      const andrat = st.av.length || st.avDrop.length || st.avKat.length || st.avTyp.length || st.seasons.length || VIS_STEG.some(([k]) => !!st.steg[k] !== VIS_STEG_STD[k]);
       const head = h("div", { class: "vis-head" }, h("strong", { text: "In the visualisation" }), h("span", { class: "n", text: (items.length < iSteg.length ? items.length + " of " + iSteg.length : items.length) + " garments selected" }),
         h("button", { class: "linkish", type: "button", "aria-expanded": String(!!st.valj), text: st.valj ? "Hide garments" : "Choose garments", onclick: () => { st.valj = !st.valj; upd(); } }),
-        andrat ? h("button", { class: "linkish", type: "button", text: "Reset", onclick: () => { st.steg = Object.assign({}, VIS_STEG_STD); st.av = []; upd(); } }) : null);
-      const steg = h("div", { class: "vis-steg" }, VIS_STEG.map(([k, l]) => {
-        const n = kand.filter((s) => visSteg(s) === k).length;
-        const cb = h("input", { type: "checkbox", id: "vs_" + k }); cb.checked = !!st.steg[k];
-        cb.addEventListener("change", () => { st.steg[k] = cb.checked; upd(); });
-        return h("label", { class: "vbox" + (st.steg[k] ? " on" : "") + (n ? "" : " tom"), for: "vs_" + k }, cb, h("span", { class: "t", text: tv(l) }), h("span", { class: "c", text: String(n) }));
-      }));
-      this.vis.replaceChildren(head, steg);
+        andrat ? h("button", { class: "linkish", type: "button", text: "Reset", onclick: () => { st.steg = Object.assign({}, VIS_STEG_STD); st.av = []; st.avDrop = []; st.avKat = []; st.avTyp = []; st.seasons = []; st.season = ""; upd(); } }) : null);
+      const box = (id, text, n, on, onchange) => { const cb = h("input", { type: "checkbox", id }); cb.checked = on; cb.addEventListener("change", () => { onchange(cb.checked); upd(); }); return h("label", { class: "vbox" + (on ? " on" : "") + (n ? "" : " tom"), for: id }, cb, h("span", { class: "t", text }), h("span", { class: "c", text: String(n) })); };
+      const row = (label, boxes, keys, stKey) => h("div", { class: "vis-row" }, h("span", { class: "rl", text: label }), h("div", { class: "rb" }, boxes,
+        keys && keys.length > 3 ? [h("button", { class: "linkish", type: "button", text: "Select all", onclick: () => { st[stKey] = st[stKey].filter((x) => !keys.includes(x)); upd(); } }), h("button", { class: "linkish", type: "button", text: "Clear", onclick: () => { st[stKey] = uniq(st[stKey].concat(keys)); upd(); } })] : null));
+      const n = (utom, f) => kand.filter((s) => pass(s, utom) && f(s)).length;
+      const rows = h("div", { class: "vis-rows" });
+      // säsong
+      rows.append(row("Season", seasons.map((se) => box("vq_" + slug(se), se, D.styles.filter((s) => norm(s.sasong) === norm(se) && visSteg(s)).length, sasonger.some((x) => norm(x) === norm(se)), (on) => {
+        const x = sasonger.filter((y) => norm(y) !== norm(se)); if (on) x.push(se);
+        st.seasons = x; if (x.length && !x.some((y) => norm(y) === norm(st.season))) st.season = x[0];
+      }))));
+      // drop
+      const dropBoxes = [], dropKeys = [];
+      for (const se of sasonger) {
+        const pre = sasonger.length > 1 ? se + " " : "";
+        for (const d of dropsOfSeason(se)) { const k = dropKey(se, d.namn); dropKeys.push(k); dropBoxes.push(box("vd_" + slug(k), pre + d.namn, n("drop", (s) => dk(s) === k), !st.avDrop.includes(k), (on) => toggle("avDrop", k, on))); }
+        const k0 = dropKey(se, ""); if (kand.some((s) => dk(s) === k0)) { dropKeys.push(k0); dropBoxes.push(box("vd_" + slug(k0) + "_utan", pre + "No drop", n("drop", (s) => dk(s) === k0), !st.avDrop.includes(k0), (on) => toggle("avDrop", k0, on))); }
+      }
+      if (dropBoxes.length) rows.append(row("Drop", dropBoxes, dropKeys, "avDrop"));
+      // steg
+      rows.append(row("Stage", VIS_STEG.map(([k, l]) => box("vs_" + k, tv(l), n("steg", (s) => visSteg(s) === k), !!st.steg[k], (on) => { st.steg[k] = on; }))));
+      // kategori
+      const kats = KATEGORIER.concat(kand.some((s) => katOf(s) === "Okategoriserat") ? ["Okategoriserat"] : []);
+      rows.append(row("Category", kats.map((k) => box("vk_" + slug(k), tv(k), n("kat", (s) => katOf(s) === k), !st.avKat.includes(k), (on) => toggle("avKat", k, on))), kats, "avKat"));
+      // typ
+      rows.append(row("Type", ["Nyhet", "Restock", "NOOS"].map((k) => box("vt_" + slug(k), typLabel({ typ: k }), n("typ", (s) => typOf(s) === k), !st.avTyp.includes(k), (on) => toggle("avTyp", k, on)))));
+      this.vis.replaceChildren(head, rows);
       if (!st.valj) return;
       const pick = h("div", { class: "vis-pick" });
       for (const [k, l] of VIS_STEG) {
@@ -2318,10 +2342,10 @@ import * as P from "./platform.js";
             const cb = h("input", { type: "checkbox", id: "vg_" + s._id }); cb.checked = on;
             cb.addEventListener("change", () => { setAv([s._id], cb.checked); upd(); });
             return h("label", { class: "vitem" + (on ? " on" : ""), for: "vg_" + s._id }, cb, h("span", { class: "th" }, img ? h("img", { src: imgUrl(img), alt: "", loading: "lazy", onerror: (e) => e.target.remove() }) : null),
-              h("span", { class: "nm" }, h("b", { text: s.namn }), h("span", { text: [s.drop || "", (s.farger || []).join(", ")].filter(Boolean).join(" · ") })));
+              h("span", { class: "nm" }, h("b", { text: s.namn }), h("span", { text: [sasonger.length > 1 ? s.sasong : "", s.drop || "", (s.farger || []).join(", ")].filter(Boolean).join(" · ") })));
           })));
       }
-      if (!pick.children.length) pick.append(h("p", { class: "hint", text: "No garments in the selected stages." }));
+      if (!pick.children.length) pick.append(h("p", { class: "hint", text: "No garments with these choices." }));
       this.vis.append(pick);
     },
     card(s) {

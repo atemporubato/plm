@@ -6,6 +6,15 @@ och importeras med `node tools/import-dokument.js`, och main går live på plm.a
 
 Versionsnumrering: små ändringar ger punktversion (v9.1, v9.2 …). Nytt heltal (v10) bara vid stora ändringar.
 
+## v10.27 (2026-11-25)
+
+Visualiseringen i Kollektion filtreras med rutor för säsong, drop, steg, kategori och typ. Ingen data ändras; urvalet sparas bara i den egna webbläsaren.
+- Rutan "I visualiseringen" har en rad per sak att välja på: Säsong, Drop, Steg, Kategori och Typ (New, Re-stock, NOOS). Varje ruta visar hur många plagg den ger med övriga val. Drop och Kategori har "Markera alla" och "Avmarkera alla".
+- Flera säsonger kan visas samtidigt. Varje drop får då rubriken "Visualisering – AW26 Drop 1", "Visualisering – SS27 Drop 1" osv.
+- Rullistorna för säsong och kategori och knappraden för typ överst är borttagna; allt väljs i rutorna. Lägena Per drop, Per kategori, Helhet och Board är kvar.
+- En bortbockad drop visas inte. Tomma drops visas bara när inget är bortvalt i steg, kategori, typ eller plagg.
+- "Återställ" tar tillbaka standardvalet, inklusive aktuell säsong.
+
 ## v10.26 (2026-11-25)
 
 Kollektion blir en visualisering med rutor att bocka i. Ingen data ändras; urvalet sparas bara i den egna webbläsaren.
