@@ -2210,19 +2210,26 @@ import * as P from "./platform.js";
   }
 
   // ---------- KOLLEKTION (Carl) ----------
+  // Kollektionens steg: från "Idé redo att designa" och framåt. Råa idéer och kastade stylar hör inte hit.
+  const VIS_STEG = [["design", "Design"], ["sampling", "Sampling"], ["godkand", "Godkänd"], ["bestalld", "Beställd"], ["pausad", "Pausad"]];
+  const VIS_STEG_STD = { design: true, sampling: true, godkand: true, bestalld: true, pausad: false };
+  const visSteg = (s) => { const x = styleStatusNorm(s.status); return x === ST_DESIGN ? "design" : x === ST_KANBEST || x === "Sampling" ? "sampling" : x === "Godkänd" ? "godkand" : ["PO lagd", "I produktion", "Levererad"].includes(x) ? "bestalld" : x === "Pausad" ? "pausad" : null; };
   const KollView = {
     mount(root) {
       const st = UI.koll;
+      if (!st.steg || typeof st.steg !== "object") st.steg = Object.assign({}, VIS_STEG_STD);
+      if (!Array.isArray(st.av)) st.av = [];
       const upd = () => { this.update(); persist(); };
       this.fSeason = filterSelect("f_k_season", "All seasons", st, "season", upd);
-      this.seg = makeSeg([["drop", "By drop"], ["kategori", "By category"], ["helhet", "Overall"]], st, "mode", upd);
+      this.seg = makeSeg([["drop", "By drop"], ["kategori", "By category"], ["helhet", "Overall"], ["board", "Board"]], st, "mode", upd);
+      this.vis = h("section", { class: "vis-filter", "aria-label": "In the visualisation" });
       this.fKat = filterSelect("f_k_kat", "All categories", st, "kat", upd);
       this.segTyp = makeSeg([["alla", "All"], ["Nyhet", "New"], ["Restock", "Re-stock"], ["NOOS", "NOOS"]], st, "typ", upd);
       this.count = h("span", { class: "count" });
       this.stats = h("div", { class: "koll-stats" });
       this.body = h("div", { style: "display:grid;gap:26px" });
-      root.append(h("p", { class: "lede", text: "The coming collection in pictures: every product with its latest sample and status. Switch between drop, category and overall, and filter on New, Re-stock or NOOS. Click a product for details and all images." }),
-        h("section", { class: "filters", "aria-label": "Filter" }, this.fSeason.el, this.seg.el, this.segTyp.el, this.fKat.el, this.count), this.stats, this.body);
+      root.append(h("p", { class: "lede", text: "The collection in pictures, from idea ready for design onwards. Tick which stages and which garments to include to see what a drop could look like. Board shows only the images. The selection is your own and changes nothing for anyone else." }),
+        h("section", { class: "filters", "aria-label": "Filter" }, this.fSeason.el, this.seg.el, this.segTyp.el, this.fKat.el, this.count), this.vis, this.stats, this.body);
     },
     seasonInView() {
       const st = UI.koll;
@@ -2239,9 +2246,14 @@ import * as P from "./platform.js";
       this.fKat.fill(KATEGORIER);
       this.seg.sync(); this.segTyp.sync();
       const season = this.seasonInView();
-      let items = D.styles.filter((s) => norm(s.sasong) === norm(season) && styleStatusNorm(s.status) !== "Kastad");
-      if (st.kat) items = items.filter((s) => styleKategori(s) === st.kat);
-      if (st.typ && st.typ !== "alla") items = items.filter((s) => (s.typ || "Nyhet") === st.typ);
+      let kand = D.styles.filter((s) => norm(s.sasong) === norm(season) && visSteg(s));
+      if (st.kat) kand = kand.filter((s) => styleKategori(s) === st.kat);
+      if (st.typ && st.typ !== "alla") kand = kand.filter((s) => (s.typ || "Nyhet") === st.typ);
+      kand.sort((a, b) => (a.namn || "").localeCompare(b.namn || "", "sv"));
+      const av = new Set(st.av);
+      const iSteg = kand.filter((s) => st.steg[visSteg(s)]);
+      let items = iSteg.filter((s) => !av.has(s._id));
+      this.renderVis(kand, iSteg, items, season);
       const order = { [ST_IDE]: -3, [ST_DESIGN]: -2, [ST_KANBEST]: -1, Sampling: 0, "Godkänd": 1, "PO lagd": 2, "I produktion": 3, Levererad: 4, Pausad: 5 };
       items.sort((a, b) => (order[styleStatusNorm(a.status)] ?? 9) - (order[styleStatusNorm(b.status)] ?? 9) || (a.namn || "").localeCompare(b.namn || "", "sv"));
       const units = (s) => poLinesOf(s._id).reduce((a, x) => a + (num(x.r.antal) || 0), 0);
@@ -2254,26 +2266,63 @@ import * as P from "./platform.js";
       this.stats.replaceChildren(kv("Products " + season, String(items.length), nNew + " new · " + nRe + " re-stock · " + nNoos + " NOOS"), kv("I produktion", String(inProd), items.filter((s) => styleStatusNorm(s.status) === "Sampling").length + " in sampling" + (nIdeas ? " · " + nIdeas + " ideas" : "")), kv("Units ordered", String(items.reduce((a, s) => a + units(s), 0))), kv("With image", withImg + " of " + items.length));
       this.body.replaceChildren();
       const groups = [];
-      if (st.mode === "drop") {
+      const board = st.mode === "board";
+      if (st.mode === "drop" || board) {
         const placed = new Set();
-        for (const d of dropsOfSeason(season)) { const m = items.filter((s) => dropKey(s.sasong, s.drop) === dropKey(d.sasong, d.namn)); m.forEach((x) => placed.add(x._id)); groups.push({ title: d.namn + " – " + season, drop: d, sub: [isISO(d.lansering) ? "Launch " + fmtDate(d.lansering) : "", isISO(d.klartSenast) ? "In stock by " + fmtDate(d.klartSenast) : ""].filter(Boolean).join(" · "), items: m }); }
+        for (const d of dropsOfSeason(season)) { const m = items.filter((s) => dropKey(s.sasong, s.drop) === dropKey(d.sasong, d.namn)); m.forEach((x) => placed.add(x._id)); groups.push({ title: "Visualisation – " + season + " " + d.namn, drop: d, sub: [isISO(d.lansering) ? "Launch " + fmtDate(d.lansering) : "", isISO(d.klartSenast) ? "In stock by " + fmtDate(d.klartSenast) : ""].filter(Boolean).join(" · "), items: m }); }
         const rest = items.filter((s) => !placed.has(s._id)); if (rest.length) groups.push({ title: "No drop – " + season, sub: "", items: rest });
       } else if (st.mode === "kategori") {
         for (const k of KATEGORIER.concat(["Okategoriserat"])) { const m = items.filter((s) => (styleKategori(s) || "Okategoriserat") === k); if (m.length) groups.push({ title: k, sub: "", items: m }); }
-      } else groups.push({ title: season + " – the whole collection", sub: "", items });
+      } else groups.push({ title: "Visualisation – " + season, sub: "", items });
       for (const g of groups) {
         const sec = h("section", { class: "koll-sec" });
         const gu = g.items.reduce((a, s) => a + units(s), 0);
         const head = h("div", { class: "koll-h" }, h("h3", { text: g.title }), h("span", { class: "sub", text: g.items.length + (g.items.length === 1 ? " product" : " products") + (gu ? " · " + gu + " units" : "") + (g.sub ? " · " + g.sub : "") }));
         if (g.drop && canWrite && db) head.append(h("button", { class: "linkish", type: "button", text: "Edit drop", onclick: () => openDrop(g.drop._id) }));
+        const perSteg = VIS_STEG.map(([k, l]) => [g.items.filter((s) => visSteg(s) === k).length, l]).filter((x) => x[0]);
+        if (perSteg.length) head.append(h("span", { class: "steg-sum", text: perSteg.map(([n, l]) => n + " " + tv(l).toLowerCase()).join(" · ") }));
         sec.append(head);
         const dImgs = g.drop ? docImages(g.drop) : [];
         if (dImgs.length) sec.append(h("div", { class: "gallery", style: "grid-template-columns:repeat(auto-fill,minmax(90px,1fr))" }, dImgs.map((id) => h("figure", { class: "thumb" }, h("img", { src: imgUrl(id), alt: "", loading: "lazy", onclick: () => openLightbox(dImgs, id) })))));
         if (!g.items.length) sec.append(h("p", { class: "hint", text: "No products here yet." }));
-        else sec.append(h("div", { class: "pgrid" }, g.items.map((s) => this.card(s))));
+        else sec.append(h("div", { class: "pgrid" + (board ? " board" : "") }, g.items.map((s) => this.card(s))));
         this.body.append(sec);
       }
-      this.count.textContent = items.length + " products in " + season;
+      this.count.textContent = (items.length < iSteg.length ? items.length + " of " + iSteg.length : items.length) + " products in " + season;
+    },
+    // Rutorna: steg överst, och under "Välj plagg" varje plagg för sig. Det som bockas ur försvinner ur bilden, inget annat ändras.
+    renderVis(kand, iSteg, items, season) {
+      const st = UI.koll;
+      const upd = () => { this.update(); persist(); };
+      const av = new Set(st.av);
+      const setAv = (ids, on) => { const x = new Set(st.av); ids.forEach((id) => (on ? x.delete(id) : x.add(id))); st.av = [...x].filter((id) => byId(D.styles, id)); };
+      const andrat = st.av.length || VIS_STEG.some(([k]) => !!st.steg[k] !== VIS_STEG_STD[k]);
+      const head = h("div", { class: "vis-head" }, h("strong", { text: "In the visualisation" }), h("span", { class: "n", text: (items.length < iSteg.length ? items.length + " of " + iSteg.length : items.length) + " garments selected" }),
+        h("button", { class: "linkish", type: "button", "aria-expanded": String(!!st.valj), text: st.valj ? "Hide garments" : "Choose garments", onclick: () => { st.valj = !st.valj; upd(); } }),
+        andrat ? h("button", { class: "linkish", type: "button", text: "Reset", onclick: () => { st.steg = Object.assign({}, VIS_STEG_STD); st.av = []; upd(); } }) : null);
+      const steg = h("div", { class: "vis-steg" }, VIS_STEG.map(([k, l]) => {
+        const n = kand.filter((s) => visSteg(s) === k).length;
+        const cb = h("input", { type: "checkbox", id: "vs_" + k }); cb.checked = !!st.steg[k];
+        cb.addEventListener("change", () => { st.steg[k] = cb.checked; upd(); });
+        return h("label", { class: "vbox" + (st.steg[k] ? " on" : "") + (n ? "" : " tom"), for: "vs_" + k }, cb, h("span", { class: "t", text: tv(l) }), h("span", { class: "c", text: String(n) }));
+      }));
+      this.vis.replaceChildren(head, steg);
+      if (!st.valj) return;
+      const pick = h("div", { class: "vis-pick" });
+      for (const [k, l] of VIS_STEG) {
+        const xs = iSteg.filter((s) => visSteg(s) === k); if (!xs.length) continue;
+        const ids = xs.map((s) => s._id);
+        pick.append(h("div", { class: "vis-grp-h" }, h("span", { class: "t", text: tv(l) }), h("button", { class: "linkish", type: "button", text: "Select all", onclick: () => { setAv(ids, true); upd(); } }), h("button", { class: "linkish", type: "button", text: "Clear", onclick: () => { setAv(ids, false); upd(); } })),
+          h("div", { class: "vis-items" }, xs.map((s) => {
+            const on = !av.has(s._id); const img = styleImage(s);
+            const cb = h("input", { type: "checkbox", id: "vg_" + s._id }); cb.checked = on;
+            cb.addEventListener("change", () => { setAv([s._id], cb.checked); upd(); });
+            return h("label", { class: "vitem" + (on ? " on" : ""), for: "vg_" + s._id }, cb, h("span", { class: "th" }, img ? h("img", { src: imgUrl(img), alt: "", loading: "lazy", onerror: (e) => e.target.remove() }) : null),
+              h("span", { class: "nm" }, h("b", { text: s.namn }), h("span", { text: [s.drop || "", (s.farger || []).join(", ")].filter(Boolean).join(" · ") })));
+          })));
+      }
+      if (!pick.children.length) pick.append(h("p", { class: "hint", text: "No garments in the selected stages." }));
+      this.vis.append(pick);
     },
     card(s) {
       const img = styleImage(s);
@@ -2284,11 +2333,11 @@ import * as P from "./platform.js";
       const fs = fotoState(s);
       const allImgs = styleAllImages(s);
       const g = grundOf(s);
-      const b = h("button", { class: "pcard", type: "button", onclick: () => openStyle(s._id) },
+      const b = h("button", { class: "pcard" + (["design", "sampling"].includes(visSteg(s)) ? " tent" : ""), type: "button", onclick: () => openStyle(s._id) },
         h("div", { class: "pimg" }, img ? h("img", { src: imgUrl(img), alt: s.namn, loading: "lazy", onerror: (e) => { const el = e.target; if (/^https?:/.test(el.src)) el.replaceWith(h("span", { class: "noimg", text: "The image from Shopify could not be shown – press \"Fetch Shopify images\"" })); } }) : emptyTile(s, xs), styleStatusPill(s), h("span", { class: "typtag t-" + slug(s.typ || "Nyhet"), text: typLabel(s) }), (() => { const fb = s.fargBilder && typeof s.fargBilder === "object" ? uniq(Object.values(s.fargBilder)) : []; const rest = (fb.length ? fb : allImgs.filter((x) => !(x === shopUrl(s) && docImages(s).length))).filter((x) => x !== img); if (!rest.length) return null; const visa = rest.slice(0, 3); return h("span", { class: "pthumbs" }, rest.length > visa.length ? h("span", { class: "more", text: "+" + (rest.length - visa.length) }) : null, visa.slice().reverse().map((x) => h("img", { src: imgUrl(x), alt: "", loading: "lazy", onerror: (e) => e.target.remove() }))); })(), g ? h("span", { class: "grundtag", text: "Variant of " + g.namn }) : imageSource(s) ? h("span", { class: "grundtag", text: imageSource(s) === "Shopify" ? (s.shopifyBild && s.shopifyBild.likhet === "liknande" ? "Similar · Shopify" : "Shopify") : imageSource(s) }) : null),
-        h("div", { class: "pbody" }, h("span", { class: "pname", text: s.namn }), h("span", { class: "psub", text: [s.leverantor, styleKategori(s), styleTyg(s)].filter(Boolean).join(" · ") }),
+        h("div", { class: "pbody" }, h("span", { class: "pname", text: s.namn }), h("span", { class: "psub lev", text: [s.leverantor, styleKategori(s), styleTyg(s)].filter(Boolean).join(" · ") }),
           (s.farger || []).length ? h("span", { class: "psub", text: s.farger.join(", ") }) : null,
-          h("span", { class: "psub", text: units ? units + " units" : last ? (last.version || "") + " · " + (last.status || "") : "" }),
+          h("span", { class: "psub antal", text: units ? units + " units" : last ? (last.version || "") + " · " + (last.status || "") : "" }),
           h("div", { class: "pflags" }, last && beslutNorm(last.beslut) ? chip(beslutNorm(last.beslut), "b-" + slug(beslutNorm(last.beslut))) : null, last && last.platsTyp === "Hängare" ? h("span", { class: "hanger", text: "H" + (last.hangare || "?") }) : null, fs.key === "finns" ? chip("Fotosample", "fs-finns") : null)));
       return b;
     }

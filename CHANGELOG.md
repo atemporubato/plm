@@ -6,6 +6,16 @@ och importeras med `node tools/import-dokument.js`, och main går live på plm.a
 
 Versionsnumrering: små ändringar ger punktversion (v9.1, v9.2 …). Nytt heltal (v10) bara vid stora ändringar.
 
+## v10.26 (2026-11-25)
+
+Kollektion blir en visualisering med rutor att bocka i. Ingen data ändras; urvalet sparas bara i den egna webbläsaren.
+- Kollektion visar allt från "Idé redo att designa" och framåt. Råa idéer ("Idé ej redo för design") ligger bara kvar under Idéer. Kastade visas inte, pausade bara om man bockar i dem.
+- Ny ruta "I visualiseringen": en kryssruta per steg med antal – Design, Sampling, Godkänd, Beställd (PO lagd, i produktion, levererad) och Pausad. Under "Välj plagg" finns en kryssruta per plagg med miniatyr, drop och färger, plus "Markera alla" och "Avmarkera alla" per steg. "Återställ" tar tillbaka standardvalet.
+- Varje drop heter "Visualisering – SS27 Drop 1" och har en rad som summerar stegen, t.ex. "1 sampling · 4 beställda".
+- Plagg som ännu inte är bestämda (Design och Sampling) har streckad ram och dämpad bild.
+- Nytt läge "Board": per drop med stora bilder och bara namn och färger.
+- Urvalet (steg och bortbockade plagg) sparas per webbläsare, som övriga filter. Det skrivs inte till databasen och påverkar ingen annan.
+
 ## v10.25 (2026-11-25)
 
 Texträttning i den hostade appen. Ingen data ändras, ingen ändring i artifact-källan (byggs från v10.24).

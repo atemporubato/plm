@@ -1746,7 +1746,17 @@
   "emballage,": "packaging,",
   "t.ex. E-com bags": "e.g. E-com bags",
   "st:": "pcs:",
-  "Ingen träff. Personen syns här efter att ha loggat in i PLM en gång med sitt Rubato-konto. Tills dess gäller standardrollen.": "No match. The person appears here after signing in to PLM once with their Rubato account. Until then the default role applies."
+  "Ingen träff. Personen syns här efter att ha loggat in i PLM en gång med sitt Rubato-konto. Tills dess gäller standardrollen.": "No match. The person appears here after signing in to PLM once with their Rubato account. Until then the default role applies.",
+  "Kollektionen i bild, från idé redo att designa och framåt. Bocka i vilka steg och vilka plagg som ska vara med för att se hur en drop kan se ut. Board visar bara bilderna. Urvalet är ditt eget och ändrar ingenting för andra.": "The collection in pictures, from idea ready for design onwards. Tick which stages and which garments to include to see what a drop could look like. Board shows only the images. The selection is your own and changes nothing for anyone else.",
+  "Dölj plaggen": "Hide garments",
+  "Välj plagg": "Choose garments",
+  "Återställ": "Reset",
+  "Inga plagg i de valda stegen.": "No garments in the selected stages.",
+  "I visualiseringen": "In the visualisation",
+  "Visualisering –": "Visualisation –",
+  "plagg valda": "garments selected",
+  "Markera alla": "Select all",
+  "Avmarkera alla": "Clear"
  },
  "values": {
   "Storleksset": "Size set",
