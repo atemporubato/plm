@@ -1498,8 +1498,9 @@ import * as P from "./platform.js";
       const seasons = uniq(D.po.map(poSeason).concat(D.budget.map((b) => b.sasong || b._id), D.styles.map((s) => s.sasong))).sort((a, b) => seasonRank(b) - seasonRank(a) || b.localeCompare(a, "sv"));
       this.fSeason.fill(seasons);
       this.fLev.fill(uniq(D.po.map((p) => p.leverantor)));
-      const season = this.seasonInView();
+      const season = st.season || ""; // tomt = alla säsonger: listan, summorna och räknaren gäller då alla POs
       const inSeason = D.po.filter((p) => !season || norm(poSeason(p)) === norm(season));
+      const budgetSeason = this.seasonInView(); // budgeten gäller alltid en säsong: den valda, annars den senaste
       const gsum = (g) => inSeason.filter((p) => poGroup(p) === g).reduce((a, p) => a + poTotal(p), 0);
       const gn = (g) => inSeason.filter((p) => poGroup(p) === g).length;
       if (!["ordered", "prelim"].includes(st.view)) st.view = null;
@@ -1546,7 +1547,7 @@ import * as P from "./platform.js";
       this.empty.hidden = list.length > 0;
       if (!list.length) this.empty.replaceChildren(...(!loaded.has("po") ? [h("strong", { text: db ? "Loading production …" : "No production to show" })] : D.po.length ? [h("strong", { text: "Nothing matches the filter" }), h("span", { text: "Change season or status, or clear the search." })] : [h("strong", { text: "No POs yet" }), h("span", { text: "Add the first one with \"+ New PO\"." })]));
       this.count.textContent = list.length + " of " + inSeason.length + " POs" + (season ? " in " + season : "");
-      this.renderBudget(season, inSeason);
+      this.renderBudget(budgetSeason, season ? inSeason : D.po.filter((p) => norm(poSeason(p)) === norm(budgetSeason)));
     },
     renderTimelines(season) {
       const box = this.tl; box.replaceChildren();

@@ -6,6 +6,12 @@ och importeras med `node tools/import-dokument.js`, och main går live på plm.a
 
 Versionsnumrering: små ändringar ger punktversion (v9.1, v9.2 …). Nytt heltal (v10) bara vid stora ändringar.
 
+## v10.23 (2026-11-25)
+
+Rättning i Produktion. Ingen data ändras.
+- "Alla säsonger" visar nu POs i alla säsonger. Tidigare valdes senaste säsongen tyst när inget var valt, så t.ex. JPN-AW26-5 (Roper Shirt, AW26) syntes inte förrän man valde AW26. Listan, summorna överst (Beställt/Preliminärt) och räknaren gäller alla säsonger när ingen är vald.
+- Budgeten längst ner gäller alltid en säsong: den valda, annars den senaste. Rubriken säger vilken.
+
 ## v10.22 (2026-11-24)
 
 Sample-steg, hängare, fotosample-storlek, befintlig produkt, lageravdrag och ref-plagg från Shopify. Nya fält: atgang (lagerparti), lagerAvdrag (PO), shopifyOrder/shopifyRad (ref-plagg). Inget befintligt fält ändras.
