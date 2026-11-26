@@ -1815,7 +1815,8 @@
   "Bara när vi köper tyget själva. Tomt = tyget ingår i Make.": "Only when we buy the fabric ourselves. Empty = the fabric is included in Make.",
   "Make + tyg. Gäller på PO-rader utan eget pris och i marginalen.": "Make + fabric. Used on PO lines without a price of their own and in the margin.",
   "Klicka på en rad för att öppna PO:n. Unit cost = Make + tyg per plagg. Kostnad = antal × unit cost.": "Click a row to open the PO. Unit cost = Make + fabric per unit. Cost = quantity × unit cost.",
-  "Fyll i Make": "Enter Make"
+  "Fyll i Make": "Enter Make",
+  "Make och tyg per plagg ändrat": "Make and fabric per unit changed"
  },
  "values": {
   "Storleksset": "Size set",

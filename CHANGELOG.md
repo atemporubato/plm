@@ -6,6 +6,12 @@ och importeras med `node tools/import-dokument.js`, och main går live på plm.a
 
 Versionsnumrering: små ändringar ger punktversion (v9.1, v9.2 …). Nytt heltal (v10) bara vid stora ändringar.
 
+## v10.30 (2026-11-26)
+
+Rättning: Make, valuta och tyg per plagg på stylen sparades inte om inget annat ändrades samtidigt.
+- Fälten ligger med flit utanför ändringsloggen (beloppen ska inte stå i loggen som alla ser), och sparningen hoppades därför över när bara de hade ändrats. Felet fanns sedan inköpspriset kom till på stylen och gällde även det nya tygfältet i v10.29.
+- Nu sparas ändringen, med loggraden "Make och tyg per plagg ändrat" utan belopp. Inget ändras i befintliga poster.
+
 ## v10.29 (2026-11-26)
 
 Unit cost = Make + tyg, för plagg där vi köper tyget själva (som i Masterplaner: Styckpris (CMT) + Tygkostnad per enhet). Ett nytt fält på stylen (tygkostnad); inget ändras i befintliga poster.

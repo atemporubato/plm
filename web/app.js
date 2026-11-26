@@ -5691,6 +5691,8 @@ import * as P from "./platform.js";
         await saveShopFields();
         const mattAndr = mattChanges(parseMatt(mattEff(cur.mattFran, cur.mattlista)), parseMatt(mattEff(o.mattFran, o.mattlista)));
         const extra = mattAndr.length ? [mattComment(mattAndr)] : String(cur.mattlista || "") !== String(o.mattlista || "") ? [logEntry("Measurement list changed")] : [];
+        const kostAndr = canSeeMoney() && (num(o.inkopspris) !== num(cur.inkopspris) || num(o.tygkostnad) !== num(cur.tygkostnad) || (num(o.inkopspris) != null && (o.inkopsValuta || "") !== (cur.inkopsValuta || "")));
+        if (kostAndr) extra.push(logEntry("Make and fabric per unit changed"));
         if (!changes.length && !extra.length) { if (after) return after(cur._id); closeSheet(); return cur._id; }
         if (await write("styles", cur._id, Object.assign({}, o, { andrad: now, logg: (cur.logg || []).concat(changes.map(logEntry), extra) }))) { if (after) return after(cur._id); toast("Saved"); closeSheet(); return cur._id; }
         return null;
