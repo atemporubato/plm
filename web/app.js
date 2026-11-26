@@ -481,7 +481,7 @@ import * as P from "./platform.js";
     if (own.length) return own[0];
     if (shopExact(st) && shopUrl(st)) return shopUrl(st);
     const g = st.grundId ? byId(D.styles, st.grundId) : null;
-    if (g) { const gi = g.bildId || docImages(g)[0] || shopUrl(g); if (gi) return gi; }
+    if (g) { const gi = g.bildId || docImages(g)[0] || (shopExact(g) ? shopUrl(g) : ""); if (gi) return gi; }
     return null;
   }
   // Bara exakta Shopify-träffar ("samma" eller manuellt klistrad URL) hämtas som bild – aldrig "liknande" produkter.
@@ -2408,7 +2408,9 @@ import * as P from "./platform.js";
     card(s) {
       // Egen bild först. Saknas den visas modellens bild från butiken (shopifyBild med likhet "liknande"), tydligt märkt.
       const egen = styleImage(s);
-      const sim = !egen && !shopExact(s) ? shopUrl(s) : "";
+      const g0 = grundOf(s);
+      const simFran = egen ? null : !shopExact(s) && shopUrl(s) ? s : g0 && !shopExact(g0) && shopUrl(g0) ? g0 : null;
+      const sim = simFran ? shopUrl(simFran) : "";
       const img = egen || sim || null;
       const xs = samplesOfStyle(s._id);
       const last = xs[xs.length - 1];
@@ -2418,7 +2420,7 @@ import * as P from "./platform.js";
       const allImgs = styleAllImages(s);
       const g = grundOf(s);
       const b = h("button", { class: "pcard" + (["design", "sampling"].includes(visSteg(s)) ? " tent" : ""), type: "button", onclick: () => openStyle(s._id) },
-        h("div", { class: "pimg" }, img ? h("img", { src: imgUrl(img), alt: s.namn, loading: "lazy", class: sim ? "sim" : null, onerror: (e) => { const el = e.target; if (/^https?:/.test(String(img))) el.replaceWith(h("span", { class: "noimg", text: "The image from Shopify could not be shown – press \"Fetch Shopify images\"" })); } }) : emptyTile(s, xs), styleStatusPill(s), h("span", { class: "typtag t-" + slug(s.typ || "Nyhet"), text: typLabel(s) }), sim ? h("span", { class: "simtag", title: shopTitle(s), text: "Similar product" }) : null, (() => { const fb = s.fargBilder && typeof s.fargBilder === "object" ? uniq(Object.values(s.fargBilder)) : []; const rest = (fb.length ? fb : allImgs.filter((x) => !(x === shopUrl(s) && docImages(s).length))).filter((x) => x !== img); if (!rest.length) return null; const visa = rest.slice(0, 3); return h("span", { class: "pthumbs" }, rest.length > visa.length ? h("span", { class: "more", text: "+" + (rest.length - visa.length) }) : null, visa.slice().reverse().map((x) => h("img", { src: imgUrl(x), alt: "", loading: "lazy", onerror: (e) => e.target.remove() }))); })(), g ? h("span", { class: "grundtag", text: "Variant of " + g.namn }) : imageSource(s) ? h("span", { class: "grundtag", text: imageSource(s) === "Shopify" ? (s.shopifyBild && s.shopifyBild.likhet === "liknande" ? "Similar · Shopify" : "Shopify") : imageSource(s) }) : null),
+        h("div", { class: "pimg" }, img ? h("img", { src: imgUrl(img), alt: s.namn, loading: "lazy", class: sim ? "sim" : null, onerror: (e) => { const el = e.target; if (/^https?:/.test(String(img))) el.replaceWith(h("span", { class: "noimg", text: "The image from Shopify could not be shown – press \"Fetch Shopify images\"" })); } }) : emptyTile(s, xs), styleStatusPill(s), h("span", { class: "typtag t-" + slug(s.typ || "Nyhet"), text: typLabel(s) }), sim ? h("span", { class: "simtag", title: shopTitle(simFran), text: "Similar product" }) : null, (() => { const fb = s.fargBilder && typeof s.fargBilder === "object" ? uniq(Object.values(s.fargBilder)) : []; const rest = (fb.length ? fb : allImgs.filter((x) => !(x === shopUrl(s) && docImages(s).length))).filter((x) => x !== img); if (!rest.length) return null; const visa = rest.slice(0, 3); return h("span", { class: "pthumbs" }, rest.length > visa.length ? h("span", { class: "more", text: "+" + (rest.length - visa.length) }) : null, visa.slice().reverse().map((x) => h("img", { src: imgUrl(x), alt: "", loading: "lazy", onerror: (e) => e.target.remove() }))); })(), g ? h("span", { class: "grundtag", text: "Variant of " + g.namn }) : imageSource(s) ? h("span", { class: "grundtag", text: imageSource(s) === "Shopify" ? (s.shopifyBild && s.shopifyBild.likhet === "liknande" ? "Similar · Shopify" : "Shopify") : imageSource(s) }) : null),
         h("div", { class: "pbody" }, h("span", { class: "pname", text: s.namn }), h("span", { class: "psub lev", text: [s.leverantor, styleKategori(s), styleTyg(s)].filter(Boolean).join(" · ") }),
           (s.farger || []).length ? h("span", { class: "psub", text: s.farger.join(", ") }) : null,
           h("span", { class: "psub antal", text: units ? units + " units" : last ? (last.version || "") + " · " + (last.status || "") : "" }),
@@ -3746,7 +3748,7 @@ import * as P from "./platform.js";
   let autoShopifyKor = false;
   async function hostedAutoShopify() {
     if (autoShopifyKor || !canWrite || !db || !assets || designOnly() || ME.leverantor) return;
-    let provat = {}; try { provat = JSON.parse(localStorage.getItem("plmAutoShopify5") || "{}"); } catch (e) {}
+    let provat = {}; try { provat = JSON.parse(localStorage.getItem("plmAutoShopify6") || "{}"); } catch (e) {}
     const nu = Date.now(), vecka = 7 * 864e5;
     // Utan bild, eller flera färger där den enda bilden är en automatisk (Shopify-kopia eller färgöversikt) – då hämtas en bild per färg.
     // En bild från en liknande produkt räknas som tom här: stylen provas igen, och en säker träff ersätter den.
@@ -3792,14 +3794,17 @@ import * as P from "./platform.js";
           }
           if (!hit || !hit.url || !(gammal(s) || hit.exakt)) {
             // Ingen säker träff: modellens bild från butiken visas i Kollektion, märkt "Liknande produkt". Den kopieras aldrig in som stylens egen bild.
-            const lik = svar.liknande && svar.liknande.url ? svar.liknande : hit && hit.url ? hit : null;
+            const lik = svar.liknande && svar.liknande.url ? svar.liknande : null;
+            const harLik = !!(cur.shopifyBild && cur.shopifyBild.likhet === "liknande");
             if (lik && tom(cur) && !styleImage(cur) && !(cur.shopifyBild && cur.shopifyBild.url === lik.url)) await write("styles", s._id, { shopifyBild: { url: lik.url, titel: lik.titel, handle: lik.handle, likhet: "liknande", auto: true }, andrad: new Date().toISOString(), logg: (cur.logg || []).concat(logEntry("Image from a similar product in Shopify: " + lik.titel)) });
+            // En automatiskt satt liknande bild tas bort när butiken inte längre har någon liknande produkt (t.ex. namn på ett enda ord).
+            else if (!lik && harLik && cur.shopifyBild.auto) await write("styles", s._id, { shopifyBild: null, andrad: new Date().toISOString(), logg: (cur.logg || []).concat(logEntry("Image from a similar product removed – no similar product in Shopify")) });
             continue;
           }
           if (await write("styles", s._id, { shopifyBild: { url: hit.url, titel: hit.titel, handle: hit.handle, likhet: "samma", auto: true }, andrad: new Date().toISOString(), logg: (cur.logg || []).concat(logEntry("Shopify image linked automatically: " + hit.titel)) })) { Object.assign(cur, { shopifyBild: { url: hit.url, titel: hit.titel, handle: hit.handle, likhet: "samma", auto: true } }); hits++; }
         } catch (e) { delete provat[s._id]; }
       }
-      try { localStorage.setItem("plmAutoShopify5", JSON.stringify(provat)); } catch (e) {}
+      try { localStorage.setItem("plmAutoShopify6", JSON.stringify(provat)); } catch (e) {}
       if (antal) toast(antal + " " + "Shopify images fetched");
       if (hits) await importShopifyImages();
     } finally { autoShopifyKor = false; }

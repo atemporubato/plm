@@ -1819,7 +1819,8 @@
   "Make och tyg per plagg ändrat": "Make and fabric per unit changed",
   "Liknande produkt": "Similar product",
   "Bild omvandlad till JPG – originalet gick inte att visa i alla webbläsare": "Image converted to JPG – the original could not be shown in every browser",
-  "Bild från liknande produkt i Shopify:": "Image from a similar product in Shopify:"
+  "Bild från liknande produkt i Shopify:": "Image from a similar product in Shopify:",
+  "Bild från liknande produkt borttagen – ingen liknande produkt i Shopify": "Image from a similar product removed – no similar product in Shopify"
  },
  "values": {
   "Storleksset": "Size set",

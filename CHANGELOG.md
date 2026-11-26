@@ -6,6 +6,13 @@ och importeras med `node tools/import-dokument.js`, och main går live på plm.a
 
 Versionsnumrering: små ändringar ger punktversion (v9.1, v9.2 …). Nytt heltal (v10) bara vid stora ändringar.
 
+## v10.32 (2026-11-26)
+
+Två rättningar av liknande-bilderna från v10.31. Ingen befintlig data tas bort utöver automatiskt satta liknande-bilder som inte längre ska finnas.
+- En liknande bild på en grundstyle följde med till varianterna som om den vore deras egen bild, utan märkning (t.ex. French pkt Corduroy via grundstylen French pkt). Nu visas den även där tonad och märkt "Liknande produkt", och bara i Kollektion.
+- Namn på ett enda ord fick ändå en liknande bild (FATigues fick Fatigue Shirt), tvärtemot regeln. Nu avgör bara serverns svar, och en automatiskt satt liknande bild tas bort när butiken inte har någon liknande produkt.
+- Varje style provas om en gång efter uppdateringen.
+
 ## v10.31 (2026-11-26)
 
 Bilder i Kollektion: tåligare koppling mot Shopify, bild från liknande produkt och omvandling av gamla HEIC-bilder. Ingen befintlig data tas bort.
