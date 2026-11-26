@@ -618,6 +618,45 @@ import * as P from "./platform.js";
     const blob = await new Promise((res) => c.toBlob(res, "image/jpeg", 0.86));
     return blob || (webSafe ? file : null);
   }
+  // En sparad bild som inte går att visa (HEIC från iPhone, uppladdad innan omvandlingen fanns) görs om till JPG: den visas direkt,
+  // och sparas om så att den syns i alla webbläsare. Originalet ligger kvar i lagringen – bara hänvisningen byts.
+  async function replaceImageId(gammal, ny) {
+    const byt = (a) => (Array.isArray(a) && a.includes(gammal) ? a.map((x) => (x === gammal ? ny : x)) : null);
+    const now = new Date().toISOString();
+    for (const [coll, list] of [["styles", D.styles], ["samples", D.samples], ["drops", D.drops], ["refplagg", D.ref]]) {
+      for (const d of (list || []).slice()) {
+        const p = {};
+        if (d.bildId === gammal) p.bildId = ny;
+        const b = byt(d.bilder); if (b) p.bilder = b;
+        if (d.fargBilder && typeof d.fargBilder === "object" && Object.values(d.fargBilder).includes(gammal)) p.fargBilder = Object.fromEntries(Object.entries(d.fargBilder).map(([k, v]) => [k, v === gammal ? ny : v]));
+        if (d.design && byt(d.design.bilder)) p.design = Object.assign({}, d.design, { bilder: byt(d.design.bilder) });
+        if (!Object.keys(p).length) continue;
+        if ("andrad" in d) p.andrad = now;
+        if (Array.isArray(d.logg)) p.logg = d.logg.concat(logEntry("Image converted to JPG – the original could not be shown in every browser"));
+        await write(coll, d._id, p);
+      }
+    }
+  }
+  const bildFix = new Map();
+  async function repairImage(el) {
+    if (el.dataset.fixad) return; el.dataset.fixad = "1";
+    let id = ""; try { id = decodeURIComponent(new URL(el.src).pathname.split("/").pop() || ""); } catch (e) { return; }
+    if (!id) return;
+    const src = el.src;
+    if (!bildFix.has(id)) bildFix.set(id, (async () => {
+      const resp = await fetch(src); if (!resp.ok) return null;
+      const raw = await resp.blob();
+      if (/^image\/(jpeg|png|webp|gif|svg)/.test(raw.type || "")) return null; // inget formatfel – något annat är fel med bilden
+      const jpg = await shrinkImage(new File([raw], "photo.heic", { type: raw.type || "image/heic" }), 1600);
+      if (!jpg) return null;
+      const ut = { url: URL.createObjectURL(jpg) };
+      if (canWrite && assets && db) { try { const r = await assets.upload(jpg, jpg.type ? undefined : { type: "image/jpeg" }); await replaceImageId(id, r.id); } catch (e) {} }
+      return ut;
+    })().catch(() => null));
+    const fix = await bildFix.get(id);
+    if (fix && el.isConnected) el.src = fix.url;
+  }
+  document.addEventListener("error", (e) => { const el = e.target; if (el && el.tagName === "IMG" && el.src && !/^(blob|data):/.test(el.src) && !/cdn\.shopify\.com|myshopify\.com/.test(el.src)) repairImage(el); }, true);
   async function uploadImages(files) {
     if (!assets) { toast("Uploading images requires Editor access to the app."); return []; }
     const ids = [];
@@ -2367,7 +2406,10 @@ import * as P from "./platform.js";
       this.vis.append(pick);
     },
     card(s) {
-      const img = styleImage(s);
+      // Egen bild först. Saknas den visas modellens bild från butiken (shopifyBild med likhet "liknande"), tydligt märkt.
+      const egen = styleImage(s);
+      const sim = !egen && !shopExact(s) ? shopUrl(s) : "";
+      const img = egen || sim || null;
       const xs = samplesOfStyle(s._id);
       const last = xs[xs.length - 1];
       const pl = poLinesOf(s._id);
@@ -2376,7 +2418,7 @@ import * as P from "./platform.js";
       const allImgs = styleAllImages(s);
       const g = grundOf(s);
       const b = h("button", { class: "pcard" + (["design", "sampling"].includes(visSteg(s)) ? " tent" : ""), type: "button", onclick: () => openStyle(s._id) },
-        h("div", { class: "pimg" }, img ? h("img", { src: imgUrl(img), alt: s.namn, loading: "lazy", onerror: (e) => { const el = e.target; if (/^https?:/.test(el.src)) el.replaceWith(h("span", { class: "noimg", text: "The image from Shopify could not be shown – press \"Fetch Shopify images\"" })); } }) : emptyTile(s, xs), styleStatusPill(s), h("span", { class: "typtag t-" + slug(s.typ || "Nyhet"), text: typLabel(s) }), (() => { const fb = s.fargBilder && typeof s.fargBilder === "object" ? uniq(Object.values(s.fargBilder)) : []; const rest = (fb.length ? fb : allImgs.filter((x) => !(x === shopUrl(s) && docImages(s).length))).filter((x) => x !== img); if (!rest.length) return null; const visa = rest.slice(0, 3); return h("span", { class: "pthumbs" }, rest.length > visa.length ? h("span", { class: "more", text: "+" + (rest.length - visa.length) }) : null, visa.slice().reverse().map((x) => h("img", { src: imgUrl(x), alt: "", loading: "lazy", onerror: (e) => e.target.remove() }))); })(), g ? h("span", { class: "grundtag", text: "Variant of " + g.namn }) : imageSource(s) ? h("span", { class: "grundtag", text: imageSource(s) === "Shopify" ? (s.shopifyBild && s.shopifyBild.likhet === "liknande" ? "Similar · Shopify" : "Shopify") : imageSource(s) }) : null),
+        h("div", { class: "pimg" }, img ? h("img", { src: imgUrl(img), alt: s.namn, loading: "lazy", class: sim ? "sim" : null, onerror: (e) => { const el = e.target; if (/^https?:/.test(String(img))) el.replaceWith(h("span", { class: "noimg", text: "The image from Shopify could not be shown – press \"Fetch Shopify images\"" })); } }) : emptyTile(s, xs), styleStatusPill(s), h("span", { class: "typtag t-" + slug(s.typ || "Nyhet"), text: typLabel(s) }), sim ? h("span", { class: "simtag", title: shopTitle(s), text: "Similar product" }) : null, (() => { const fb = s.fargBilder && typeof s.fargBilder === "object" ? uniq(Object.values(s.fargBilder)) : []; const rest = (fb.length ? fb : allImgs.filter((x) => !(x === shopUrl(s) && docImages(s).length))).filter((x) => x !== img); if (!rest.length) return null; const visa = rest.slice(0, 3); return h("span", { class: "pthumbs" }, rest.length > visa.length ? h("span", { class: "more", text: "+" + (rest.length - visa.length) }) : null, visa.slice().reverse().map((x) => h("img", { src: imgUrl(x), alt: "", loading: "lazy", onerror: (e) => e.target.remove() }))); })(), g ? h("span", { class: "grundtag", text: "Variant of " + g.namn }) : imageSource(s) ? h("span", { class: "grundtag", text: imageSource(s) === "Shopify" ? (s.shopifyBild && s.shopifyBild.likhet === "liknande" ? "Similar · Shopify" : "Shopify") : imageSource(s) }) : null),
         h("div", { class: "pbody" }, h("span", { class: "pname", text: s.namn }), h("span", { class: "psub lev", text: [s.leverantor, styleKategori(s), styleTyg(s)].filter(Boolean).join(" · ") }),
           (s.farger || []).length ? h("span", { class: "psub", text: s.farger.join(", ") }) : null,
           h("span", { class: "psub antal", text: units ? units + " units" : last ? (last.version || "") + " · " + (last.status || "") : "" }),
@@ -3704,10 +3746,11 @@ import * as P from "./platform.js";
   let autoShopifyKor = false;
   async function hostedAutoShopify() {
     if (autoShopifyKor || !canWrite || !db || !assets || designOnly() || ME.leverantor) return;
-    let provat = {}; try { provat = JSON.parse(localStorage.getItem("plmAutoShopify4") || "{}"); } catch (e) {}
+    let provat = {}; try { provat = JSON.parse(localStorage.getItem("plmAutoShopify5") || "{}"); } catch (e) {}
     const nu = Date.now(), vecka = 7 * 864e5;
     // Utan bild, eller flera färger där den enda bilden är en automatisk (Shopify-kopia eller färgöversikt) – då hämtas en bild per färg.
-    const tom = (s) => !s.shopifyBild && !s.bildId && !docImages(s).length;
+    // En bild från en liknande produkt räknas som tom här: stylen provas igen, och en säker träff ersätter den.
+    const tom = (s) => (!s.shopifyBild || s.shopifyBild.likhet === "liknande") && !s.bildId && !docImages(s).length;
     const baraAuto = (s) => (s.farger || []).length > 1 && !s.fargBilder && docImages(s).length <= 1 && (!!s.bildAuto || !!s.shopifyBild);
     // Färgbilder hämtade tidigare men inte för alla färger (t.ex. Lot 1 där en färg heter något annat i butiken): prova igen.
     const ofull = (s) => !!s.bildAuto && !!s.fargBilder && Object.keys(s.fargBilder).length < (s.farger || []).length && docImages(s).length === Object.keys(s.fargBilder).length;
@@ -3747,11 +3790,16 @@ import * as P from "./platform.js";
             if (ids.length && await write("styles", s._id, { bilder: ids, bildId: ids[0], bildAuto: true, fargBilder, andrad: new Date().toISOString(), logg: (cur.logg || []).concat(logEntry("Shopify images fetched automatically: " + per.map((x) => x.titel).join(", "))) })) antal += ids.length;
             continue;
           }
-          if (!hit || !hit.url || !(gammal(s) || hit.exakt)) continue;
+          if (!hit || !hit.url || !(gammal(s) || hit.exakt)) {
+            // Ingen säker träff: modellens bild från butiken visas i Kollektion, märkt "Liknande produkt". Den kopieras aldrig in som stylens egen bild.
+            const lik = svar.liknande && svar.liknande.url ? svar.liknande : hit && hit.url ? hit : null;
+            if (lik && tom(cur) && !styleImage(cur) && !(cur.shopifyBild && cur.shopifyBild.url === lik.url)) await write("styles", s._id, { shopifyBild: { url: lik.url, titel: lik.titel, handle: lik.handle, likhet: "liknande", auto: true }, andrad: new Date().toISOString(), logg: (cur.logg || []).concat(logEntry("Image from a similar product in Shopify: " + lik.titel)) });
+            continue;
+          }
           if (await write("styles", s._id, { shopifyBild: { url: hit.url, titel: hit.titel, handle: hit.handle, likhet: "samma", auto: true }, andrad: new Date().toISOString(), logg: (cur.logg || []).concat(logEntry("Shopify image linked automatically: " + hit.titel)) })) { Object.assign(cur, { shopifyBild: { url: hit.url, titel: hit.titel, handle: hit.handle, likhet: "samma", auto: true } }); hits++; }
         } catch (e) { delete provat[s._id]; }
       }
-      try { localStorage.setItem("plmAutoShopify4", JSON.stringify(provat)); } catch (e) {}
+      try { localStorage.setItem("plmAutoShopify5", JSON.stringify(provat)); } catch (e) {}
       if (antal) toast(antal + " " + "Shopify images fetched");
       if (hits) await importShopifyImages();
     } finally { autoShopifyKor = false; }

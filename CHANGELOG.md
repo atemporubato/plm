@@ -6,6 +6,15 @@ och importeras med `node tools/import-dokument.js`, och main går live på plm.a
 
 Versionsnumrering: små ändringar ger punktversion (v9.1, v9.2 …). Nytt heltal (v10) bara vid stora ändringar.
 
+## v10.31 (2026-11-26)
+
+Bilder i Kollektion: tåligare koppling mot Shopify, bild från liknande produkt och omvandling av gamla HEIC-bilder. Ingen befintlig data tas bort.
+- Kopplingen mot Shopify (api/bild) tål nu plural och stavning: Trouser/Trousers, Selvage/Selvedge, pkt/Pocket. Butiken söks på de första bokstäverna i varje ord, och den exakta jämförelsen görs efteråt.
+- Liknande produkt: hittas ingen säker träff visas bilden från samma modell i butiken – t.ex. Pilot Chino Westpoint får bilden från Pilot Chino in Peak Moleskin. Kortet i Kollektion märks "Liknande produkt" och bilden visas tonad. Den kopieras aldrig in som stylens egen bild, räknas inte som bild i "utan bild", och ersätts så fort stylen får en egen bild eller en säker träff. Namn på ett enda ord får ingen liknande bild.
+- Varje style provas om en gång efter uppdateringen (veckospärren nollställs), och styles med liknande bild provas igen varje vecka.
+- HEIC: en sparad bild som webbläsaren inte kan visa (iPhone-format, uppladdad innan omvandlingen fanns) görs om till JPG första gången någon ser den. Den visas direkt och sparas om, så att den syns i alla webbläsare. Originalet ligger kvar i lagringen; stylen får en loggrad.
+- Rättning: ett kort vars egna bild inte gick att ladda visade texten om Shopify-bilder. Den texten visas nu bara för bilder som faktiskt kommer från Shopify.
+
 ## v10.30 (2026-11-26)
 
 Rättning: Make, valuta och tyg per plagg på stylen sparades inte om inget annat ändrades samtidigt.

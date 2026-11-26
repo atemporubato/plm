@@ -1816,7 +1816,10 @@
   "Make + tyg. Gäller på PO-rader utan eget pris och i marginalen.": "Make + fabric. Used on PO lines without a price of their own and in the margin.",
   "Klicka på en rad för att öppna PO:n. Unit cost = Make + tyg per plagg. Kostnad = antal × unit cost.": "Click a row to open the PO. Unit cost = Make + fabric per unit. Cost = quantity × unit cost.",
   "Fyll i Make": "Enter Make",
-  "Make och tyg per plagg ändrat": "Make and fabric per unit changed"
+  "Make och tyg per plagg ändrat": "Make and fabric per unit changed",
+  "Liknande produkt": "Similar product",
+  "Bild omvandlad till JPG – originalet gick inte att visa i alla webbläsare": "Image converted to JPG – the original could not be shown in every browser",
+  "Bild från liknande produkt i Shopify:": "Image from a similar product in Shopify:"
  },
  "values": {
   "Storleksset": "Size set",
