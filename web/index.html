@@ -382,6 +382,27 @@ table.ledger { width: 100%; border-collapse: collapse; min-width: 960px; }
 .pcard .pname { font-size: 16px; line-height: 1.2; }
 .pcard .psub { font-size: 13px; color: var(--muted); }
 .pcard .pflags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+.my-people { display: flex; flex-wrap: wrap; gap: 8px; }
+.my-person { border: 1px solid var(--line-strong); background: var(--surface); padding: 9px 16px 8px; text-align: left; display: grid; gap: 2px; min-width: 132px; cursor: pointer; color: var(--ink); }
+.my-person b { font-family: var(--f-label); font-weight: 400; font-size: 11px; letter-spacing: .12em; text-transform: uppercase; }
+.my-person b i { font-family: var(--f-ui); font-style: italic; text-transform: none; letter-spacing: 0; font-size: 13px; color: var(--muted); }
+.my-person span { font-size: 13px; color: var(--muted); }
+.my-person[aria-pressed="true"] { background: var(--indigo); color: var(--on-indigo); border-color: var(--indigo); }
+.my-person[aria-pressed="true"] span, .my-person[aria-pressed="true"] b i { color: var(--on-indigo); opacity: .72; }
+.my-tiles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); border: 1px solid var(--line-strong); background: var(--surface); }
+.my-tiles .kv { padding: 14px 18px; border-left: 1px solid var(--line); } .my-tiles .kv:first-child { border-left: 0; } .my-tiles .kv .sub { font-size: 13px; color: var(--muted); }
+.my-2col { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 18px; align-items: start; }
+.my-card .card-head { justify-content: space-between; align-items: center; border-bottom-color: var(--line); }
+.my-card .card-head + .flagrow { border-top: 0; }
+.my-card .flagrow { grid-template-columns: 92px 1fr auto; }
+.my-card .flagrow .pill { justify-self: start; }
+.my-card .flagrow .ft b { font-weight: 400; }
+.my-card .fx { font-size: 15px; line-height: 1.38; margin-top: 2px; overflow-wrap: anywhere; }
+.my-card .fa input { min-width: 200px; flex: 1 1 200px; }
+.pill.p-com { border-color: var(--line-strong); background: var(--paper); color: var(--ink); }
+.at { font-weight: 400; background: var(--warn-soft); padding: 0 3px; }
+.my-empty { padding: 16px; margin: 0; color: var(--muted); }
+@media (max-width: 900px) { .my-2col { grid-template-columns: 1fr; } .my-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); } .my-tiles .kv:nth-child(3) { border-left: 0; } .my-tiles .kv:nth-child(n+3) { border-top: 1px solid var(--line); } .my-card .flagrow { grid-template-columns: 1fr; } }
 .vis-filter { border: 1px solid var(--line-strong); background: var(--surface); display: grid; }
 .vis-head { display: flex; flex-wrap: wrap; gap: 6px 18px; align-items: baseline; padding: 12px 16px 0; }
 .vis-head strong { font-family: var(--f-label); font-weight: 400; font-size: 10px; letter-spacing: .14em; text-transform: uppercase; }
@@ -860,18 +881,20 @@ table.vtable { width: 100%; border-collapse: collapse; font-size: 13.5px; }
     </div>
   </header>
   <nav class="areas" id="areas" aria-label="Areas">
+    <button class="area" type="button" data-area="min"><b>My page</b><span>Your flags and comments</span></button>
     <button class="area" type="button" data-area="produkt"><b>Product</b><span>From idea to drop</span></button>
     <button class="area" type="button" data-area="planering"><b>Planning</b><span>Launches and payments</span></button>
     <button class="area" type="button" data-area="register"><b>Reference</b><span>Stock, references and settings</span></button>
   </nav>
   <nav class="tabs" role="tablist" aria-label="Views" id="tabs">
-    <button class="tab" role="tab" type="button" data-tab="bibliotek"><span class="tn"><span class="nr"></span>Ideas <span class="c" id="c_bibliotek"></span></span><span class="who">Carl</span></button>
-    <button class="tab" role="tab" type="button" data-tab="design"><span class="tn"><span class="nr"></span>Design <span class="c" id="c_design"></span></span><span class="who">Conor</span></button>
-    <button class="tab" role="tab" type="button" data-tab="samples"><span class="tn"><span class="nr"></span>Samples <span class="c" id="c_samples"></span></span><span class="who">Alex</span></button>
-    <button class="tab" role="tab" type="button" data-tab="kollektion"><span class="tn"><span class="nr"></span>Collection <span class="c" id="c_kollektion"></span></span><span class="who">Carl</span></button>
-    <button class="tab" role="tab" type="button" data-tab="produktion"><span class="tn"><span class="nr"></span>Production <span class="c" id="c_produktion"></span></span><span class="who">Elliot</span></button>
-    <button class="tab" role="tab" type="button" data-tab="foto"><span class="tn"><span class="nr"></span>Photo <span class="c" id="c_foto"></span></span><span class="who">Oliver</span></button>
-    <button class="tab" role="tab" type="button" data-tab="ecom"><span class="tn"><span class="nr"></span>E-com <span class="c" id="c_ecom"></span></span><span class="who">Jakob</span></button>
+    <button class="tab" role="tab" type="button" data-tab="min" hidden><span class="tn"><span class="nr"></span>My page</span></button>
+    <button class="tab" role="tab" type="button" data-tab="bibliotek"><span class="tn"><span class="nr"></span>Ideas <span class="c" id="c_bibliotek"></span></span></button>
+    <button class="tab" role="tab" type="button" data-tab="design"><span class="tn"><span class="nr"></span>Design <span class="c" id="c_design"></span></span></button>
+    <button class="tab" role="tab" type="button" data-tab="samples"><span class="tn"><span class="nr"></span>Samples <span class="c" id="c_samples"></span></span></button>
+    <button class="tab" role="tab" type="button" data-tab="kollektion"><span class="tn"><span class="nr"></span>Collection <span class="c" id="c_kollektion"></span></span></button>
+    <button class="tab" role="tab" type="button" data-tab="produktion"><span class="tn"><span class="nr"></span>Production <span class="c" id="c_produktion"></span></span></button>
+    <button class="tab" role="tab" type="button" data-tab="foto"><span class="tn"><span class="nr"></span>Photo <span class="c" id="c_foto"></span></span></button>
+    <button class="tab" role="tab" type="button" data-tab="ecom"><span class="tn"><span class="nr"></span>E-com <span class="c" id="c_ecom"></span></span></button>
     <button class="tab" role="tab" type="button" data-tab="shopify"><span class="tn">Shopify <span class="c" id="c_shopify"></span></span><span class="who">Jakob</span></button>
     <button class="tab" role="tab" type="button" data-tab="coo"><span class="tn"><span class="nr"></span>Launches <span class="c" id="c_coo"></span></span><span class="who">Jakob</span></button>
     <button class="tab" role="tab" type="button" data-tab="leverantorer"><span class="tn"><span class="nr"></span>Suppliers <span class="c" id="c_leverantorer"></span></span><span class="who">Jakob / Elliot</span></button>

@@ -30,19 +30,20 @@ import * as P from "./platform.js";
   const NEW_TABS = ["coo", "shopify"]; // flikar tillagda efter att roller kan ha sparats – visas tills rollen sparas om
   const NEW_TABS_3 = ["design"]; // tillagda i v10 (flikVersion 3)
   // Tre områden: Produkt är själva PLM-flödet i den ordning plagget rör sig, resten ligger vid sidan av.
-  const AREA_TABS = { produkt: ["bibliotek", "design", "samples", "kollektion", "produktion", "foto", "ecom"], planering: ["coo", "leverantorer"], register: ["tyglager", "ref", "ean", "shopify", "anvandare"] };
+  const AREA_TABS = { min: ["min"], produkt: ["bibliotek", "design", "samples", "kollektion", "produktion", "foto", "ecom"], planering: ["coo", "leverantorer"], register: ["tyglager", "ref", "ean", "shopify", "anvandare"] };
   const AREA_HEAD = {
-    produkt: ["Samples <em>&amp; production</em>", "The product's path: idea, design, sample, collection, order, photo and launch. Every step has an owner."],
+    min: ["My <em>page</em>", "Flags that concern you and comments you are part of."],
+    produkt: ["Samples <em>&amp; production</em>", "The product's path: idea, design, sample, collection, order, photo and launch."],
     planering: ["Planning <em>&amp; finance</em>", "Launches, timeline and payments. The dates here drive the product flow."],
     register: ["Reference <em>&amp; settings</em>", "What the products draw on: fabric and trims, reference garments, the Shopify link and users."]
   };
   const areaOf = (t) => Object.keys(AREA_TABS).find((a) => AREA_TABS[a].includes(t)) || "produkt";
   const ALL_TABS = TAB_DEFS.map((x) => x[0]);
   const ROLE_DEFAULTS = {
-    admin: { namn: "Admin", flikar: ALL_TABS, redigera: true, fast: true },
-    team: { namn: "Team", flikar: ALL_TABS, redigera: true },
-    design: { namn: "Designer", flikar: ["bibliotek", "design", "samples", "ref", "kollektion", "foto", "coo", "tyglager"], redigera: true },
-    junior: { namn: "Junior", flikar: ["bibliotek", "design", "samples", "ref", "kollektion", "coo", "tyglager"], redigera: true },
+    admin: { namn: "Admin", flikar: ALL_TABS, redigera: true, fast: true, andras: true },
+    team: { namn: "Team", flikar: ALL_TABS, redigera: true, andras: true },
+    design: { namn: "Designer", flikar: ["bibliotek", "design", "samples", "ref", "kollektion", "foto", "coo", "tyglager"], redigera: true, andras: true },
+    junior: { namn: "Junior", flikar: ["bibliotek", "design", "samples", "ref", "kollektion", "coo", "tyglager"], redigera: true, andras: true },
     formgivare: { namn: "External designer", flikar: ["design"], redigera: true },
     extern: { namn: "External partner", flikar: ["bibliotek", "kollektion"], redigera: false },
     producent: { namn: "Producent", flikar: ["produktion"], redigera: false, leverantor: true },
@@ -161,7 +162,7 @@ import * as P from "./platform.js";
   const D = { flaggor: [], samples: [], styles: [], tyger: [], lager: [], lev: [], drops: [], po: [], budget: [], ref: [], pool: null, logg: [], settings: { utvarderingDagar: 7, standardFrakt: 7, marginalGul: 14 }, anvandare: [], narvaro: [], roller: { roller: {}, standardRoll: "team" }, handelser: [], shopify: [] };
   const loaded = new Set();
   let db = null, user = null, downloads = null, assets = null, myId = null, myName = "", canWrite = true, canAdmin = false, platformWrite = true, isGuest = false;
-  const ME = { roll: "team", flikar: ALL_TABS, redigera: true, leverantor: "" };
+  const ME = { roll: "team", flikar: ALL_TABS, redigera: true, leverantor: "", andras: true };
   const UI = {
     tab: "samples",
     bibliotek: { view: null, mode: "styles", q: "", season: "", kat: "", lev: "", status: "alla" },
@@ -177,7 +178,8 @@ import * as P from "./platform.js";
     ref: { status: "ute", q: "" },
     tyger: { q: "", status: "" },
     lager: { view: null, status: "I lager", q: "", plats: "", group: "plats" },
-    ean: { q: "" }
+    ean: { q: "" },
+    min: { vem: "", flag: "to", kom: "tag" }
   };
   const selected = new Set();
   try {
@@ -4356,7 +4358,7 @@ import * as P from "./platform.js";
   }
 
   // ---------- ANVÄNDARE (Elliot) ----------
-  const roleDef = (key) => { const base = ROLE_DEFAULTS[key] || ROLE_DEFAULTS.ingen; const ov = (D.roller.roller || {})[key] || {}; let flikar = Array.isArray(ov.flikar) ? ov.flikar.slice() : base.flikar; if (Array.isArray(ov.flikar) && (num(ov.flikVersion) || 1) < 2) flikar = uniq(flikar.concat(NEW_TABS.filter((t) => base.flikar.includes(t)))); if (Array.isArray(ov.flikar) && (num(ov.flikVersion) || 1) < 3) flikar = uniq(flikar.concat(NEW_TABS_3.filter((t) => base.flikar.includes(t)))); return { key, namn: base.namn, flikar, redigera: typeof ov.redigera === "boolean" ? ov.redigera : base.redigera, leverantor: !!base.leverantor, fast: !!base.fast }; };
+  const roleDef = (key) => { const base = ROLE_DEFAULTS[key] || ROLE_DEFAULTS.ingen; const ov = (D.roller.roller || {})[key] || {}; let flikar = Array.isArray(ov.flikar) ? ov.flikar.slice() : base.flikar; if (Array.isArray(ov.flikar) && (num(ov.flikVersion) || 1) < 2) flikar = uniq(flikar.concat(NEW_TABS.filter((t) => base.flikar.includes(t)))); if (Array.isArray(ov.flikar) && (num(ov.flikVersion) || 1) < 3) flikar = uniq(flikar.concat(NEW_TABS_3.filter((t) => base.flikar.includes(t)))); return { key, namn: base.namn, flikar, redigera: typeof ov.redigera === "boolean" ? ov.redigera : base.redigera, andras: base.fast ? !!base.andras : typeof ov.andras === "boolean" ? ov.andras : !!base.andras, leverantor: !!base.leverantor, fast: !!base.fast }; };
   const userDoc = (id) => D.anvandare.find((a) => a._id === id) || null;
   const AnvView = {
     mount(root) {
@@ -4365,7 +4367,7 @@ import * as P from "./platform.js";
       this.search = h("div", { class: "people" });
       root.append(h("p", { class: "lede", text: "Who sees what. Everyone signs in with their Rubato account (Microsoft) and appears here after the first visit; here you control which role they get in the app and which tabs the role sees. Admin (can manage users) is set in the database by Jakob." }),
         h("section", { class: "card" }, h("div", { class: "card-head" }, h("h3", { text: "People" }), h("span", { class: "sub", text: "Everyone who has opened the app or been given a role" })), this.search, this.people),
-        h("section", { class: "card" }, h("div", { class: "card-head" }, h("h3", { text: "Roles" }), h("span", { class: "sub", text: "Which tabs each role sees and whether it may edit" })), this.roles));
+        h("section", { class: "card" }, h("div", { class: "card-head" }, h("h3", { text: "Roles" }), h("span", { class: "sub", text: "Which tabs each role sees, whether it may edit, and whether it may see other people's My page" })), this.roles));
       this.renderSearch();
     },
     renderSearch() {
@@ -4416,19 +4418,20 @@ import * as P from "./platform.js";
     },
     renderRoles() {
       const tbl = h("table", { class: "rolegrid" });
-      tbl.append(h("thead", null, h("tr", null, h("th", { text: "Role" }), TAB_DEFS.map(([k, l]) => h("th", { text: l })), h("th", { text: "May edit" }))));
+      tbl.append(h("thead", null, h("tr", null, h("th", { text: "Role" }), TAB_DEFS.map(([k, l]) => h("th", { text: l })), h("th", { text: "May edit" }), h("th", { text: "Sees others' pages" }))));
       const tb = h("tbody");
       const state = {};
       for (const k of ROLE_ORDER) {
-        const r = roleDef(k); state[k] = { flikar: r.flikar.slice(), redigera: r.redigera };
+        const r = roleDef(k); state[k] = { flikar: r.flikar.slice(), redigera: r.redigera, andras: r.andras };
         const tr = h("tr", null, h("td", null, h("strong", { text: r.namn }), r.key === "admin" ? h("div", { class: "sub", text: "Editor/owner in Claude" }) : r.key === "producent" ? h("div", { class: "sub", text: "Only sees their supplier's POs" }) : r.key === "ingen" ? h("div", { class: "sub", text: "Default for guests" }) : null));
         for (const [tk] of TAB_DEFS) { const cb = h("input", { type: "checkbox" }); cb.checked = r.flikar.includes(tk); cb.disabled = r.fast; cb.addEventListener("change", () => { state[k].flikar = cb.checked ? uniq(state[k].flikar.concat([tk])) : state[k].flikar.filter((x) => x !== tk); }); tr.append(h("td", null, cb)); }
         const ed = h("input", { type: "checkbox" }); ed.checked = r.redigera; ed.disabled = r.fast; ed.addEventListener("change", () => (state[k].redigera = ed.checked)); tr.append(h("td", null, ed));
+        const an = h("input", { type: "checkbox", "aria-label": "Sees others' pages" }); an.checked = r.andras; an.disabled = r.fast; an.addEventListener("change", () => (state[k].andras = an.checked)); tr.append(h("td", null, an));
         tb.append(tr);
       }
       tbl.append(tb);
       const saveBtn = h("button", { class: "btn small primary", type: "button", text: "Save roles", onclick: async () => { const roller = {}; for (const k of ROLE_ORDER) if (!ROLE_DEFAULTS[k].fast) roller[k] = Object.assign({ flikVersion: 3 }, state[k]); try { await db.doc("behorighet/roller").set(Object.assign({}, D.roller, { roller, andrad: new Date().toISOString() })); toast("Roles saved"); } catch (e) { writeError(e); } } });
-      this.roles.replaceChildren(h("div", { class: "ledger-wrap", style: "padding:6px 10px" }, tbl), h("div", { class: "budget-foot", style: "padding:10px 16px;border-top:1px solid var(--line)" }, saveBtn, h("span", { class: "sub", text: "Admin and No access are fixed. Changes apply as soon as the person reloads the app." })));
+      this.roles.replaceChildren(h("div", { class: "ledger-wrap", style: "padding:6px 10px" }, tbl), h("div", { class: "budget-foot", style: "padding:10px 16px;border-top:1px solid var(--line)" }, saveBtn, h("span", { class: "sub", text: "Admin and No access are fixed. Changes apply as soon as the person reloads the app. My page: everyone sees their own; \"Sees others' pages\" decides who may open someone else's." })));
     }
   };
   async function setRole(id, roll, leverantor) {
@@ -4444,7 +4447,7 @@ import * as P from "./platform.js";
     let roll = canAdmin ? "admin" : doc && doc.roll ? doc.roll : (isGuest ? "ingen" : (D.roller.standardRoll || "team"));
     if (!myId && !canAdmin) roll = db ? (D.roller.standardRoll || "team") : "team";
     const r = roleDef(roll);
-    ME.roll = roll; ME.flikar = r.flikar.slice(); ME.redigera = r.redigera; ME.leverantor = r.leverantor && doc ? (doc.leverantor || "") : "";
+    ME.roll = roll; ME.flikar = r.flikar.slice(); ME.redigera = r.redigera; ME.leverantor = r.leverantor && doc ? (doc.leverantor || "") : ""; ME.andras = canAdmin || !!r.andras;
     if (canAdmin) ME.flikar = ALL_TABS.concat(["anvandare"]);
     canWrite = platformWrite && ME.redigera;
   }
@@ -4460,15 +4463,117 @@ import * as P from "./platform.js";
       return;
     }
     $("gsearch").hidden = designOnly();
-    if (!ME.flikar.includes(UI.tab)) switchTab(ME.flikar[0]); else renderActions();
+    if (UI.tab === "min" ? !minAllowed() : !ME.flikar.includes(UI.tab)) switchTab(ME.flikar[0]); else renderActions();
     if (db && !canWrite) banner(platformWrite ? "Your role (" + roleDef(ME.roll).namn + ") has read access in the app." : "You have read access. Ask Elliot for a role that may edit.");
     else banner("");
   }
 
-  const VIEWS = { bibliotek: LibView, design: DesignView, samples: SamplesView, ref: RefView, kollektion: KollView, produktion: ProdView, foto: FotoView, ecom: EcomView, shopify: ShopifyView, coo: CooMatrisView, tyglager: LagerView, leverantorer: LevView, ean: EanView, anvandare: AnvView };
+  // ---------- MIN SIDA ----------
+  // En sida per person: flaggor som gäller en och kommentarer man är med i. Inget nytt sparas – allt läses ur
+  // flaggorna och ur loggen på varje sak. Flaggat-rutan överst i flikarna ligger kvar som förut.
+  const PROFIL = {}; // user-id → förnamn, hämtas en gång per id
+  const nameKey = (name) => { const n = norm(String(name || "").split(" ")[0]); const k = MENTION_ALIAS[n] || n; return FLAG_PEOPLE.some((p) => p[0] === k) ? k : ""; };
+  const avKey = (id) => (id && id === myId ? myKey() : nameKey(PROFIL[id] || ""));
+  const avNamn = (id) => (id ? (id === myId && myName ? myName : PROFIL[id] || "Someone in the team") : "Import");
+  async function loadProfiles(ids) {
+    const need = [...new Set(ids.filter(Boolean))].filter((id) => !(id in PROFIL)); if (!need.length || !user) return false;
+    try { const ps = await user.profiles(need); for (const id of need) PROFIL[id] = ((ps[id] && ps[id].name) || "").split(" ")[0]; } catch (e) { for (const id of need) PROFIL[id] = ""; }
+    return true;
+  }
+  const minAllowed = () => ME.flikar.length > 0 && !ME.leverantor && !!(myKey() || ME.andras);
+  const flagAvKey = (f) => avKey(f.av) || nameKey(f.avNamn);
+  const flagTill = (p) => flagsOpen().filter((f) => (f.till || []).includes(p));
+  const flagFran = (p) => flagsOpen().filter((f) => flagAvKey(f) === p);
+  const flagLosta = (p) => D.flaggor.filter((f) => f.status === "Löst" && ((f.till || []).includes(p) || flagAvKey(f) === p)).sort((a, b) => String(b.lostT || b.t || "").localeCompare(String(a.lostT || a.t || ""))).slice(0, 30);
+  // Automatiska flaggor har ingen mottagare: försenade POs visas hos den som äger Produktion och Lanseringar, Redo att beställa hos den som äger Produktion.
+  const autoFor = (p) => (designOnly() || ME.leverantor ? { late: [], ready: [] } : { late: TAB_OWNER.produktion.includes(p) || TAB_OWNER.coo.includes(p) ? latePos() : [], ready: TAB_OWNER.produktion.includes(p) ? readyToOrder() : [] });
+  const komKallor = () => [["samples", D.samples, "sample"], ["styles", D.styles, "style"], ["po", D.po, "po"], ["tyglager", D.lager, "lager"], ["refplagg", D.ref, "ref"], ["handelser", D.handelser, "handelse"], ["drops", D.drops, "drop"], ["fabrics", D.tyger, "tyg"], ["leverantorer", D.lev, "lev"]];
+  // En tråd = kommentarerna på en sak. Man är med i tråden om man skrivit i den eller taggats i den.
+  function komTradar() {
+    const out = [];
+    for (const [coll, list, typ] of komKallor()) for (const x of list || []) {
+      const ks = ((x && x.logg) || []).filter((e) => e && e.text && (e.kom || (e.till && e.till.length)));
+      if (ks.length) out.push({ coll, typ, x, ks, list });
+    }
+    return out;
+  }
+  const iTrad = (tr, p) => tr.ks.some((e) => avKey(e.av) === p || (e.till || []).includes(p));
+  const taggar = (tr, p) => tr.ks.filter((e) => (e.till || []).includes(p));
+  const komTitel = (typ, x) => (typ === "sample" ? x._id + " · " + styleName(x) + (x.version ? " · " + tv(x.version) : "") : typ === "style" ? x._id + " · " + (x.namn || "") : typ === "po" ? (x.nr || x._id) + (x.leverantor ? " · " + x.leverantor : "") : typ === "lager" ? x._id + " · " + lotName(x) : typ === "ref" ? x._id + " · " + (x.plagg || x.styleNamn || "") : typ === "handelse" ? x._id + " · " + (x.titel || x.namn || "") : typ === "drop" ? [x.sasong, x.namn].filter(Boolean).join(" ") : typ === "tyg" ? x._id + " · " + (x.namn || "") : x.namn || x._id);
+  function komOpen(typ, x) {
+    if (designOnly()) { if (typ === "style") openDesign(x._id); return; }
+    if (typ === "sample") openSample(x._id); else if (typ === "style") openStyle(x._id, null, { full: true }); else if (typ === "po") openPo(x._id); else if (typ === "lager") openLager(x._id); else if (typ === "ref") openRef(x._id);
+    else if (typ === "handelse") openEvent(x._id); else if (typ === "drop") openDrop(x._id); else if (typ === "tyg") openTyg(x._id); else if (typ === "lev") openLev(x._id);
+  }
+  const komTid = (t) => { const d = new Date(t); return isNaN(d) ? "" : d.getDate() + " " + MONTHS[d.getMonth()] + " " + String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0"); };
+  const MyView = {
+    mount(root) {
+      this.people = h("div", { class: "my-people" }); this.tiles = h("section", { class: "my-tiles" });
+      this.flags = h("section", { class: "card my-card" }); this.coms = h("section", { class: "card my-card" });
+      root.append(h("p", { class: "lede", text: "Flags that concern you and comments you are part of, gathered in one place. The items stay in their tabs – here you see what involves you." }), this.people, this.tiles, h("div", { class: "my-2col" }, this.flags, this.coms));
+    },
+    update() {
+      const ids = []; for (const tr of komTradar()) for (const e of tr.ks) ids.push(e.av); for (const f of D.flaggor) ids.push(f.av);
+      loadProfiles(ids).then((ny) => { if (ny && UI.tab === "min") this.draw(); });
+      this.draw();
+    },
+    draw() {
+      const st = UI.min, me = myKey();
+      let vem = ME.andras ? (st.vem || me || FLAG_PEOPLE[0][0]) : me;
+      if (!FLAG_PEOPLE.some((p) => p[0] === vem)) vem = me || FLAG_PEOPLE[0][0];
+      const jag = vem === me, namn = personName(vem);
+      const tradar = komTradar();
+      // namnraden: bara för den som får se andras sidor
+      this.people.hidden = !ME.andras;
+      const ordning = FLAG_PEOPLE.slice().sort((a, b) => (a[0] === me ? -1 : b[0] === me ? 1 : 0));
+      this.people.replaceChildren(...(ME.andras ? ordning.map(([k, l]) => { const a = autoFor(k); const nf = flagTill(k).length + a.late.length + a.ready.length, nk = tradar.filter((tr) => iTrad(tr, k)).length;
+        return h("button", { class: "my-person", type: "button", "aria-pressed": String(k === vem), onclick: () => { st.vem = k; this.draw(); } }, h("b", null, l, k === me ? h("i", { text: " you" }) : null), h("span", { text: "⚑ " + nf + " · " + nk + (nk === 1 ? " thread" : " threads") })); }) : []));
+      const till = flagTill(vem), fran = flagFran(vem), auto = autoFor(vem);
+      const tag = tradar.filter((tr) => taggar(tr, vem).length), mina = tradar.filter((tr) => iTrad(tr, vem));
+      const kv = (k, v, sub) => h("div", { class: "kv" }, h("span", { class: "k", text: k }), h("span", { class: "v big", text: String(v) }), sub ? h("span", { class: "sub", text: sub }) : null);
+      const aldst = till.map((f) => String(f.t || "").slice(0, 10)).filter(isISO).sort()[0];
+      const senastTag = tag.map((tr) => taggar(tr, vem).slice(-1)[0].t).sort().pop();
+      this.tiles.replaceChildren(
+        kv(jag ? "Flags to you" : "Flags to " + namn, till.length + auto.late.length + auto.ready.length, aldst ? "oldest " + fmtDate(aldst) : ""),
+        kv(jag ? "Flags from you" : "Flags from " + namn, fran.length, fran.length ? "waiting on " + uniq(fran.flatMap((f) => f.till || []).map(personName)).join(", ") : ""),
+        kv(jag ? "Comments tagging you" : "Comments tagging " + namn, tag.length, senastTag ? "latest " + komTid(senastTag) : ""),
+        kv(jag ? "Threads you are in" : "Threads " + namn + " is in", mina.length, ""));
+      // flaggor
+      const nTill = till.length + auto.late.length + auto.ready.length;
+      const segF = makeSeg([["to", (jag ? "To you" : "To " + namn) + " " + nTill], ["fran", (jag ? "From you" : "From " + namn) + " " + fran.length], ["losta", "Resolved"]], st, "flag", () => this.draw());
+      let rows = [];
+      if (st.flag === "fran") rows = fran.map((f) => flagRow(f));
+      else if (st.flag === "losta") rows = flagLosta(vem).map((f) => h("div", { class: "flagrow" }, h("span", { class: "pill s-Mottagen", text: "Löst" }), h("div", null, h("div", { class: "ft" }, h("b", { text: f.titel || f.ref }), " – ", f.text || ""), h("div", { class: "fm", text: [f.avNamn ? "flagged by " + f.avNamn : "", f.lostNamn ? "resolved by " + f.lostNamn : "", f.lostT ? komTid(f.lostT) : "", f.lostText || ""].filter(Boolean).join(" · ") })), h("div", { class: "fa" }, h("button", { class: "btn small", type: "button", text: "Open", onclick: () => openFlagTarget(f) }))));
+      else rows = till.map((f) => flagRow(f)).concat(auto.late.map((x) => lateRow(x)), auto.ready.map((s) => h("div", { class: "flagrow" }, h("span", { class: "pill", text: "Godkänd" }), h("div", null, h("div", { class: "ft" }, h("b", { text: s.namn }), " – ", "Ready to order"), h("div", { class: "fm", text: [[s.sasong, s.drop].filter(Boolean).join(" "), s.leverantor].filter(Boolean).join(" · ") })), h("div", { class: "fa" }, h("button", { class: "btn small", type: "button", text: "Open", onclick: () => openStyle(s._id, null, { full: true }) })))));
+      this.flags.replaceChildren(h("div", { class: "card-head" }, h("h3", { text: "Flags" }), segF.el), ...(rows.length ? rows : [h("p", { class: "my-empty", text: st.flag === "losta" ? "No resolved flags yet." : "No open flags here." })]));
+      // kommentarer
+      if (st.kom === "alla" && !ME.andras) st.kom = "tag"; // "Alla" är hela teamets trådar – bara för den som får se andras sidor
+      const segK = makeSeg([["tag", jag ? "Tagging you" : "Tagging " + namn], ["tradar", jag ? "Your threads" : "Threads with " + namn]].concat(ME.andras ? [["alla", "All"]] : []), st, "kom", () => this.draw());
+      const lista = (st.kom === "tradar" ? mina : st.kom === "alla" ? tradar : tag).map((tr) => ({ tr, e: st.kom === "tag" ? taggar(tr, vem).slice(-1)[0] : tr.ks[tr.ks.length - 1] })).sort((a, b) => String(b.e.t || "").localeCompare(String(a.e.t || ""))).slice(0, 60);
+      this.coms.replaceChildren(h("div", { class: "card-head" }, h("h3", { text: "Comments" }), segK.el), ...(lista.length ? lista.map(({ tr, e }) => this.komRow(tr, e, vem, jag)) : [h("p", { class: "my-empty", text: st.kom === "tag" ? "No one has tagged " + (jag ? "you" : namn) + " yet." : "No comments here yet." })]));
+    },
+    komRow(tr, e, vem, jag) {
+      const tagged = (e.till || []).includes(vem), by = avKey(e.av) === vem;
+      const pill = h("span", { class: "pill p-com", text: tagged ? "@ " + (jag ? "you" : personName(vem)) : by ? (jag ? "By you" : "By " + personName(vem)) : "Thread" });
+      const txt = h("div", { class: "fx" });
+      String(e.text).split(/(@[A-Za-zÅÄÖåäö]+)/).forEach((part) => txt.append(/^@/.test(part) && mentionKeys(part).length ? h("b", { class: "at", text: part }) : part));
+      const acts = h("div", { class: "fa" });
+      const kanOppna = !designOnly() || tr.typ === "style";
+      const reset = () => acts.replaceChildren(...[kanOppna ? h("button", { class: "btn small", type: "button", text: "Open", onclick: () => komOpen(tr.typ, tr.x) }) : null, canWrite && db ? h("button", { class: "btn small", type: "button", text: "Reply", onclick: () => svara() }) : null].filter(Boolean));
+      const svara = () => {
+        const i = attachMentions(inp("my_svar", "", { placeholder: NOTE_PH, autocomplete: "off" }));
+        const go = async () => { const cur = byId(tr.list, tr.x._id) || tr.x; if (await addComment(tr.coll, cur, i)) scheduleRefresh(); };
+        i.addEventListener("keydown", (ev) => { if (ev.key === "Enter") { ev.preventDefault(); go(); } });
+        acts.replaceChildren(i, h("button", { class: "btn small primary", type: "button", text: "Add", onclick: go }), h("button", { class: "btn small", type: "button", text: "Cancel", onclick: reset })); i.focus();
+      };
+      reset();
+      return h("div", { class: "flagrow comrow" }, pill, h("div", null, h("div", { class: "ft" }, h("b", { text: komTitel(tr.typ, tr.x) })), txt, h("div", { class: "fm", text: [avNamn(e.av), komTid(e.t), tr.ks.length + (tr.ks.length === 1 ? " comment in the thread" : " comments in the thread")].filter(Boolean).join(" · ") })), acts);
+    }
+  };
+  const VIEWS = { min: MyView, bibliotek: LibView, design: DesignView, samples: SamplesView, ref: RefView, kollektion: KollView, produktion: ProdView, foto: FotoView, ecom: EcomView, shopify: ShopifyView, coo: CooMatrisView, tyglager: LagerView, leverantorer: LevView, ean: EanView, anvandare: AnvView };
   function switchTab(t) {
     if (!VIEWS[t]) t = "samples";
-    if (ME.flikar.length && !ME.flikar.includes(t)) t = ME.flikar[0];
+    if (t === "min" ? !minAllowed() : ME.flikar.length && !ME.flikar.includes(t)) t = ME.flikar[0] || "samples";
     UI.tab = t;
     document.querySelectorAll("#tabs .tab").forEach((b) => b.setAttribute("aria-selected", String(b.dataset.tab === t)));
     lastTab[areaOf(t)] = t; renderNav();
@@ -4478,7 +4583,7 @@ import * as P from "./platform.js";
   }
   $("tabs").addEventListener("click", (e) => { const b = e.target.closest(".tab"); if (b) switchTab(b.dataset.tab); });
   const lastTab = {};
-  const tabAllowed = (t) => ME.flikar.includes(t) && t !== "ean" && !!VIEWS[t];
+  const tabAllowed = (t) => (t === "min" ? minAllowed() : ME.flikar.includes(t) && t !== "ean") && !!VIEWS[t];
   function renderNav() {
     const area = areaOf(UI.tab); const nav = $("tabs"); let areas = 0;
     document.querySelectorAll("#areas .area").forEach((b) => { const any = (AREA_TABS[b.dataset.area] || []).some(tabAllowed); b.hidden = !any; if (any) areas++; b.setAttribute("aria-selected", String(b.dataset.area === area)); });
@@ -4487,7 +4592,7 @@ import * as P from "./platform.js";
     for (const b of btns) { b.hidden = true; b.classList.remove("last"); }
     for (const t of AREA_TABS[area]) { const b = btns.find((x) => x.dataset.tab === t); if (!b) continue; nav.append(b); b.hidden = !tabAllowed(t); const nr = b.querySelector(".nr"); if (nr) nr.textContent = !b.hidden && area === "produkt" ? String(++n) : ""; if (!b.hidden) last = b; }
     if (last) last.classList.add("last");
-    nav.classList.toggle("flow", area === "produkt" && n > 1);
+    nav.classList.toggle("flow", area === "produkt" && n > 1); nav.hidden = area === "min";
     $("brandH").innerHTML = AREA_HEAD[area][0]; $("brandP").textContent = AREA_HEAD[area][1];
   }
   $("areas").addEventListener("click", (e) => { const b = e.target.closest(".area"); if (!b) return; const a = b.dataset.area; const t = lastTab[a] && tabAllowed(lastTab[a]) ? lastTab[a] : (AREA_TABS[a] || []).find(tabAllowed); if (t) switchTab(t); });
@@ -4878,6 +4983,7 @@ import * as P from "./platform.js";
     if (readyToOrder().length) perTab.produktion = (perTab.produktion || 0) + readyToOrder().length;
     document.querySelectorAll("#tabs .tab").forEach((b) => { const tn = b.querySelector(".tn"); if (tn) tn.dataset.flags = perTab[b.dataset.tab] ? String(perTab[b.dataset.tab]) : ""; });
     document.querySelectorAll("#areas .area").forEach((b) => { const n = (AREA_TABS[b.dataset.area] || []).filter(tabAllowed).reduce((a, t) => a + (perTab[t] || 0), 0); const el = b.querySelector("b"); if (el) el.dataset.flags = n ? String(n) : ""; });
+    const mb = document.querySelector('#areas .area[data-area="min"] b'); if (mb) { const k = myKey(); const n = k ? flagTill(k).length + autoFor(k).late.length + autoFor(k).ready.length : 0; mb.dataset.flags = n ? String(n) : ""; }
   }
   // Flaggan syns också på själva saken, med en knapp för att lösa den där man står.
   const flagNote = (typ, ref) => { const fs = flagsFor(typ, ref); return fs.length ? h("div", { class: "flagnote" }, fs.map((f) => h("div", { style: "display:flex;gap:10px;align-items:baseline;justify-content:space-between;flex-wrap:wrap" }, h("span", null, h("b", { text: (f.avNamn ? "Flagged by " + f.avNamn : "Flagged") + ": " }), f.text || ""), canWrite && db ? h("button", { class: "btn small", type: "button", text: "Mark flag as resolved", onclick: async (e) => { const row = e.target.parentElement; e.target.disabled = true; await resolveFlag(f, ""); row.remove(); } }) : null))) : null; };

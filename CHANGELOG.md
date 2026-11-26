@@ -6,6 +6,17 @@ och importeras med `node tools/import-dokument.js`, och main går live på plm.a
 
 Versionsnumrering: små ändringar ger punktversion (v9.1, v9.2 …). Nytt heltal (v10) bara vid stora ändringar.
 
+## v10.28 (2026-11-26)
+
+Min sida: en sida per person med flaggor och kommentarer. Förnamnen är borta ur produktflödet. Inget nytt sparas utom en ruta per roll under Användare (fältet andras).
+- Nytt område "Min sida" först i raden. Öppnas på en själv; en rad med namn överst visar hur många flaggor och trådar var och en har, och ett klick öppnar den personens sida.
+- Flaggor: Till dig, Från dig och Lösta. Försenade POs visas hos den som äger Produktion och Lanseringar, Redo att beställa hos den som äger Produktion. Flaggan löses direkt på sidan, som i Flaggat-rutan.
+- Kommentarer: Taggar dig, Dina trådar (där man skrivit eller taggats) och Alla. Varje rad har Öppna och Svara; svaret sparas som en vanlig kommentar på saken.
+- Flaggat-rutan överst i flikarna ligger kvar som förut.
+- Förnamnen under flikarna i produktflödet (Idéer, Design, Samples, Kollektion, Produktion, Foto, E-com) är borttagna. Flikarna under Planering och Register har kvar sina namn.
+- Användare: ny ruta per roll, "Ser andras sidor". Admin, Team, Designer och Junior ser allas; Extern designer, Extern partner och Producent ser bara sin egen. Den som inte ser andras har ingen namnrad och inget "Alla" bland kommentarerna. Som övriga roller är det dolt i gränssnittet, inte spärrat i databasen.
+- Allt läses ur flaggorna och ur loggen på varje sak – ingen ny data, och inget ändras i befintliga poster.
+
 ## v10.27 (2026-11-25)
 
 Visualiseringen i Kollektion filtreras med rutor för säsong, drop, steg, kategori och typ. Ingen data ändras; urvalet sparas bara i den egna webbläsaren.
