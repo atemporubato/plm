@@ -316,8 +316,15 @@ import * as P from "./platform.js";
   const fmtTkr = (n) => (n == null || isNaN(n) ? "–" : (Math.round(Number(n) / 1000)).toLocaleString("sv-SE") + " k SEK");
   // Styckpris på raden, annars stylens inköpspris (originalvaluta × dagens kurs) – så att restocks räknas rätt utan att priset skrivs om.
   const lineUnit = (r) => { const p = num(r.styckpris); if (p != null) return { pris: p, kalla: "rad" }; const st = r.styleId ? byId(D.styles, r.styleId) : null; if (st && num(st.inkopspris) && fx(st.inkopsValuta || "SEK")) return { pris: num(st.inkopspris) * fx(st.inkopsValuta || "SEK"), kalla: "style" }; return null; };
-  const lineCost = (r) => { const a = num(r.antal), u = lineUnit(r), t = num(r.tygkostnad) || 0; return a == null || !u ? (num(r.kostnad) ?? null) : a * (u.pris + t); };
+  // Unit cost = Make + tyg. Make är leverantörens pris per plagg (lineUnit). Tyg per plagg (SEK) gäller bara plagg där vi köper tyget själva:
+  // radens värde om det är ifyllt, annars stylens. Tomt på båda = tyget ingår i Make.
+  const lineFab = (r) => { const t = num(r.tygkostnad); if (t != null) return t; const st = r.styleId ? byId(D.styles, r.styleId) : null; return (st && num(st.tygkostnad)) || 0; };
+  const lineUnitCost = (r) => { const u = lineUnit(r); return u ? u.pris + lineFab(r) : null; };
+  const lineCost = (r) => { const a = num(r.antal), u = lineUnitCost(r); return a == null || u == null ? (num(r.kostnad) ?? null) : a * u; };
   const poTotal = (po) => (po.rader || []).reduce((a, r) => a + (lineCost(r) || 0), 0);
+  // Tyget betalas till tygleverantören, inte till den som syr: betalningsplanen mot leverantören räknas på Make.
+  const poFabTotal = (po) => (po.rader || []).reduce((a, r) => a + (lineUnit(r) ? (num(r.antal) || 0) * lineFab(r) : 0), 0);
+  const poMakeTotal = (po) => poTotal(po) - poFabTotal(po);
   const poUnits = (po) => (po.rader || []).reduce((a, r) => a + (num(r.antal) || 0), 0);
   const poSeason = (po) => po.sasong || "";
   const poLinesOf = (styleId) => { const out = []; for (const po of D.po) for (const r of po.rader || []) if (r.styleId === styleId) out.push({ po, r }); return out; };
@@ -1547,7 +1554,7 @@ import * as P from "./platform.js";
         const card = h("section", { class: "card po-card g-" + g });
         card.append(this.groupRow(p));
         const lines = (p.rader || []);
-        const { t, tb } = table([["Product"], ["Colours"], ["Quantity", "num"], ["Unit price", "num"], ["Cost", "num"]]);
+        const { t, tb } = table([["Product"], ["Colours"], ["Quantity", "num"], ["Unit cost", "num"], ["Cost", "num"]]);
         if (!lines.length) tb.append(h("tr", { dataset: { po: p._id } }, h("td", { colSpan: 5, class: "sub", text: "No lines yet – open the PO and add products." })));
         const byProd = new Map();
         for (const r of lines) { const k = (r.styleId || "") + "|" + norm(r.produkt); if (!byProd.has(k)) byProd.set(k, []); byProd.get(k).push(r); }
@@ -1640,7 +1647,7 @@ import * as P from "./platform.js";
         td("", "c-main", h("div", { style: "display:flex;gap:10px;align-items:flex-start" }, pimg ? h("img", { class: "rowthumb", style: "margin-top:0", src: imgUrl(pimg), alt: "", loading: "lazy", onclick: (e) => { e.stopPropagation(); openLightbox(styleAllImages(st), pimg); } }) : null, h("div", null, h("div", { class: "prod", text: r0.produkt || (st ? st.namn : "–") }), h("div", { class: "sub" }, r0.typ && r0.typ !== "Nyhet" ? chip(r0.typ) : null, st ? h("button", { class: "linkish", type: "button", text: st._id + (styleKategori(st) ? " · " + styleKategori(st) : ""), onclick: (e) => { e.stopPropagation(); openStyle(st._id); } }) : h("span", { class: "muted", text: "No style linked" }))))),
         td("Colours", null, colours),
         td("Quantity", "num", unknown && !units ? "?" : String(units) + (unknown ? "+" : "")),
-        td("Unit price", "num", u0 ? h("div", null, h("div", { text: fmtSEK(u0.pris) }), u0.kalla === "style" ? h("div", { class: "sub", text: "from the style" + (st && st.inkopsValuta ? " · " + num(st.inkopspris) + " " + st.inkopsValuta : "") }) : null) : h("span", { class: "muted", text: "–" })),
+        td("Unit cost", "num", u0 ? h("div", null, h("div", { text: fmtSEK(u0.pris + lineFab(r0)) }), lineFab(r0) ? h("div", { class: "sub", text: "Make " + fmtSEK(u0.pris) + " + fabric " + fmtSEK(lineFab(r0)) }) : null, u0.kalla === "style" ? h("div", { class: "sub", text: "from the style" + (st && st.inkopsValuta ? " · " + num(st.inkopspris) + " " + st.inkopsValuta : "") }) : null) : h("span", { class: "muted", text: "–" })),
         td("Cost", "num", cost ? fmtSEK(cost) : "–")
       );
     },
@@ -1656,8 +1663,9 @@ import * as P from "./platform.js";
         td("Colour", null, r.farg || h("span", { class: "muted", text: "TBA" })),
         td("Tyg", "note", r.tyg || ""),
         td("Quantity", "num", r.antal == null || r.antal === "" ? "?" : String(r.antal), perSize ? h("div", { class: "sub", style: "text-align:right;font-family:var(--f-mono)", text: sizes.map((sz) => sz + ":" + (perSize[sz] ?? 0)).join(" ") }) : null),
-        td("Fabric/unit", "num", num(r.tygkostnad) != null ? fmtSEK(r.tygkostnad) : "–"),
-        td("Unit price", "num", num(r.styckpris) != null ? fmtSEK(r.styckpris) : "–"),
+        td("Make", "num", lineUnit(r) ? fmtSEK(lineUnit(r).pris) : "–"),
+        td("Fabric/unit", "num", lineFab(r) ? fmtSEK(lineFab(r)) : "–"),
+        td("Unit cost", "num", lineUnitCost(r) != null ? fmtSEK(lineUnitCost(r)) : "–"),
         td("Cost", "num", cost != null ? fmtSEK(cost) : "–"),
         td("EAN", "mono", !st || !r.farg ? "–" : sizes.length ? got + "/" + sizes.length : "–"),
         td("Fotosample", null, r.fotosample || p.fotosample || "", (r.fotosampleLeverans || p.fotosampleLeverans) ? h("div", { class: "sub mono", text: fmtDate(r.fotosampleLeverans || p.fotosampleLeverans) }) : null)
@@ -1738,12 +1746,12 @@ import * as P from "./platform.js";
   // Valutarisk: kostnaden räknas om till leverantörens valuta med dagens kurs och stressas med settings.valutarisk % (SEK försvagas).
   const canSeeMoney = () => ME.flikar.includes("produktion") || ME.flikar.includes("leverantorer");
   const stressPct = () => num(D.settings.valutarisk) ?? 10;
-  const unitCostOf = (styleId) => { const ls = poLinesOf(styleId).filter((x) => !PO_DRAFT.includes(poStatusNorm(x.po.status)) && num(x.r.antal) && num(x.r.styckpris) != null); const u = ls.reduce((a, x) => a + num(x.r.antal), 0); return u ? { kostnad: ls.reduce((a, x) => a + num(x.r.antal) * (num(x.r.styckpris) + (num(x.r.tygkostnad) || 0)), 0) / u, po: uniq(ls.map((x) => x.po.nr || x.po._id)) } : null; };
+  const unitCostOf = (styleId) => { const ls = poLinesOf(styleId).filter((x) => !PO_DRAFT.includes(poStatusNorm(x.po.status)) && num(x.r.antal) && num(x.r.styckpris) != null); const u = ls.reduce((a, x) => a + num(x.r.antal), 0); return u ? { kostnad: ls.reduce((a, x) => a + num(x.r.antal) * (num(x.r.styckpris) + lineFab(x.r)), 0) / u, po: uniq(ls.map((x) => x.po.nr || x.po._id)) } : null; };
   const shopifyOf = (styleId) => D.shopify.filter((p) => p.styleId === styleId);
   const median = (arr) => { const a = arr.filter((x) => x != null && !isNaN(x)).sort((x, y) => x - y); if (!a.length) return null; const m = Math.floor(a.length / 2); return a.length % 2 ? a[m] : (a[m - 1] + a[m]) / 2; };
   const stylePrice = (s) => num(s.ecomPris) ?? median(shopifyOf(s._id).map((p) => num(p.pris)).filter(Boolean));
   // Inköpspris i originalvaluta: Shopify-produktens egen inmatning (inkop) vinner, annars stylens inkopspris/inkopsValuta, annars PO-snittet i SEK.
-  const inkopOf = (s, shop) => { const i = shop && shop.inkop && num(shop.inkop.pris) ? shop.inkop : (s && num(s.inkopspris) ? { pris: num(s.inkopspris), valuta: s.inkopsValuta || "", kalla: s.inkopsKalla || "", datum: s.inkopsDatum || "" } : null); return i && num(i.pris) ? i : null; };
+  const inkopOf = (s, shop) => { const i = shop && shop.inkop && num(shop.inkop.pris) ? shop.inkop : (s && num(s.inkopspris) ? { pris: num(s.inkopspris), valuta: s.inkopsValuta || "", kalla: s.inkopsKalla || "", datum: s.inkopsDatum || "", fran: "style" } : null); return i && num(i.pris) ? i : null; };
   function gm1Info(s, prisIn, shop) {
     const pris = prisIn != null ? num(prisIn) : stylePrice(s);
     if (!pris) return null;
@@ -1752,11 +1760,11 @@ import * as P from "./platform.js";
     const lev = levByName(s.leverantor); const valuta = (ink && ink.valuta) || (lev && lev.valuta) || "SEK"; const kurs = fx(valuta) || 1;
     const stress = valuta === "SEK" ? 0 : stressPct() / 100;
     const out = { pris, netto, valuta, kurs, stress: stressPct(), kostnad: null, kostnadValuta: null, gm: null, gmStress: null, tal: null, po: [], kalla: "" };
-    let kostnad = null;
+    let kostnad = null, make = null, fab = 0;
     if (ink && !ink.valuta && !(lev && lev.valuta)) { out.kalla = "purchase price " + num(ink.pris) + " – currency missing"; }
-    else if (ink && fx(valuta)) { kostnad = num(ink.pris) * kurs; out.kalla = "purchase price " + fmtCur(num(ink.pris), valuta) + (ink.kalla ? " (" + ink.kalla + (ink.datum ? " " + fmtDate(ink.datum) : "") + ")" : ""); }
+    else if (ink && fx(valuta)) { make = num(ink.pris) * kurs; fab = ink.fran === "style" ? num(s.tygkostnad) || 0 : 0; kostnad = make + fab; out.kalla = (fab ? "Make " : "purchase price ") + fmtCur(num(ink.pris), valuta) + (fab ? " + fabric " + fmtSEK(fab) : "") + (ink.kalla ? " (" + ink.kalla + (ink.datum ? " " + fmtDate(ink.datum) : "") + ")" : ""); }
     else { const uc = unitCostOf(s._id); if (uc) { kostnad = uc.kostnad; out.po = uc.po; out.kalla = "PO average " + uc.po.join(", "); } }
-    if (kostnad != null) { out.kostnad = kostnad; out.kostnadValuta = kostnad / kurs; out.gm = (netto - kostnad) / netto * 100; out.gmStress = (netto - kostnad * (1 + stress)) / netto * 100; out.tal = valuta === "SEK" ? null : (0.3 * netto / kostnad - 1) * 100; }
+    if (kostnad != null) { out.kostnad = kostnad; out.kostnadValuta = kostnad / kurs; out.gm = (netto - kostnad) / netto * 100; const mk = make ?? kostnad; out.gmStress = (netto - (mk * (1 + stress) + fab)) / netto * 100; out.tal = valuta === "SEK" || !mk ? null : ((0.3 * netto - fab) / mk - 1) * 100; }
     return out;
   }
   const gmClass = (gm) => (gm == null ? "" : gm >= 75 ? "ts-ok" : gm >= 70 ? "ts-delvis-slut" : "ts-slut");
@@ -1785,7 +1793,7 @@ import * as P from "./platform.js";
     const rate = fx(cur) || 1;
     const manual = manualPayments(po);
     if (manual.length) return manual.map((x) => Object.assign(x, { valuta: cur, beloppValuta: x.belopp / rate }));
-    const total = poTotal(po); if (!total) return [];
+    const total = poMakeTotal(po); if (!total) return [];
     const vill = lev && Array.isArray(lev.villkor) && lev.villkor.length ? lev.villkor : null;
     const terms = vill || [{ andel: 100, vid: "leverans", dagar: 0 }];
     const ms = poMilestones(po);
@@ -1916,7 +1924,9 @@ import * as P from "./platform.js";
       const fFarg = inp("l_farg_" + idx, r.farg, { placeholder: "Colour", list: "dlFarger", autocomplete: "off" });
       const fTyp = selectEl("l_typ_" + idx, STYLE_TYP, r.typ || (st ? st.typ : "Nyhet") || "Nyhet");
       const fTyg = inp("l_tyg_" + idx, r.tyg, { list: "dlTyg", autocomplete: "off", placeholder: "Tyg" });
-      const fPris = inp("l_pris_" + idx, r.styckpris, { type: "number", min: "0", step: "0.01", placeholder: "Unit price" });
+      const fPris = inp("l_pris_" + idx, r.styckpris, { type: "number", min: "0", step: "0.01", placeholder: "SEK" });
+      const fTygK = inp("l_tygk_" + idx, r.tygkostnad, { type: "number", min: "0", step: "0.01", placeholder: "0" });
+      const ucEl = h("div", { class: "calc" });
       // Storlekar: en ruta per storlek. Skalan är XS–XXL eller 44–58; andra storlekar (stylens egna) visas som de är.
       const EGNA = "__egna";
       const start = r.storlekar && r.storlekar.length ? r.storlekar : sizesOf(st);
@@ -1933,13 +1943,17 @@ import * as P from "./platform.js";
       const sync = () => {
         const s2 = styleByName(fProdN.value);
         r.produkt = fProdN.value.trim(); r.styleId = s2 ? s2._id : (r.styleId && st && norm(st.namn) === norm(r.produkt) ? r.styleId : null);
-        r.farg = fFarg.value.trim(); r.typ = fTyp.value; r.tyg = fTyg.value.trim(); r.styckpris = num(fPris.value);
+        r.farg = fFarg.value.trim(); r.typ = fTyp.value; r.tyg = fTyg.value.trim(); r.styckpris = num(fPris.value); r.tygkostnad = num(fTygK.value);
         const fyllda = sizes.filter((sz) => num(q[sz]) > 0);
         if (fyllda.length) { r.storlekar = fyllda; r.perStorlek = {}; fyllda.forEach((sz) => (r.perStorlek[sz] = num(q[sz]))); r.antal = sum(); }
         else { r.storlekar = sizes.slice(); r.perStorlek = null; r.antal = utanStorlek; }
         r.kostnad = lineCost(r);
         tot.textContent = String(num(r.antal) || 0);
-        hint.textContent = [s2 ? s2._id + (styleKategori(s2) ? " · " + styleKategori(s2) : " · no category") : (r.produkt ? "A new style is created on save" : ""), !fyllda.length && utanStorlek ? "Quantity has no split per size" : "", num(r.tygkostnad) ? "Fabric cost " + fmtSEK(num(r.tygkostnad)) + " per unit is included in the total" : ""].filter(Boolean).join(" · ");
+        hint.textContent = [s2 ? s2._id + (styleKategori(s2) ? " · " + styleKategori(s2) : " · no category") : (r.produkt ? "A new style is created on save" : ""), !fyllda.length && utanStorlek ? "Quantity has no split per size" : ""].filter(Boolean).join(" · ");
+        const u = lineUnit(r), fb = lineFab(r);
+        fPris.placeholder = num(r.styckpris) == null && u ? Math.round(u.pris) + " from the style" : "SEK";
+        fTygK.placeholder = num(r.tygkostnad) == null && fb ? fb + " from the style" : "0";
+        ucEl.replaceChildren(h("b", { text: u ? fmtSEK(u.pris + fb) : "–" }), h("span", { class: "sub", text: u ? "Make " + fmtSEK(u.pris) + (fb ? " + fabric " + fmtSEK(fb) : "") : "Enter Make" }));
         renderTotals();
       };
       const renderGrid = () => {
@@ -1954,13 +1968,14 @@ import * as P from "./platform.js";
         }), h("div", { class: "sztot" }, h("span", { text: "Quantity" }), tot));
         if (ro) lock(grid);
       };
-      [fProdN, fFarg, fTyp, fTyg, fPris].forEach((x) => { x.addEventListener("input", sync); x.addEventListener("change", sync); });
+      [fProdN, fFarg, fTyp, fTyg, fPris, fTygK].forEach((x) => { x.addEventListener("input", sync); x.addEventListener("change", sync); });
       fSkala.addEventListener("change", () => { sizes = fSkala.value === EGNA ? egna : PO_SKALOR[fSkala.value]; renderGrid(); sync(); });
       fProdN.addEventListener("change", () => { const s2 = styleByName(fProdN.value); const k = s2 ? skalaAv(sizesOf(s2)) : null; if (k && !sum() && fSkala.value !== k) { fSkala.value = k; sizes = PO_SKALOR[k]; renderGrid(); } if (s2 && !fTyp.dataset.touched) fTyp.value = s2.typ || "Nyhet"; sync(); });
       fTyp.addEventListener("change", () => (fTyp.dataset.touched = "1"));
       const box = h("div", { class: "line" },
         h("div", { class: "row two" }, field("Product", fProdN), field("Colour", fFarg), field("New / restock", fTyp)),
-        h("div", { class: "row three" }, field("Tyg", fTyg), field("Size scale", fSkala), field("Unit price", fPris)),
+        h("div", { class: "row pair" }, field("Tyg", fTyg), field("Size scale", fSkala)),
+        h("div", { class: "row cost" }, field("Make (SEK)", fPris), field("Fabric per unit (SEK)", fTygK), h("div", { class: "field" }, h("label", { text: "Unit cost" }), ucEl)),
         grid,
         h("div", { class: "foot" }, hint, ro ? null : h("button", { class: "btn small danger", type: "button", text: "Remove line", onclick: () => { lines.splice(idx, 1); renderLines(); } })));
       if (ro) lock(box);
@@ -1971,8 +1986,9 @@ import * as P from "./platform.js";
     function renderTotals() {
       const units = lines.reduce((a, r) => a + (num(r.antal) || 0), 0);
       const cost = lines.reduce((a, r) => a + (lineCost(r) || 0), 0);
+      const fabTot = poFabTotal({ rader: lines });
       const perColor = {}; for (const r of lines) { const k = r.farg || "TBA"; perColor[k] = (perColor[k] || 0) + (num(r.antal) || 0); }
-      totalsEl.replaceChildren(h("span", null, "Lines: ", h("b", { text: String(lines.length) })), h("span", null, "Quantity: ", h("b", { text: String(units) })), h("span", null, "Per colour: ", h("b", { text: Object.entries(perColor).map(([k, v]) => k + " " + v).join(", ") || "–" })), h("span", null, "Average/unit: ", h("b", { text: units ? fmtSEK(cost / units) : "–" })), h("span", null, "Total: ", h("b", { text: fmtSEK(cost) })));
+      totalsEl.replaceChildren(h("span", null, "Lines: ", h("b", { text: String(lines.length) })), h("span", null, "Quantity: ", h("b", { text: String(units) })), h("span", null, "Per colour: ", h("b", { text: Object.entries(perColor).map(([k, v]) => k + " " + v).join(", ") || "–" })), h("span", null, "Average/unit: ", h("b", { text: units ? fmtSEK(cost / units) : "–" })), h("span", null, "Total: ", h("b", { text: fmtSEK(cost) })), fabTot ? h("span", null, "Of which fabric: ", h("b", { text: fmtSEK(fabTot) })) : null);
     }
     renderLines();
     const linesSec = h("section", null, h("h3", { class: "sec-title", text: "Products on the PO" }), linesEl, ro ? null : h("div", { style: "margin-top:10px" }, h("button", { class: "btn small", type: "button", text: "+ Add line", onclick: () => { lines.push({ produkt: "", farg: "", typ: "Nyhet", tyg: "", storlekar: [], antal: null, tygkostnad: null, styckpris: null }); renderLines(); setTimeout(() => { const el = $("l_prod_" + (lines.length - 1)); if (el) el.focus(); }, 20); } })), totalsEl);
@@ -2127,7 +2143,7 @@ import * as P from "./platform.js";
       } finally { if (btn) btn.disabled = false; }
     }
     const kvs = [];
-    if (!isNew) { const tot = poTotal(po); kvs.push(h("div", { class: "kvs" }, h("div", { class: "kv" }, h("span", { class: "k", text: "Total" }), h("span", { class: "v big", text: fmtSEK(tot) })), h("div", { class: "kv" }, h("span", { class: "k", text: "Quantity" }), h("span", { class: "v big", text: String(poUnits(po)) })), h("div", { class: "kv" }, h("span", { class: "k", text: "Days left" }), h("span", { class: "v big", text: poEta(po) ? fmtDays(diffDays(poEta(po))) : "–" })))); }
+    if (!isNew) { const tot = poTotal(po), fabT = poFabTotal(po); kvs.push(h("div", { class: "kvs" }, h("div", { class: "kv" }, h("span", { class: "k", text: "Total" }), h("span", { class: "v big", text: fmtSEK(tot) })), fabT ? h("div", { class: "kv" }, h("span", { class: "k", text: "Of which fabric" }), h("span", { class: "v big", text: fmtSEK(fabT) })) : null, h("div", { class: "kv" }, h("span", { class: "k", text: "Quantity" }), h("span", { class: "v big", text: String(poUnits(po)) })), h("div", { class: "kv" }, h("span", { class: "k", text: "Days left" }), h("span", { class: "v big", text: poEta(po) ? fmtDays(diffDays(poEta(po))) : "–" })))); }
     const body = [...kvs, form, linesSec, attSec];
     if (!isNew && downloads) body.push(h("section", null, h("h3", { class: "sec-title", text: "PO file" }), h("p", { class: "hint", text: "Excel in Rubato's PO template: a \"PO\" sheet with the order details, one column per size and a TOTAL row. Fill in quantity per size on the lines for a complete PO." }), h("div", { class: "quick" }, h("button", { class: "btn small primary", type: "button", text: "Create PO file (Excel)", onclick: () => exportPoXlsx(current()) }))));
     const noteIn = attachMentions(inp("f_pnote", "", { placeholder: NOTE_PH, autocomplete: "off" }));
@@ -2207,8 +2223,8 @@ import * as P from "./platform.js";
   }
   function exportPo() {
     const rows = [];
-    for (const p of D.po) for (const r of p.rader || []) { const st = byId(D.styles, r.styleId); rows.push([p.nr, p.leverantor, p.sasong, p.drop, poStatusNorm(p.status), r.produkt, r.styleId, st ? styleKategori(st) : "", r.farg, r.typ, r.tyg, r.antal, r.tygkostnad, r.styckpris, lineCost(r), p.valuta, p.tygstatus, p.orderBekraftad ? "Ja" : "Nej", p.planeradEx, p.bekraftadEx, poEta(p), p.fotosample, p.forskottBetalt, p.slutbetalning, p.kommentar]); }
-    saveFile("Rubato_Produktion_" + todayISO() + ".csv", csv(["PO no.", "Supplier", "Season", "Drop", "Status", "Product", "Style ID", "Category", "Colour", "New/Restock", "Tyg", "Quantity", "Fabric cost/unit", "Unit price", "Cost", "Currency", "Fabric status", "Order confirmed", "Planned ex-factory", "Confirmed ex-factory", "ETA warehouse", "Fotosample", "Deposit paid", "Final payment", "Comment"], rows));
+    for (const p of D.po) for (const r of p.rader || []) { const st = byId(D.styles, r.styleId); rows.push([p.nr, p.leverantor, p.sasong, p.drop, poStatusNorm(p.status), r.produkt, r.styleId, st ? styleKategori(st) : "", r.farg, r.typ, r.tyg, r.antal, lineFab(r) || r.tygkostnad, lineUnit(r) ? lineUnit(r).pris : r.styckpris, lineUnitCost(r), lineCost(r), p.valuta, p.tygstatus, p.orderBekraftad ? "Ja" : "Nej", p.planeradEx, p.bekraftadEx, poEta(p), p.fotosample, p.forskottBetalt, p.slutbetalning, p.kommentar]); }
+    saveFile("Rubato_Produktion_" + todayISO() + ".csv", csv(["PO no.", "Supplier", "Season", "Drop", "Status", "Product", "Style ID", "Category", "Colour", "New/Restock", "Tyg", "Quantity", "Fabric cost/unit", "Make", "Unit cost", "Cost", "Currency", "Fabric status", "Order confirmed", "Planned ex-factory", "Confirmed ex-factory", "ETA warehouse", "Fotosample", "Deposit paid", "Final payment", "Comment"], rows));
   }
 
   // ---------- KOLLEKTION (Carl) ----------
@@ -5309,6 +5325,11 @@ import * as P from "./platform.js";
     const fKom = area("f_skom", st.kommentar);
     const fInk = inp("f_sink", st.inkopspris, { type: "number", min: "0", step: "0.01", inputmode: "decimal", placeholder: "per unit" });
     const fInkV = selectEl("f_sinkv", [["", "– currency –"]].concat(CURS.concat(["SEK"]).map((c) => [c, c])), st.inkopsValuta || ((levByName(st.leverantor) || {}).valuta || ""));
+    const fTygK = inp("f_stygk", st.tygkostnad, { type: "number", min: "0", step: "1", inputmode: "decimal", placeholder: "empty = included in Make" });
+    const ucOut = h("div", { class: "calc" });
+    const syncUc = () => { const m = num(fInk.value), cur = fInkV.value || "SEK", k = fx(cur), t = num(fTygK.value) || 0; const mk = m != null && k ? m * k : null;
+      ucOut.replaceChildren(h("b", { text: mk != null ? fmtSEK(mk + t) : "–" }), h("span", { class: "sub", text: mk != null ? "Make " + (cur !== "SEK" ? fmtCur(m, cur) + " = " : "") + fmtSEK(mk) + (t ? " + fabric " + fmtSEK(t) : "") : "Enter Make" })); };
+    [fInk, fInkV, fTygK].forEach((x) => { x.addEventListener("input", syncUc); x.addEventListener("change", syncUc); }); syncUc();
     const mattOpts = [["", "– Own measurement list below –"]]
       .concat(D.styles.filter((x) => x._id !== st._id && !["Kastad"].includes(styleStatusNorm(x.status))).sort((a, b) => (a.namn || "").localeCompare(b.namn || "", "sv")).map((x) => [x._id, x.namn + (x.sasong ? " · " + x.sasong : "") + " (style)"]))
       .concat(D.samples.filter((x) => x.mattGodkanda === true || x.status === "Mottagen").sort((a, b) => styleName(a).localeCompare(styleName(b), "sv")).map((x) => [x._id, styleName(x) + (x.version ? " · " + x.version : "") + " (" + x._id + ")"]));
@@ -5365,11 +5386,13 @@ import * as P from "./platform.js";
       field("Comment", fKom, { full: true }),
       lean && !isNew ? h("p", { class: "hint full" }, "Planning, photo, e-com, EAN, Shopify and purchasing are handled in their own tabs. ", h("button", { class: "linkish", type: "button", text: "Show the whole style", onclick: () => openStyle(st._id, null, { full: true }) })) : null,
       canSeeMoney() && !lean ? h("h3", { class: "sec-title full", text: "Purchasing" }) : null,
-      canSeeMoney() && !lean ? field("Purchase price per unit", fInk, { hint: st.inkopsKalla ? "Source: " + st.inkopsKalla + (st.inkopsDatum ? " " + fmtDate(st.inkopsDatum) : "") : "In the supplier's currency – converted to SEK with the rates under Suppliers" }) : null,
-      canSeeMoney() && !lean ? field("Currency", fInkV) : null);
+      canSeeMoney() && !lean ? field("Make per unit", fInk, { hint: st.inkopsKalla ? "Source: " + st.inkopsKalla + (st.inkopsDatum ? " " + fmtDate(st.inkopsDatum) : "") : "In the supplier's currency – converted to SEK with the rates under Suppliers" }) : null,
+      canSeeMoney() && !lean ? field("Currency", fInkV) : null,
+      canSeeMoney() && !lean ? field("Fabric per unit (SEK)", fTygK, { hint: "Only when we buy the fabric ourselves. Empty = the fabric is included in Make." }) : null,
+      canSeeMoney() && !lean ? h("div", { class: "field" }, h("label", { text: "Unit cost" }), ucOut, h("span", { class: "hint", text: "Make + fabric. Used on PO lines without a price of their own and in the margin." })) : null);
     if (ro) lock(form);
     fSas.addEventListener("change", syncDropHint); fDrop.addEventListener("change", syncDropHint); syncDropHint(); syncGrund();
-    const formState = () => ({ _id: st._id, namn: fNamn.value.trim(), beskrivning: fBesk.value.trim(), grund: !!st.grund, grundId: st.grund ? "" : fGrund.value, leverantor: fLev.value.trim(), sasong: fSas.value.trim(), drop: fDrop.value.trim(), typ: fTyp.value, kategori: fKat.value, status: fStatus.value, mattFran: fMattFran.value, mattlista: fMatt.value.trim(), referenser: fRef.value.trim(), shopifyBild: fShop.value.trim() ? (st.shopifyBild && st.shopifyBild.url === fShop.value.trim() ? st.shopifyBild : { url: fShop.value.trim(), titel: "", handle: "", likhet: "manuell", t: new Date().toISOString() }) : null, ecomBilder: fEcom.value, ecomPlatDatum: fEcomD.value || null, kampanjStatus: fKamp.value, kampanjDatum: fKampD.value || null, klartSenast: fKlart.value || null, fotoSenast: fFoto.value || null, kommentar: fKom.value.trim(), inkopspris: canSeeMoney() ? num(fInk.value) : st.inkopspris ?? null, inkopsValuta: canSeeMoney() ? fInkV.value : st.inkopsValuta || "", inkopsKalla: canSeeMoney() && num(fInk.value) !== num(st.inkopspris) ? (num(fInk.value) == null ? "" : myName || "manual") : st.inkopsKalla || "", inkopsDatum: canSeeMoney() && num(fInk.value) !== num(st.inkopspris) ? (num(fInk.value) == null ? "" : todayISO()) : st.inkopsDatum || "" });
+    const formState = () => ({ _id: st._id, namn: fNamn.value.trim(), beskrivning: fBesk.value.trim(), grund: !!st.grund, grundId: st.grund ? "" : fGrund.value, leverantor: fLev.value.trim(), sasong: fSas.value.trim(), drop: fDrop.value.trim(), typ: fTyp.value, kategori: fKat.value, status: fStatus.value, mattFran: fMattFran.value, mattlista: fMatt.value.trim(), referenser: fRef.value.trim(), shopifyBild: fShop.value.trim() ? (st.shopifyBild && st.shopifyBild.url === fShop.value.trim() ? st.shopifyBild : { url: fShop.value.trim(), titel: "", handle: "", likhet: "manuell", t: new Date().toISOString() }) : null, ecomBilder: fEcom.value, ecomPlatDatum: fEcomD.value || null, kampanjStatus: fKamp.value, kampanjDatum: fKampD.value || null, klartSenast: fKlart.value || null, fotoSenast: fFoto.value || null, kommentar: fKom.value.trim(), inkopspris: canSeeMoney() ? num(fInk.value) : st.inkopspris ?? null, tygkostnad: canSeeMoney() ? num(fTygK.value) : st.tygkostnad ?? null, inkopsValuta: canSeeMoney() ? fInkV.value : st.inkopsValuta || "", inkopsKalla: canSeeMoney() && num(fInk.value) !== num(st.inkopspris) ? (num(fInk.value) == null ? "" : myName || "manual") : st.inkopsKalla || "", inkopsDatum: canSeeMoney() && num(fInk.value) !== num(st.inkopspris) ? (num(fInk.value) == null ? "" : todayISO()) : st.inkopsDatum || "" });
 
     const prodSec = h("section");
     function renderPris() {
@@ -5393,9 +5416,9 @@ import * as P from "./platform.js";
         const kv = (k, v) => h("div", { class: "kv" }, h("span", { class: "k", text: k }), h("span", { class: "v big", text: v }));
         prodSec.append(h("h3", { class: "sec-title", text: "Production" }),
           h("div", { class: "kvs" }, kv("Total quantity", String(units)), kv("Per colour", Object.entries(perColor).map(([k, v]) => k + " " + v).join(", ") || "–"), kv("Average/unit", units ? fmtSEK(cost / units) : "–"), kv("Purchase value", fmtSEK(cost))),
-          h("div", { class: "vscroll" }, h("table", { class: "prodrows" }, h("thead", null, h("tr", null, ["PO", "Colour", "Quantity", "Fabric/unit", "Unit price", "Cost", "Status", "ETA warehouse"].map((x) => h("th", { text: x })))),
-            h("tbody", null, pl.map((x) => { const tr = h("tr", { style: "cursor:pointer", onclick: () => openPo(x.po._id) }, h("td", { class: "mono", text: x.po.nr || x.po._id }), h("td", { text: x.r.farg || "TBA" }), h("td", { class: "num", text: x.r.antal == null ? "?" : String(x.r.antal) }), h("td", { class: "num", text: num(x.r.tygkostnad) != null ? fmtSEK(x.r.tygkostnad) : "–" }), h("td", { class: "num", text: num(x.r.styckpris) != null ? fmtSEK(x.r.styckpris) : "–" }), h("td", { class: "num", text: fmtSEK(lineCost(x.r)) }), h("td", null, poStatusPill(x.po)), h("td", { class: "mono", text: poEta(x.po) ? fmtDate(poEta(x.po)) : "" })); return tr; })))),
-          h("p", { class: "hint", text: "Click a row to open the PO. Cost = quantity × (unit price + fabric cost)." }));
+          h("div", { class: "vscroll" }, h("table", { class: "prodrows" }, h("thead", null, h("tr", null, ["PO", "Colour", "Quantity", "Make", "Fabric/unit", "Unit cost", "Cost", "Status", "ETA warehouse"].map((x) => h("th", { text: x })))),
+            h("tbody", null, pl.map((x) => { const tr = h("tr", { style: "cursor:pointer", onclick: () => openPo(x.po._id) }, h("td", { class: "mono", text: x.po.nr || x.po._id }), h("td", { text: x.r.farg || "TBA" }), h("td", { class: "num", text: x.r.antal == null ? "?" : String(x.r.antal) }), h("td", { class: "num", text: lineUnit(x.r) ? fmtSEK(lineUnit(x.r).pris) : "–" }), h("td", { class: "num", text: lineFab(x.r) ? fmtSEK(lineFab(x.r)) : "–" }), h("td", { class: "num", text: lineUnitCost(x.r) != null ? fmtSEK(lineUnitCost(x.r)) : "–" }), h("td", { class: "num", text: fmtSEK(lineCost(x.r)) }), h("td", null, poStatusPill(x.po)), h("td", { class: "mono", text: poEta(x.po) ? fmtDate(poEta(x.po)) : "" })); return tr; })))),
+          h("p", { class: "hint", text: "Click a row to open the PO. Unit cost = Make + fabric per unit. Cost = quantity × unit cost." }));
         return;
       }
       const rows = Array.isArray(st.produktion) ? st.produktion : [];

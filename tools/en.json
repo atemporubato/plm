@@ -1805,7 +1805,17 @@
   "Svara": "Reply",
   "Ser andras sidor": "Sees others' pages",
   "senaste": "latest",
-  "Flaggor": "Flags"
+  "Flaggor": "Flags",
+  "+ tyg": "+ fabric",
+  "Tyg per plagg (SEK)": "Fabric per unit (SEK)",
+  "Varav tyg:": "Of which fabric:",
+  "Varav tyg": "Of which fabric",
+  "tomt = ingår i Make": "empty = included in Make",
+  "Make per plagg": "Make per unit",
+  "Bara när vi köper tyget själva. Tomt = tyget ingår i Make.": "Only when we buy the fabric ourselves. Empty = the fabric is included in Make.",
+  "Make + tyg. Gäller på PO-rader utan eget pris och i marginalen.": "Make + fabric. Used on PO lines without a price of their own and in the margin.",
+  "Klicka på en rad för att öppna PO:n. Unit cost = Make + tyg per plagg. Kostnad = antal × unit cost.": "Click a row to open the PO. Unit cost = Make + fabric per unit. Cost = quantity × unit cost.",
+  "Fyll i Make": "Enter Make"
  },
  "values": {
   "Storleksset": "Size set",

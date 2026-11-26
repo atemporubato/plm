@@ -6,6 +6,16 @@ och importeras med `node tools/import-dokument.js`, och main går live på plm.a
 
 Versionsnumrering: små ändringar ger punktversion (v9.1, v9.2 …). Nytt heltal (v10) bara vid stora ändringar.
 
+## v10.29 (2026-11-26)
+
+Unit cost = Make + tyg, för plagg där vi köper tyget själva (som i Masterplaner: Styckpris (CMT) + Tygkostnad per enhet). Ett nytt fält på stylen (tygkostnad); inget ändras i befintliga poster.
+- Stylen, under Inköp: "Inköpspris per plagg" heter nu Make per plagg (leverantörens pris, i leverantörens valuta). Nytt fält Tyg per plagg (SEK) – bara när vi köper tyget själva, tomt = tyget ingår i Make. Unit cost visas direkt: Make omräknat till SEK + tyg.
+- PO-raden: Styckpris heter Make (SEK), och Tyg per plagg (SEK) går nu att fylla i och ändra (fanns tidigare bara på rader importerade från Masterplaner). Unit cost visas på raden. Tomma fält följer stylen, och det syns i rutan vad som hämtas därifrån.
+- Produktion: kolumnen Styckpris heter Unit cost och visar Make + tyg när det finns tyg. PO:n visar "Varav tyg" bredvid Totalt. Stylens produktionstabell har kolumnerna Make, Tyg/enhet, Unit cost och Kostnad.
+- Betalningar: betalningsplanen mot leverantören räknas på Make. Tyget betalas till tygleverantören och ligger inte längre i beloppet till den som syr. Inköpsvärde och budget räknas som förut på unit cost.
+- Marginal (GM1): kostnaden är Make × kurs + tyg när priset kommer från stylen. Valutastressen läggs bara på Make, tyget är i SEK.
+- CSV-exporten från Produktion har kolumnerna Tygkostnad/enhet, Make, Unit cost och Kostnad.
+
 ## v10.28 (2026-11-26)
 
 Min sida: en sida per person med flaggor och kommentarer. Förnamnen är borta ur produktflödet. Inget nytt sparas utom en ruta per roll under Användare (fältet andras).
