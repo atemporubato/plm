@@ -1843,7 +1843,22 @@
   "kom": "arrived",
   "I lagret": "In warehouse",
   "– I lager senast": "– In stock by",
-  "– I lager senast var": "– In stock by was"
+  "– I lager senast var": "– In stock by was",
+  "Skriv ett namn på droppen.": "Enter a name for the drop.",
+  "Det finns redan en drop som heter": "There is already a drop called",
+  "(droppen bytte namn)": "(the drop was renamed)",
+  "Droppen bytte namn, men": "The drop was renamed, but",
+  "poster kunde inte uppdateras – försök igen.": "items could not be updated – try again.",
+  "styles och": "styles and",
+  "POs följde med": "POs followed",
+  "✎ Byt namn på en drop …": "✎ Rename a drop …",
+  "Drop att byta namn på": "Drop to rename",
+  "Nytt namn": "New name",
+  "Byt namn": "Rename",
+  "Byter namn överallt i": "Renames it everywhere in",
+  ": styles, POs och lanseringen följer med.": ": styles, POs and the launch follow.",
+  "Byter du namn följer styles, POs och lanseringen med": "If you rename it, styles, POs and the launch follow",
+  "Droppen heter nu": "The drop is now called"
  },
  "values": {
   "Storleksset": "Size set",

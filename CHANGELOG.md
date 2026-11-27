@@ -6,6 +6,16 @@ och importeras med `node tools/import-dokument.js`, och main går live på plm.a
 
 Versionsnumrering: små ändringar ger punktversion (v9.1, v9.2 …). Nytt heltal (v10) bara vid stora ändringar.
 
+## v10.34 (2026-11-27)
+
+Byt namn på en drop – direkt i rullistan eller i droppens egen ruta. Inget nytt fält; namnet byts i de poster som pekar på droppen.
+- Rullistan Drop (på stylen, PO:n och lanseringen) har en sista rad "Byt namn på en drop …". Den öppnar en liten ruta under listan: välj drop, skriv det nya namnet, Byt namn. Formuläret man står i ligger kvar orört.
+- Namnbytet gäller i hela säsongen: droppen, alla styles och POs som pekar på den, och raden under Lanseringar. Varje style och PO får en loggrad. Samples följer sin style.
+- Ett namn som redan finns i säsongen stoppas, så att två drops inte slås ihop av misstag.
+- Droppens egen ruta (Redigera drop): fältet Namn är inte längre låst, och ett nytt namn slår igenom på samma sätt.
+- Den som bara ser Design-fliken, och producenter, har inte raden.
+- Rättning från v10.29: produktionstabellen i stylen hade fått nio kolumner och blev bredare än rutan, så att högerkanten på hela style-formuläret klipptes för styles med PO-rader. Tabellen visar nu Unit cost med uppdelningen Make + tyg under, och inget i rutan kan längre tränga ut formuläret.
+
 ## v10.33 (2026-11-27)
 
 Bekräfta inleverans i ett steg, och en PO i lager står kvar i sin säsong. Ett nytt fält på PO:n (inlevDatum); inget ändras i befintliga poster.

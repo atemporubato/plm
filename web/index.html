@@ -319,6 +319,11 @@ table.ledger { width: 100%; border-collapse: collapse; min-width: 960px; }
 .pill.pg-sent { background: transparent; color: var(--ink); border: 1px solid var(--ink); }
 .pill.pg-prelim, .pill.pg-cancel { background: transparent; color: var(--muted); border: 1px dashed var(--line-strong); }
 .pill.pg-done { background: transparent; color: var(--ink); border: 1px solid var(--line-strong); }
+.droprename { margin-top: 8px; padding: 10px 12px; border: 1px solid var(--line-strong); background: var(--paper); display: grid; gap: 8px; }
+.droprename .dr-row { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); gap: 8px; align-items: center; }
+.droprename { box-sizing: border-box; max-width: 100%; min-width: 0; }
+.droprename select, .droprename input { min-width: 0; width: 100%; box-sizing: border-box; }
+.droprename .dr-act { display: flex; gap: 8px; flex-wrap: wrap; }
 .po-card.is-inlev { border-left-color: var(--line-strong); }
 .po-card.is-inlev > .card-head h3 { color: var(--muted); }
 .inlev-rows { border: 1px solid var(--line); margin: 4px 0 10px; }
@@ -732,6 +737,8 @@ select:not([multiple]) { -webkit-appearance: none; appearance: none; padding-lef
 .drop .empty { padding: 20px; }
 .pos { font-size: 14px; }
 .prodrows { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+.sheet-body > section, .sheet-body > form { min-width: 0; max-width: 100%; }
+.sheet-body .vscroll { overflow-x: auto; max-width: 100%; }
 .prodrows th { text-align: left; font-size: 9px; text-transform: uppercase; letter-spacing: .1em; color: var(--muted); font-weight: 400; padding: 6px 8px; border-bottom: 1px solid var(--line); }
 .prodrows td { padding: 6px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
 .prodrows tr:last-child td { border-bottom: 0; }

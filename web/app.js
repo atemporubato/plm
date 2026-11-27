@@ -289,16 +289,65 @@ import * as P from "./platform.js";
     const all = gen.concat(D.drops.map((d) => d.sasong), D.styles.map((s) => s.sasong), D.po.map((p) => p.sasong)).map((x) => String(x || "").trim()).filter((x) => { const k = norm(x); if (!x || seen.has(k)) return false; seen.add(k); return true; }).sort((a, b) => seasonRank(a) - seasonRank(b) || a.localeCompare(b, "sv"));
     return selectEl(id, [["", emptyLabel || "– No season –"]].concat(all.map((x) => [x, x])), value || "");
   }
+  // Byt namn på en drop. Säsong + namn är det styles, POs och lanseringen pekar på – allt som pekar på det gamla namnet följer med.
+  async function renameDrop(sasong, gammalt, nytt) {
+    nytt = String(nytt || "").trim(); gammalt = String(gammalt || "").trim();
+    if (!nytt) { toast("Enter a name for the drop."); return false; }
+    if (nytt === gammalt) return true;
+    const kOld = dropKey(sasong, gammalt), kNew = dropKey(sasong, nytt);
+    if (kNew !== kOld && D.drops.some((x) => dropKey(x.sasong, x.namn) === kNew) && D.drops.some((x) => dropKey(x.sasong, x.namn) === kOld)) { toast("There is already a drop called " + nytt + " (" + sasong + ")"); return false; }
+    const now = new Date().toISOString(); const rad = "Drop: " + gammalt + " → " + nytt + " (the drop was renamed)";
+    const docs = RAW.drops.filter((x) => dropKey(x.sasong, x.namn) === kOld);
+    const evs = (D.handelser || []).filter((x) => String(x.drop || "").trim() && dropKey(x.sasong, x.drop) === kOld);
+    const sts = D.styles.filter((x) => String(x.drop || "").trim() && dropKey(x.sasong, x.drop) === kOld);
+    const pos = RAW.po.filter((x) => String(x.drop || "").trim() && dropKey(x.sasong, x.drop) === kOld);
+    for (const d of docs) { if (!(await write("drops", d._id, { namn: nytt, andrad: now }))) return false; d.namn = nytt; }
+    let fel = 0;
+    for (const x of evs) { if (await write("handelser", x._id, { drop: nytt, andrad: now })) x.drop = nytt; else fel++; }
+    for (const x of sts) { if (await write("styles", x._id, { drop: nytt, andrad: now, logg: (x.logg || []).concat(logEntry(rad)) })) x.drop = nytt; else fel++; }
+    for (const x of pos) { if (await write("po", x._id, { drop: nytt, andrad: now, logg: (x.logg || []).concat(logEntry(rad)) })) x.drop = nytt; else fel++; }
+    // Öppna formulär håller kvar de gamla objekten: byt namnet även där, så att en sparning inte skriver tillbaka det gamla.
+    for (const q of D.po) if (norm(q.sasong) === norm(sasong)) { if (norm(q._dropRaw) === norm(gammalt)) q._dropRaw = nytt; if (norm(q.drop) === norm(gammalt)) q.drop = nytt; if (Array.isArray(q._drops)) q._drops = q._drops.map((n) => (norm(n) === norm(gammalt) ? nytt : n)); }
+    deriveDrops(); derivePo(); scheduleRefresh();
+    toast(fel ? "The drop was renamed, but " + fel + " items could not be updated – try again." : "The drop is now called " + nytt + " – " + sts.length + " styles and " + pos.length + " POs followed");
+    return !fel;
+  }
   function dropSelect(id, value, seasonEl) {
     const e = h("select", { id });
+    const BYT = "__bytnamn";
     const names = () => dropsOfSeason(seasonEl.value).map((d) => d.namn);
+    const farByta = () => canWrite && !!db && !designOnly() && !ME.leverantor;
     e.refill = (keep) => {
       const ns = names(); const hit = ns.find((n) => norm(n) === norm(keep));
       e.replaceChildren(new Option("– No drop, season only –", ""), ...ns.map((n) => new Option(n, n)));
       if (keep && !hit) e.add(new Option(keep + " (not a drop in " + (seasonEl.value || "the season") + ")", keep));
+      if (farByta() && ns.length) e.add(new Option("✎ Rename a drop …", BYT));
       e.value = hit || keep || "";
     };
-    e.refill(String(value || "").trim());
+    // Sista raden i listan är ett kommando, inte ett värde: listan går tillbaka till det som var valt, och en liten ruta öppnas under den.
+    let senast = "", box = null;
+    const closeBox = () => { if (box) { box.remove(); box = null; } };
+    e.addEventListener("focus", () => { if (e.value !== BYT) senast = e.value; });
+    e.addEventListener("change", (ev) => {
+      if (e.value !== BYT) { senast = e.value; closeBox(); return; }
+      e.value = senast; ev.stopImmediatePropagation(); closeBox();
+      const ns = names(); if (!ns.length) return;
+      const fVilken = h("select", { "aria-label": "Drop to rename" }, ...ns.map((n) => new Option(n, n))); fVilken.value = ns.find((n) => norm(n) === norm(senast)) || ns[0];
+      const fNytt = h("input", { type: "text", value: fVilken.value, "aria-label": "New name", autocomplete: "off" });
+      fVilken.addEventListener("change", () => { fNytt.value = fVilken.value; fNytt.select(); });
+      const btn = h("button", { class: "btn small primary", type: "button", text: "Rename" });
+      const go = async () => {
+        const gammalt = fVilken.value, varVald = norm(senast) === norm(gammalt); btn.disabled = true;
+        if (await renameDrop(seasonEl.value, gammalt, fNytt.value)) { closeBox(); const nu = varVald ? fNytt.value.trim() : senast; e.refill(nu); senast = e.value; e.dispatchEvent(new Event("change")); } else btn.disabled = false;
+      };
+      btn.addEventListener("click", go);
+      fNytt.addEventListener("keydown", (k) => { if (k.key === "Enter") { k.preventDefault(); go(); } });
+      box = h("div", { class: "droprename" }, h("div", { class: "dr-row" }, fVilken, h("span", { text: "→" }), fNytt), h("div", { class: "dr-act" }, btn, h("button", { class: "btn small", type: "button", text: "Cancel", onclick: closeBox })),
+        h("span", { class: "hint", text: "Renames it everywhere in " + (seasonEl.value || "the season") + ": styles, POs and the launch follow." }));
+      e.insertAdjacentElement("afterend", box); fNytt.focus({ preventScroll: true }); fNytt.select();
+      const sb = box.closest(".sheet-body"); if (sb) { const r = box.getBoundingClientRect(), q = sb.getBoundingClientRect(); if (r.bottom > q.bottom) sb.scrollTop += r.bottom - q.bottom + 12; }
+    });
+    e.refill(String(value || "").trim()); senast = e.value;
     seasonEl.addEventListener("change", () => { const cur = e.value; e.refill(names().some((n) => norm(n) === norm(cur)) ? cur : ""); e.dispatchEvent(new Event("change")); });
     return e;
   }
@@ -1466,9 +1515,9 @@ import * as P from "./platform.js";
     const syncKlart = () => { const l = cooEv ? d.lansering : fLans.value; const auto = isISO(l) ? addDays(l, -marg) : null; klartHint.textContent = fKlart.value ? (isISO(l) && fKlart.value > l ? "Own date that falls after the launch " + fmtDate(l) + ". Clear the field for " + marg + " days before." : "Own date. Clear the field to follow the launch" + (auto ? " (" + fmtDate(auto) + ")" : "") + ".") : (auto ? "Follows the launch: " + fmtDate(auto) + ", " + marg + " days before. Only fill in if the drop should have its own date." : "Empty = " + marg + " days before the launch."); };
     fKlart.addEventListener("input", syncKlart); fLans.addEventListener("input", syncKlart); syncKlart();
     const fKom = area("f_dkom", d.kommentar);
-    if (!isNew) { fSas.disabled = true; fNamn.disabled = true; }
+    if (!isNew) fSas.disabled = true; // säsongen ligger fast; namnet går att byta och allt som pekar på droppen följer med
     const form = h("form", { class: "form", autocomplete: "off", onsubmit: (e) => e.preventDefault() },
-      field("Season", fSas), field("Name", fNamn, { hint: isNew ? "Styles are linked by season + name" : "Do not rename; styles point to it" }),
+      field("Season", fSas), field("Name", fNamn, { hint: isNew ? "Styles are linked by season + name" : "If you rename it, styles, POs and the launch follow" }),
       field("Order", fOrd, { hint: "Sort order within the season" }), h("div", { class: "field" }, h("label", { for: "f_dklart", text: "In stock by" }), fKlart, klartHint),
       h("div", { class: "field" }, h("label", { for: "f_dlans", text: "Launch" }), fLans, cooEv ? h("span", { class: "hint" }, "Controlled by Jakob under Launches. ", h("button", { class: "linkish", type: "button", text: "Change it there", onclick: () => { closeSheet(); switchTab("coo"); openEvent(cooEv._id); } })) : h("span", { class: "hint", text: "No drop row under Launches yet. The date here applies until the drop is set up there." })), h("div"),
       field("Comment", fKom, { full: true }));
@@ -1485,8 +1534,9 @@ import * as P from "./platform.js";
         o.bilder = pendingImgs.slice();
         if (await create("drops", nid, o)) { toast("Drop created"); closeSheet(); }
       } else {
-        delete o.sasong; delete o.namn;
-        if (await write("drops", d._id, o)) { toast("Saved"); closeSheet(); }
+        const nyttNamn = o.namn; delete o.sasong; delete o.namn;
+        if (nyttNamn !== d.namn && !(await renameDrop(d.sasong, d.namn, nyttNamn))) return;
+        if (await write("drops", d._id, o)) { if (nyttNamn === d.namn) toast("Saved"); closeSheet(); }
       }
     }
     openSheet({ flagRef: isNew ? null : { typ: "drop", ref: d._id, titel: d.sasong + " " + d.namn, tab: "kollektion" }, tag: isNew ? "New" : d.sasong, title: isNew ? "New drop" : d.sasong + " · " + d.namn, sub: isNew ? "" : members.length + (members.length === 1 ? " product" : " products"), body: [form, imgSec].concat(isNew ? [] : [commentsSection("drops", () => RAW.drops.find((x) => x._id === d._id) || raw, "f_drnote", ro)]), foot: footButtons({ del: "Delete drop", onDelete: isNew ? null : async () => { if (await remove("drops", d._id)) { toast("Removed"); closeSheet(); } }, canDelete: !members.length, blockText: "Move the products first", onSave: save }), ctx: { refresh: () => { if (!isNew && !byId(D.drops, d._id)) { closeSheet(); return; } imgSec.render(); } }, focus: isNew ? "f_dsasong" : null });
@@ -5515,8 +5565,8 @@ import * as P from "./platform.js";
         const kv = (k, v) => h("div", { class: "kv" }, h("span", { class: "k", text: k }), h("span", { class: "v big", text: v }));
         prodSec.append(h("h3", { class: "sec-title", text: "Production" }),
           h("div", { class: "kvs" }, kv("Total quantity", String(units)), kv("Per colour", Object.entries(perColor).map(([k, v]) => k + " " + v).join(", ") || "–"), kv("Average/unit", units ? fmtSEK(cost / units) : "–"), kv("Purchase value", fmtSEK(cost))),
-          h("div", { class: "vscroll" }, h("table", { class: "prodrows" }, h("thead", null, h("tr", null, ["PO", "Colour", "Quantity", "Make", "Fabric/unit", "Unit cost", "Cost", "Status", "ETA warehouse"].map((x) => h("th", { text: x })))),
-            h("tbody", null, pl.map((x) => { const tr = h("tr", { style: "cursor:pointer", onclick: () => openPo(x.po._id) }, h("td", { class: "mono", text: x.po.nr || x.po._id }), h("td", { text: x.r.farg || "TBA" }), h("td", { class: "num", text: x.r.antal == null ? "?" : String(x.r.antal) }), h("td", { class: "num", text: lineUnit(x.r) ? fmtSEK(lineUnit(x.r).pris) : "–" }), h("td", { class: "num", text: lineFab(x.r) ? fmtSEK(lineFab(x.r)) : "–" }), h("td", { class: "num", text: lineUnitCost(x.r) != null ? fmtSEK(lineUnitCost(x.r)) : "–" }), h("td", { class: "num", text: fmtSEK(lineCost(x.r)) }), h("td", null, poStatusPill(x.po)), h("td", { class: "mono", text: poEta(x.po) ? fmtDate(poEta(x.po)) : "" })); return tr; })))),
+          h("div", { class: "vscroll" }, h("table", { class: "prodrows" }, h("thead", null, h("tr", null, ["PO", "Colour", "Quantity", "Unit cost", "Cost", "Status", "ETA warehouse"].map((x) => h("th", { text: x })))),
+            h("tbody", null, pl.map((x) => { const tr = h("tr", { style: "cursor:pointer", onclick: () => openPo(x.po._id) }, h("td", { class: "mono", text: x.po.nr || x.po._id }), h("td", { text: x.r.farg || "TBA" }), h("td", { class: "num", text: x.r.antal == null ? "?" : String(x.r.antal) }), h("td", { class: "num" }, h("div", { text: lineUnitCost(x.r) != null ? fmtSEK(lineUnitCost(x.r)) : "–" }), lineUnit(x.r) && lineFab(x.r) ? h("div", { class: "sub", text: "Make " + fmtSEK(lineUnit(x.r).pris) + " + fabric " + fmtSEK(lineFab(x.r)) }) : null), h("td", { class: "num", text: fmtSEK(lineCost(x.r)) }), h("td", null, poStatusPill(x.po)), h("td", { class: "mono", text: poEta(x.po) ? fmtDate(poEta(x.po)) : "" })); return tr; })))),
           h("p", { class: "hint", text: "Click a row to open the PO. Unit cost = Make + fabric per unit. Cost = quantity × unit cost." }));
         return;
       }
