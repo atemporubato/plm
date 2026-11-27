@@ -627,6 +627,11 @@ import * as P from "./platform.js";
     return { key: "saknas", label: "Not ordered", sample: null, all: [] };
   }
   const hasPlacedPo = (st) => poLinesOf(st._id).some((x) => PO_PLACED.includes(poStatusNorm(x.po.status)));
+  // Livscykeln: Idé → Design → Sampling → Produktion. En produkt ligger i ett steg i taget.
+  // Så fort produkten står på en PO – även en preliminär – har den lämnat samplingen och hör hemma i Produktion (och Kollektion).
+  const hasLivePo = (st) => poLinesOf(st._id).some((x) => poStatusNorm(x.po.status) !== "Avbruten");
+  const iProduktion = (st) => !!st && (PROD_STATUS.includes(styleStatusNorm(st.status)) || hasLivePo(st));
+  const livePoNr = (st) => uniq(poLinesOf(st._id).filter((x) => poStatusNorm(x.po.status) !== "Avbruten").map((x) => x.po.nr || x.po._id));
   // Beställer fotosample för en style: en sample per färg på lagda PO-rader (annars en), version Fotosample.
   async function orderFotosamples(st, po, who) {
     const pls = poLinesOf(st._id).filter((x) => PO_PLACED.includes(poStatusNorm(x.po.status)));
@@ -832,7 +837,7 @@ import * as P from "./platform.js";
     sec.render = render;
     return sec;
   }
-  const sampleDone = (s) => { const st = styleOf(s); if (!st) return false; const ss = styleStatusNorm(st.status); if (!(PROD_STATUS.includes(ss) || ss === "Kastad")) return false; return !(ACTIVE.includes(s.status) || toEvaluate(s)); };
+  const sampleDone = (s) => { const st = styleOf(s); if (!st) return false; const ss = styleStatusNorm(st.status); if (!(iProduktion(st) || ss === "Kastad")) return false; return !(ACTIVE.includes(s.status) || toEvaluate(s)); };
   const needsPlace = (s) => s.status === "Mottagen" && !s.platsTyp;
   function utfallParts(s) {
     const out = [];
@@ -1018,7 +1023,7 @@ import * as P from "./platform.js";
   }
 
   // ---------- idéer överlämnade till Alex ----------
-  const ideaInbox = () => D.styles.filter((s) => styleStatusNorm(s.status) === ST_KANBEST).sort((a, b) => String((b.overlamnad && b.overlamnad.t) || b.andrad || "").localeCompare(String((a.overlamnad && a.overlamnad.t) || a.andrad || "")));
+  const ideaInbox = () => D.styles.filter((s) => styleStatusNorm(s.status) === ST_KANBEST && !hasLivePo(s)).sort((a, b) => String((b.overlamnad && b.overlamnad.t) || b.andrad || "").localeCompare(String((a.overlamnad && a.overlamnad.t) || a.andrad || "")));
   function fillNames(nodes) {
     const ids = uniq(nodes.map((n) => n.dataset.uid));
     if (!user || !ids.length) return;
@@ -1082,7 +1087,7 @@ import * as P from "./platform.js";
       const open = (e) => { if (e.target.closest("input, button")) return; const tr = e.target.closest("tr[data-id], tr[data-group]"); if (!tr) return; if (tr.dataset.id) openSample(tr.dataset.id); else { const k = tr.dataset.group; if (expanded.has(k)) expanded.delete(k); else expanded.add(k); this.update(); } };
       this.cards.addEventListener("click", open);
       this.cards.addEventListener("keydown", (e) => { if (e.key === "Enter") open(e); });
-      root.append(h("p", { class: "lede", text: "Samples for products that are not finished yet. Once the product has gone to production its samples move to \"Gone to production\". Paused and dropped samples sit in the Archive and can be picked up again. The intended season is set on each sample." }),
+      root.append(h("p", { class: "lede", text: "Samples for products that are not finished yet. Once the product has a PO – even a preliminary one – it leaves sampling and its samples move to \"Gone to production\". A sample that is still on its way or waiting to be evaluated stays until it has been handled. Paused and dropped samples sit in the Archive and can be picked up again. The intended season is set on each sample." }),
         this.strip.el, this.bar = h("section", { class: "filters sticky-bar", "aria-label": "Filter" }, q, this.fLev.el, this.fSeason.el, this.fPlats.el, this.seg.el, grp, h("label", { class: "checkline" }, this.allBox, "Select all visible"), this.count), this.tray, this.cards, this.empty);
       const setStick = () => { if (this.bar) document.documentElement.style.setProperty("--stick", (this.bar.offsetHeight - 2) + "px"); };
       setStick(); window.addEventListener("resize", setStick); setTimeout(setStick, 300);
@@ -1197,6 +1202,7 @@ import * as P from "./platform.js";
     if (s.sasong && (!stn || norm(stn.sasong) !== norm(s.sasong))) subBits.push(h("span", { class: "place", text: (subBits.length ? " · " : "") + "intended " + s.sasong }));
     else if (stn && stn.sasong) subBits.push(h("span", { text: (subBits.length ? " · " : "") + stn.sasong + (stn.drop ? " " + stn.drop : "") }));
     else if (s.sasong) subBits.push(h("span", { text: (subBits.length ? " · " : "") + "intended " + s.sasong }));
+    if (stn && iProduktion(stn) && !sampleDone(s)) subBits.push(h("span", { class: "place", text: (subBits.length ? " · " : "") + "the product is in Production" + (livePoNr(stn).length ? " (" + livePoNr(stn).join(", ") + ")" : "") + " – only the sample is awaited" }));
     const pl = platsText(s);
     const placeCell = td("Hängare", null, s.platsTyp === "Hängare" ? h("span", { class: "hanger", text: "Hanger " + (s.hangare || "?") }) : pl ? h("span", { class: "place", text: pl }) : needsPlace(s) ? h("span", { class: "flag", text: "Set location" }) : null);
     if (unmarked(s)) placeCell.append(h("span", { class: "flag bad", text: "Label " + s._id }));
@@ -4195,54 +4201,42 @@ import * as P from "./platform.js";
 
   // ---------- tabs ----------
   // ---------- BIBLIOTEK (styles och idéer) ----------
+  // Idéer är första steget i flödet: här ligger bara idéer som inte är skickade vidare. När Carl skickar en idé till design,
+  // till sampling eller markerar den klar för PO lämnar den fliken och ligger i nästa steg. Grundstyles är biblioteket man utgår från.
+  const lamnatIde = (s) => samplesOfStyle(s._id).length > 0 || poLinesOf(s._id).length > 0 || !!(s.design && s.design.klar);
   const LibView = {
     mount(root) {
       const st = UI.bibliotek;
+      if (!["ideer", "arkiv"].includes(st.status)) st.status = "ideer"; // äldre sparade val (Allt, Sampling & godkända …) finns inte längre
+      st.view = null;
       const upd = () => { this.update(); persist(); };
-      this.strip = makeStrip([
-        { key: "ideer", label: "Ideas not ready for design" },
-        { key: "hosConor", label: "With Conor for design", cls: "t-warn" },
-        { key: "hosAlex", label: "Sample can be ordered (Alex)", cls: "t-warn" },
-        { key: "sampling", label: "In sampling" },
-        { key: "godkanda", label: "Approved" },
-        { key: "produktion", label: "In production / delivered" },
-        { key: "utanBild", label: "No image", cls: "t-warn" }
-      ], st, () => { this.seg.sync(); upd(); });
-      const q = searchBox("q_lib", "Search style, idea, fabric, supplier …", st, () => this.update());
+      const q = searchBox("q_lib", "Search idea, fabric, supplier …", st, () => this.update());
       this.fSeason = filterSelect("f_l_season", "All seasons", st, "season", upd);
       this.fKat = filterSelect("f_l_kat", "All categories", st, "kat", upd);
       this.fLev = filterSelect("f_l_lev", "All suppliers", st, "lev", upd);
-      this.seg = makeSeg([["alla", "All"], ["ideer", "Ideas"], ["aktiva", "Sampling & approved"], ["klara", "I produktion"], ["arkiv", "Paused & dropped"]], st, "status", upd);
+      this.seg = makeSeg([["ideer", "Ideas"], ["arkiv", "Paused & dropped ideas"]], st, "status", upd);
       this.segMode = makeSeg([["styles", "By season"], ["grund", "Base styles"]], st, "mode", upd);
       this.count = h("span", { class: "count" });
+      this.vidare = h("p", { class: "hint", id: "libVidare", style: "margin:0" });
       this.body = h("div", { style: "display:grid;gap:26px" });
-      root.append(h("p", { class: "lede", text: "All styles and ideas in one place – even before a sample is ordered. Create an idea with description, fabric, measurements and images, then send it to design or straight to sampling. A base style (e.g. Roper Shirt) is reused across collections through variants." }),
-        this.strip.el, h("section", { class: "filters", "aria-label": "Filter" }, q, this.fSeason.el, this.fKat.el, this.fLev.el, this.seg.el, this.segMode.el, this.count), this.body);
+      root.append(h("p", { class: "lede", text: "Ideas that have not been sent on yet. When an idea goes to design, to sampling or is ready for PO it leaves Ideas and sits in the next step. Base styles holds the garments to start from when a new idea is a variant." }),
+        h("section", { class: "filters", "aria-label": "Filter" }, q, this.fSeason.el, this.fKat.el, this.fLev.el, this.seg.el, this.segMode.el, this.count), this.vidare, this.body);
+    },
+    matches(s) {
+      const st = UI.bibliotek, q = norm(st.q);
+      if (st.season && (s.sasong || "Utan säsong") !== st.season) return false;
+      if (st.kat && styleKategori(s) !== st.kat) return false;
+      if (st.lev && s.leverantor !== st.lev) return false;
+      if (q && ![s._id, s.namn, s.beskrivning, s.leverantor, s.sasong, s.drop, styleKategori(s), styleTyg(s), (s.farger || []).join(" "), styleStatusNorm(s.status), grundOf(s) ? grundOf(s).namn : "", s.referenser].join(" ").toLowerCase().includes(q)) return false;
+      return true;
     },
     filtered() {
-      const st = UI.bibliotek, q = norm(st.q);
+      const st = UI.bibliotek;
       return D.styles.filter((s) => {
         const ss = styleStatusNorm(s.status);
-        switch (st.view) {
-          case "ideer": if (ss !== ST_IDE) return false; break;
-          case "hosConor": if (ss !== ST_DESIGN) return false; break;
-          case "hosAlex": if (ss !== ST_KANBEST) return false; break;
-          case "sampling": if (ss !== "Sampling") return false; break;
-          case "godkanda": if (ss !== "Godkänd") return false; break;
-          case "produktion": if (!PROD_STATUS.includes(ss)) return false; break;
-          case "utanBild": if (styleImage(s) || ["Kastad", "Pausad"].includes(ss)) return false; break;
-          default:
-            if (st.status === "ideer" && !IDEA_STATUS.includes(ss)) return false;
-            if (st.status === "aktiva" && !["Sampling", "Godkänd"].includes(ss)) return false;
-            if (st.status === "klara" && !PROD_STATUS.includes(ss)) return false;
-            if (st.status === "arkiv" && !["Pausad", "Kastad"].includes(ss)) return false;
-            if (st.status === "alla" && ss === "Kastad") return false;
-        }
-        if (st.season && (s.sasong || "Utan säsong") !== st.season) return false;
-        if (st.kat && styleKategori(s) !== st.kat) return false;
-        if (st.lev && s.leverantor !== st.lev) return false;
-        if (q && ![s._id, s.namn, s.beskrivning, s.leverantor, s.sasong, s.drop, styleKategori(s), styleTyg(s), (s.farger || []).join(" "), ss, grundOf(s) ? grundOf(s).namn : "", s.referenser].join(" ").toLowerCase().includes(q)) return false;
-        return true;
+        if (st.status === "arkiv") { if (!["Pausad", "Kastad"].includes(ss) || lamnatIde(s)) return false; }
+        else if (ss !== ST_IDE || s.grund) return false;
+        return this.matches(s);
       });
     },
     update() {
@@ -4251,35 +4245,36 @@ import * as P from "./platform.js";
       if (D.styles.some((s) => !s.sasong)) seasons.push("Utan säsong");
       this.fSeason.fill(seasons); this.fKat.fill(KATEGORIER); this.fLev.fill(uniq(D.styles.map((s) => s.leverantor)));
       this.seg.sync(); this.segMode.sync();
+      // Var de vidareskickade idéerna ligger nu – en rad med länkar, inga produkter.
       const S = (x) => styleStatusNorm(x.status);
-      this.strip.set({ ideer: D.styles.filter((s) => S(s) === ST_IDE && !s.grund).length, hosConor: D.styles.filter((s) => S(s) === ST_DESIGN).length, hosAlex: D.styles.filter((s) => S(s) === ST_KANBEST).length, sampling: D.styles.filter((s) => S(s) === "Sampling").length, godkanda: D.styles.filter((s) => S(s) === "Godkänd").length, produktion: D.styles.filter((s) => PROD_STATUS.includes(S(s))).length, utanBild: D.styles.filter((s) => !styleImage(s) && !["Kastad", "Pausad"].includes(S(s))).length });
+      const nD = D.styles.filter((s) => S(s) === ST_DESIGN).length, nA = ideaInbox().length, nP = readyToOrder().length;
+      const lank = (n, text, tab, view) => (n ? h("button", { class: "linkish", type: "button", text: n + " " + text, onclick: () => { if (view) UI[tab].view = view; switchTab(tab); } }) : null);
+      const bits = [lank(nD, "with Conor under Design", "design"), lank(nA, "waiting for a sample under Samples", "samples", "ideer"), lank(nP, "ready for PO under Production", "produktion")].filter(Boolean);
+      this.vidare.replaceChildren(); this.vidare.hidden = !bits.length;
+      if (bits.length) { this.vidare.append("Further along the flow: "); bits.forEach((x, i) => { if (i) this.vidare.append(" · "); this.vidare.append(x); }); }
       const list = this.filtered();
       this.body.replaceChildren();
-      if (st.mode === "grund" && !st.view) {
-        const gs = grundStyles().filter((g) => list.includes(g) || variantsOf(g._id).some((v) => list.includes(v)));
+      if (st.mode === "grund" && st.status !== "arkiv") {
+        const lib = D.styles.filter((s) => S(s) !== "Kastad" && this.matches(s));
+        const gs = grundStyles().filter((g) => lib.includes(g) || variantsOf(g._id).some((v) => lib.includes(v)));
         const loose = list.filter((s) => !isGrund(s) && !grundOf(s));
-        const sec = h("section", { class: "lib-sec" }, h("div", { class: "lib-h" }, h("h3", { text: "Base styles" }), h("span", { class: "sub", text: gs.length + (gs.length === 1 ? " base style" : " base styles") + " · " + loose.length + " styles without a base style" })));
+        const sec = h("section", { class: "lib-sec" }, h("div", { class: "lib-h" }, h("h3", { text: "Base styles" }), h("span", { class: "sub", text: gs.length + (gs.length === 1 ? " base style" : " base styles") + " to start from. The variants are shown wherever they are in the flow." })));
         if (!gs.length) sec.append(h("p", { class: "hint", text: "No base styles yet. Open a style and choose the garment it builds on under \"Base style\" – the chosen style becomes a base style." }));
-        else sec.append(h("div", { class: "cards" }, gs.map((g) => this.grundCard(g, list))));
+        else sec.append(h("div", { class: "cards" }, gs.map((g) => this.grundCard(g, lib))));
         this.body.append(sec);
-        if (loose.length) {
-          const sec2 = h("section", { class: "lib-sec" }, h("div", { class: "lib-h" }, h("h3", { text: "No base style" }), h("span", { class: "sub", text: "Open a style and choose \"Base style\" to link it." })), h("div", { class: "pgrid" }, loose.sort((a, b) => (a.namn || "").localeCompare(b.namn || "", "sv")).map((s) => KollView.card(s))));
-          this.body.append(sec2);
-        }
-        this.count.textContent = list.length + " styles";
+        if (loose.length) this.body.append(h("section", { class: "lib-sec" }, h("div", { class: "lib-h" }, h("h3", { text: "Ideas without a base style" }), h("span", { class: "sub", text: "Open an idea and choose \"Base style\" to link it." })), h("div", { class: "pgrid" }, loose.sort((a, b) => (a.namn || "").localeCompare(b.namn || "", "sv")).map((s) => KollView.card(s)))));
+        this.count.textContent = gs.length + (gs.length === 1 ? " base style" : " base styles");
         return;
       }
       const groups = new Map();
       for (const s of list) { const k = s.sasong || "Utan säsong"; if (!groups.has(k)) groups.set(k, []); groups.get(k).push(s); }
       const keys = [...groups.keys()].sort((a, b) => (a === "Utan säsong") - (b === "Utan säsong") || seasonRank(b) - seasonRank(a) || b.localeCompare(a, "sv"));
-      const order = { [ST_IDE]: -1, [ST_DESIGN]: 0, [ST_KANBEST]: 1, Sampling: 2, "Godkänd": 3, "PO lagd": 4, "I produktion": 5, Levererad: 6, Pausad: 7, Kastad: 8 };
       for (const k of keys) {
-        const items = groups.get(k).sort((a, b) => (order[S(a)] ?? 9) - (order[S(b)] ?? 9) || (a.namn || "").localeCompare(b.namn || "", "sv"));
-        const nI = items.filter((s) => isIdea(s) && !s.grund).length;
-        this.body.append(h("section", { class: "lib-sec" }, h("div", { class: "lib-h" }, h("h3", { text: k }), h("span", { class: "sub", text: items.length + (items.length === 1 ? " style" : " styles") + (nI ? " · " + nI + (nI === 1 ? " idea" : " ideas") : "") })), h("div", { class: "pgrid" }, items.map((s) => KollView.card(s)))));
+        const items = groups.get(k).sort((a, b) => (a.namn || "").localeCompare(b.namn || "", "sv"));
+        this.body.append(h("section", { class: "lib-sec" }, h("div", { class: "lib-h" }, h("h3", { text: k }), h("span", { class: "sub", text: items.length + (items.length === 1 ? " idea" : " ideas") })), h("div", { class: "pgrid" }, items.map((s) => KollView.card(s)))));
       }
-      if (!list.length) this.body.append(h("div", { class: "empty" }, h("strong", { text: loaded.has("styles") ? (D.styles.length ? "Nothing matches" : "No styles yet") : "Loading …" }), h("span", { text: "Create an idea with \"+ New idea\"." })));
-      this.count.textContent = list.length + " of " + D.styles.length + " styles";
+      if (!list.length) this.body.append(h("div", { class: "empty" }, h("strong", { text: !loaded.has("styles") ? "Loading …" : st.status === "arkiv" ? "No paused or dropped ideas" : st.q || st.season || st.kat || st.lev ? "Nothing matches" : "No ideas at the idea stage right now" }), h("span", { text: st.status === "arkiv" ? "" : "Create a product idea with \"+ New idea\". Ideas that have been sent on are under Design, Samples or Production." })));
+      this.count.textContent = list.length + (list.length === 1 ? " idea" : " ideas");
     },
     grundCard(g, list) {
       const img = styleImage(g) || variantsOf(g._id).map(styleImage).find(Boolean);
@@ -4747,7 +4742,7 @@ import * as P from "./platform.js";
     const w = canWrite && !!db, t = UI.tab;
     const libSeason = () => (UI.bibliotek.season && UI.bibliotek.season !== "Utan säsong" ? UI.bibliotek.season : KollView.seasonInView() || "");
     if ((t === "bibliotek" || t === "produktion" || t === "kollektion") && w && assets && shopTodo().length) add("Fetch Shopify images (" + shopTodo().length + ")", importShopifyImages);
-    if (t === "bibliotek" && w) { add("+ New style", () => openStyle(null, { sasong: libSeason() })); add("+ New idea", () => openStyle(null, { status: ST_IDE, sasong: libSeason() }), true); }
+    if (t === "bibliotek" && w) add("+ New idea", () => openStyle(null, { status: ST_IDE, sasong: libSeason() }), true);
     if (t === "samples") { if (downloads) add("Export CSV", exportSamples); if (w) add("+ New style", () => openStyle(null)); if (w) add("+ New sample", () => openSample(null), true); }
     if (t === "kollektion" && w) { add("+ New drop", () => openDrop(null, { sasong: KollView.seasonInView() || "" })); add("+ New sample", () => openSample(null)); add("+ New idea", () => openStyle(null, { status: ST_IDE, sasong: KollView.seasonInView() || "" })); add("+ New style", () => openStyle(null, { sasong: KollView.seasonInView() || "" }), true); }
     if (t === "foto" && w) add("+ New sample", () => openSample(null, { version: "Fotosample" }), true);
@@ -4771,7 +4766,7 @@ import * as P from "./platform.js";
     set("c_ecom", "");
     set("c_foto", (() => { const season = KollView.seasonInView(); return D.styles.filter((s) => norm(s.sasong) === norm(season) && !["Kastad", "Pausad"].includes(styleStatusNorm(s.status)) && !isIdea(s) && fotoState(s).key === "saknas").length; })());
     set("c_design", designInbox().length);
-    set("c_bibliotek", D.styles.filter((s) => isIdea(s) && !s.grund).length);
+    set("c_bibliotek", D.styles.filter((s) => styleStatusNorm(s.status) === ST_IDE && !s.grund).length);
     set("c_anvandare", D.anvandare.length || "");
     set("c_coo", (() => { try { return allEvents().filter((e) => isOverdue(e)).length; } catch (e) { return ""; } })());
     set("c_tyger", D.tyger.length);
@@ -5870,6 +5865,14 @@ import * as P from "./platform.js";
         return sid;
       });
     }
+    async function sendToPo() {
+      await save(async (sid) => {
+        const cur = byId(D.styles, sid) || current();
+        const now = new Date().toISOString();
+        if (await write("styles", sid, { status: "Godkänd", overlamnad: { till: "Production", t: now, av: myId }, andrad: now, logg: (cur.logg || []).concat(logEntry("Ready for PO – neither design nor sample needed")) })) { toast("Now under Production as ready to order"); closeSheet(); }
+        return sid;
+      });
+    }
     async function sendToDesign() {
       await save(async (sid) => {
         const cur = byId(D.styles, sid) || current();
@@ -5893,6 +5896,7 @@ import * as P from "./platform.js";
       const s0 = styleStatusNorm(st.status);
       if (s0 === ST_IDE) foot[1].insertBefore(h("button", { class: "btn", type: "button", id: "btnDesign", text: "Send to design (Conor)", title: "The idea is ready to be designed. Conor sees it under Design.", onclick: sendToDesign }), foot[1].lastChild);
       if (s0 === ST_IDE || s0 === ST_DESIGN) foot[1].insertBefore(h("button", { class: "btn", type: "button", id: "btnAlex", text: "Straight to sampling (Alex)", title: "Skips design. Alex can order a sample straight away.", onclick: sendToAlex }), foot[1].lastChild);
+      if (s0 === ST_IDE || s0 === ST_DESIGN) foot[1].insertBefore(h("button", { class: "btn", type: "button", id: "btnPo", text: "Ready for PO", title: "Neither design nor a sample is needed, e.g. a restock or NOOS. The style is placed under Production as ready to order.", onclick: sendToPo }), foot[1].lastChild);
       if (s0 === ST_KANBEST) foot[1].insertBefore(h("button", { class: "btn", type: "button", id: "btnSampla", text: "Order sample", onclick: orderSample }), foot[1].lastChild);
     }
     openSheet({

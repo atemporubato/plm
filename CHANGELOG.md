@@ -6,6 +6,18 @@ och importeras med `node tools/import-dokument.js`, och main går live på plm.a
 
 Versionsnumrering: små ändringar ger punktversion (v9.1, v9.2 …). Nytt heltal (v10) bara vid stora ändringar.
 
+## v10.36 (2026-11-27)
+
+Livscykeln: en produkt ligger i ett steg i taget. Inga nya fält och inget ändras i befintliga poster – det som ändras är var produkten visas.
+- Idéer visar bara idéer som inte är skickade vidare (status "Idé ej redo för design"). När Carl skickar en idé till design, direkt till sampling eller markerar den klar för PO lämnar den Idéer och ligger i nästa steg. Siffran vid Idéer räknar på samma sätt.
+- Idéer var tidigare även ett bibliotek över alla styles (Allt, Sampling & godkända, I produktion, rutorna överst). De valen är borta. Kvar finns Idéer, Pausade & kastade idéer (idéer som aldrig gick vidare) och läget Grundstyles, som är plaggen man utgår från när en ny idé är en variant. Alla styles finns som förut i Kollektion och i sökningen överst.
+- En rad under filtren, "Längre fram i flödet", visar hur många som ligger hos Conor, väntar på sample och är redo för PO – som länkar till respektive flik, inte som produkter i Idéer.
+- Ny tredje väg från en idé: knappen "Klar för PO" bredvid "Skicka till design" och "Direkt till sampling". Stylen blir Godkänd och ligger under Produktion som redo att beställa. För restock, NOOS och annat som varken behöver design eller sample.
+- Samples: en produkt som står på en PO – även en preliminär – har lämnat samplingen. Dess samples ligger under "Gått till produktion" och räknas inte längre i Mottagen, Omärkta, Ej mätta eller Saknar plats. Tidigare krävdes en lagd PO. En avbruten PO räknas inte.
+- Undantag: en sample som fortfarande är på väg, eller är mottagen men inte utvärderad, ligger kvar under Samples tills den är hanterad. Raden märks med att produkten ligger i Produktion och vilken PO det gäller.
+- "Idéer att sampla" hos Alex visar inte längre en idé som redan står på en PO.
+- "+ Ny style" finns inte längre i fliken Idéer (den skapade en style som hoppade över idéstadiet); knappen finns kvar under Samples.
+
 ## v10.35 (2026-11-27)
 
 "Ny variant" finns på alla styles och idéer, och på samplen. Ett nytt fält på stylen (franSample) som bara sätts på varianter skapade från en sample; inget ändras i befintliga poster.
