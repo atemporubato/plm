@@ -1858,7 +1858,16 @@
   "Byter namn överallt i": "Renames it everywhere in",
   ": styles, POs och lanseringen följer med.": ": styles, POs and the launch follow.",
   "Byter du namn följer styles, POs och lanseringen med": "If you rename it, styles, POs and the launch follow",
-  "Droppen heter nu": "The drop is now called"
+  "Droppen heter nu": "The drop is now called",
+  "Skapar en ny idé som variant av": "Creates a new idea as a variant of",
+  "– utgår från den här samplen": "– starting from this sample",
+  "Utgår från sample": "Based on sample",
+  "· Skapad från sample": "· Created from sample",
+  "Skapar en variant under grundstylen": "Creates a variant under the base style",
+  "– utgår från den här stylen": "– starting from this style",
+  "Variant skapad från sample": "Variant created from sample",
+  "från sample": "from sample",
+  "Variant skapad:": "Variant created:"
  },
  "values": {
   "Storleksset": "Size set",

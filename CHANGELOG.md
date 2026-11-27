@@ -6,6 +6,15 @@ och importeras med `node tools/import-dokument.js`, och main går live på plm.a
 
 Versionsnumrering: små ändringar ger punktversion (v9.1, v9.2 …). Nytt heltal (v10) bara vid stora ändringar.
 
+## v10.35 (2026-11-27)
+
+"Ny variant" finns på alla styles och idéer, och på samplen. Ett nytt fält på stylen (franSample) som bara sätts på varianter skapade från en sample; inget ändras i befintliga poster.
+- Stylen: knappen "+ Ny variant av …" visas nu även på styles som själva är varianter, inte bara på grundstyles och fristående styles. Den nya varianten hamnar under samma grundstyle (varianter har inte egna varianter) men utgår från den style man står på: namn, kategori, leverantör och storlekar. Måtten tas från stylens egna, annars från dem den pekar på, annars från grundstylen.
+- Samplen: ny snabbknapp "+ Ny variant" bredvid "Ny runda". Den öppnar en ny idé som variant av samplens style, med samplens leverantör och en rad under Referenser om vilken sample den utgår från (ID, version, färg, tyg). Samples utan kopplad style har inte knappen.
+- Spårning åt båda håll: varianten får en loggrad och visar "Skapad från sample S…" med länk till samplen; samplen får en loggrad med den nya stylens ID.
+- Alla tre ställen (grundstylens kort under Idéer, stylen, samplen) använder samma förifyllning. Säsongen fylls i från filtret bara när man står i fliken Idéer.
+- Den som bara ser Design-fliken har inte knapparna.
+
 ## v10.34 (2026-11-27)
 
 Byt namn på en drop – direkt i rullistan eller i droppens egen ruta. Inget nytt fält; namnet byts i de poster som pekar på droppen.

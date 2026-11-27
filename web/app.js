@@ -588,6 +588,13 @@ import * as P from "./platform.js";
   const variantsOf = (id) => D.styles.filter((s) => s.grundId === id).sort((a, b) => seasonRank(b.sasong) - seasonRank(a.sasong) || (a.namn || "").localeCompare(b.namn || "", "sv"));
   const isGrund = (s) => !!s && (!!s.grund || D.styles.some((v) => v.grundId === s._id));
   const grundStyles = () => D.styles.filter(isGrund).sort((a, b) => (a.namn || "").localeCompare(b.namn || "", "sv"));
+  // Ny variant av vilken style som helst. Är stylen själv en variant hamnar den nya under samma grundstyle (varianter har inte egna varianter),
+  // men namn, kategori, leverantör och storlekar tas från den style man står på. Måtten: stylens egna, annars de den själv pekar på, annars grundstylens.
+  const variantPreset = (cur, extra) => {
+    const g = grundOf(cur) || cur;
+    const sas = UI.tab === "bibliotek" && UI.bibliotek.season && UI.bibliotek.season !== "Utan säsong" ? UI.bibliotek.season : "";
+    return Object.assign({ grundId: g._id, namn: cur.namn, kategori: cur.kategori || "", leverantor: cur.leverantor || "", storlekar: (cur.storlekar || []).slice(), mattFran: String(cur.mattlista || "").trim() ? cur._id : cur.mattFran || g._id, status: ST_IDE, sasong: sas }, extra || {});
+  };
   const styleTyg = (st) => { const t = st && st.tygId ? byId(D.tyger, st.tygId) : null; return t ? t.namn : (st && st.tygNamn) || ""; };
   const refName = (id) => { if (!id) return ""; const st = byId(D.styles, id); if (st) return st.namn; const s = byId(D.samples, id); return s ? styleName(s) + (s.version ? " · " + s.version : "") + " (" + s._id + ")" : String(id); };
   // Fotosample tas i 50 (siffer-storlekar), L (XS–XXL) och 33 (midjemått). Gäller från SS27; äldre visas bara om storleken är ifylld.
@@ -4283,7 +4290,7 @@ import * as P from "./platform.js";
         h("div", { class: "gbody" },
           h("div", null, h("div", { class: "gname", onclick: open, text: g.namn }), h("div", { class: "sub", text: [styleKategori(g), g.leverantor, g.beskrivning].filter(Boolean).join(" · ") })),
           h("div", { class: "gvars" }, vs.length ? vs.map((v) => h("button", { class: "gvar", type: "button", onclick: () => openStyle(v._id) }, h("span", { style: "min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" }, v.namn, h("span", { class: "sub", text: [styleTyg(v), (v.farger || []).join(", ")].filter(Boolean).map((x) => " · " + x).join("") })), h("span", { class: "sub mono", text: [v.sasong, v.drop].filter(Boolean).join(" ") || "–" }), styleStatusPill(v))) : h("p", { class: "hint", style: "margin:0", text: "No variants yet." })),
-          canWrite && db ? h("div", null, h("button", { class: "btn small", type: "button", text: "+ New variant", onclick: () => openStyle(null, { grundId: g._id, namn: g.namn, kategori: g.kategori || "", leverantor: g.leverantor || "", storlekar: (g.storlekar || []).slice(), mattFran: g._id, status: ST_IDE, sasong: UI.bibliotek.season && UI.bibliotek.season !== "Utan säsong" ? UI.bibliotek.season : "" }) })) : null));
+          canWrite && db ? h("div", null, h("button", { class: "btn small", type: "button", text: "+ New variant", onclick: () => openStyle(null, variantPreset(g)) })) : null));
     }
   };
 
@@ -5340,6 +5347,7 @@ import * as P from "./platform.js";
       if (r) add("Reminder " + r + " sent", () => quickUpdate(cur, r === 1 ? { p1Skickad: todayISO() } : { p2Skickad: todayISO() }, "Reminder " + r + " noted"));
       if (cur.status === "Mottagen" && beslutNorm(cur.beslut) !== "Godkänd") add("Approve", async () => { if (await quickUpdate(cur, { beslut: "Godkänd", utvarderad: true }, "Godkänd")) await approveStyleFrom(cur); }, true);
       if (cur.status === "Mottagen" || cur.beslut) add("Ny runda", () => newRound(cur));
+      { const stx = styleOf(cur); if (stx) quick.append(h("button", { class: "btn small", type: "button", id: "btnSampleVariant", text: "+ New variant", title: "Creates a new idea as a variant of " + stx.namn + " – starting from this sample", onclick: () => openStyle(null, variantPreset(stx, { leverantor: cur.leverantor || stx.leverantor || "", franSample: cur._id, referenser: "Based on sample " + [cur._id, cur.version, cur.farg, tygName(cur)].filter(Boolean).join(" · ") })) })); }
       if (isArchived(cur)) add("Pick up again", () => restoreSample(cur), true);
       if (["Mottagen", "Problem"].includes(cur.status) && beslutNorm(cur.beslut) !== "Pausad") add("Pause → archive", () => quickUpdate(cur, { beslut: "Pausad", utvarderad: true }, "Paused – in the Archive"));
       if (["Mottagen", "Problem"].includes(cur.status) && beslutNorm(cur.beslut) !== "Kastad") add("Drop → archive", () => quickUpdate(cur, { beslut: "Kastad", utvarderad: true }, "Dropped – in the Archive"));
@@ -5627,13 +5635,15 @@ import * as P from "./platform.js";
       if (isNew) return;
       const cur = current();
       const g = grundOf(cur);
-      if (g) { varSec.append(h("div", { class: "ideabanner" }, h("span", null, "Variant of the base style ", h("button", { class: "linkish", type: "button", text: g.namn, onclick: () => openStyle(g._id) })), h("span", { class: "sub", text: "· " + variantsOf(g._id).length + (variantsOf(g._id).length === 1 ? " variant in total" : " variants in total") }))); }
+      const nyVariant = (title) => h("button", { class: "btn small", type: "button", id: "btnNyVariant", text: "+ New variant of " + cur.namn, title, onclick: () => openStyle(null, variantPreset(cur)) });
+      const fs = cur.franSample ? byId(D.samples, cur.franSample) : null;
+      if (g) { varSec.append(h("div", { class: "ideabanner" }, h("span", null, "Variant of the base style ", h("button", { class: "linkish", type: "button", text: g.namn, onclick: () => openStyle(g._id) })), h("span", { class: "sub", text: "· " + variantsOf(g._id).length + (variantsOf(g._id).length === 1 ? " variant in total" : " variants in total") }), fs ? h("span", { class: "sub" }, "· Created from sample ", h("button", { class: "linkish", type: "button", text: fs._id, onclick: () => openSample(fs._id) })) : null)); }
       const vs = variantsOf(cur._id);
-      if (!isGrund(cur)) { if (!ro && !g) varSec.append(h("button", { class: "btn small", type: "button", text: "+ New variant of " + cur.namn, title: "Makes " + cur.namn + " a base style and creates a variant of it", onclick: () => openStyle(null, { grundId: cur._id, namn: cur.namn, kategori: cur.kategori || "", leverantor: cur.leverantor || "", storlekar: (cur.storlekar || []).slice(), mattFran: cur._id, status: ST_IDE, sasong: UI.bibliotek.season || "" }) })); return; }
+      if (!isGrund(cur)) { if (!ro) varSec.append(nyVariant(g ? "Creates a variant under the base style " + g.namn + " – starting from this style" : "Makes " + cur.namn + " a base style and creates a variant of it")); return; }
       varSec.append(h("h3", { class: "sec-title", text: "Variants (" + vs.length + ")" }));
       if (vs.length) varSec.append(h("ul", { class: "mini" }, vs.map((v) => h("li", null, h("button", { class: "mini-row", type: "button", onclick: () => openStyle(v._id) }, tag(v._id), h("span", { class: "mini-main" }, h("strong", { text: v.namn }), h("span", { class: "sub", text: [v.sasong, v.drop, styleTyg(v), (v.farger || []).join(", ")].filter(Boolean).join(" · ") })), h("span", { class: "mini-side" }, styleStatusPill(v)))))));
       else varSec.append(h("p", { class: "hint", text: "No variants yet. A variant is the same garment in a new collection, a new fabric or a new colourway." }));
-      if (!ro) varSec.append(h("button", { class: "btn small", type: "button", text: "+ New variant of " + cur.namn, onclick: () => openStyle(null, { grundId: cur._id, namn: cur.namn, kategori: cur.kategori || "", leverantor: cur.leverantor || "", storlekar: (cur.storlekar || []).slice(), mattFran: cur._id, status: ST_IDE, sasong: UI.bibliotek.season || "" }) }));
+      if (!ro) varSec.append(nyVariant(""));
     }
     const samplesSec = h("section");
     function renderSamples() {
@@ -5831,8 +5841,13 @@ import * as P from "./platform.js";
         const now = new Date().toISOString();
         if (isNew) {
           const nid = await freshId("styles", D.styles, "ST-", 3);
-          const body = Object.assign({ id: nid, ean: [], bilder: pendingImgs.slice(), logg: [logEntry(IDEA_STATUS.includes(o.status) ? "Idea created" : "Style created")], andrad: now }, o);
-          if (await create("styles", nid, body)) { if (!byId(D.styles, nid)) D.styles.push(Object.assign({}, body, { _id: nid })); toast(nid + " saved"); if (after) return after(nid); openStyle(nid); return nid; }
+          const fs = st.franSample ? byId(D.samples, st.franSample) : null;
+          const body = Object.assign({ id: nid, ean: [], bilder: pendingImgs.slice(), logg: [logEntry(IDEA_STATUS.includes(o.status) ? "Idea created" : "Style created")].concat(fs ? [logEntry("Variant created from sample " + fs._id + (fs.version ? " (" + fs.version + ")" : ""))] : []), andrad: now }, o, fs ? { franSample: fs._id } : {});
+          if (await create("styles", nid, body)) {
+            if (!byId(D.styles, nid)) D.styles.push(Object.assign({}, body, { _id: nid }));
+            if (fs) await write("samples", fs._id, { andrad: now, logg: (fs.logg || []).concat(logEntry("Variant created: " + nid + " " + o.namn)) });
+            toast(nid + " saved"); if (after) return after(nid); openStyle(nid); return nid;
+          }
           return null;
         }
         const cur = current();
@@ -5884,7 +5899,7 @@ import * as P from "./platform.js";
       flagRef: isNew ? null : { typ: "style", ref: st._id, titel: st.namn + (st.sasong ? " · " + st.sasong : ""), tab: ["bibliotek", "kollektion", "produktion", "foto", "ecom"].includes(UI.tab) ? UI.tab : "bibliotek" },
       tag: isNew ? (IDEA_STATUS.includes(st.status) ? "New idea" : "New") : st._id,
       title: isNew ? (IDEA_STATUS.includes(st.status) ? (st.grundId ? "New variant" : "New idea") : "New style") : st.namn,
-      sub: isNew ? (st.grundId && byId(D.styles, st.grundId) ? "Variant of " + byId(D.styles, st.grundId).namn : "") : [isGrund(st) ? "Base style" : "", st.leverantor, st.sasong, st.drop].filter(Boolean).join(" · "),
+      sub: isNew ? [st.grundId && byId(D.styles, st.grundId) ? "Variant of " + byId(D.styles, st.grundId).namn : "", st.franSample ? "from sample " + st.franSample : ""].filter(Boolean).join(" · ") : [isGrund(st) ? "Base style" : "", st.leverantor, st.sasong, st.drop].filter(Boolean).join(" · "),
       body,
       foot,
       ctx: { refresh: () => { if (!isNew && !byId(D.styles, st._id)) { closeSheet(); return; } renderVariants(); renderPlan(); renderGallery(); renderProd(); renderSamples(); renderEanTable(); if (!isNew) { renderFarger(); renderLogInto(logUl, current().logg); } } },
