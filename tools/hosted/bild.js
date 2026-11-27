@@ -62,7 +62,7 @@
           }
           if (!hit || !hit.url || !(gammal(s) || hit.exakt)) {
             // Ingen säker träff: modellens bild från butiken visas i Kollektion, märkt "Liknande produkt". Den kopieras aldrig in som stylens egen bild.
-            const lik = svar.liknande && svar.liknande.url ? svar.liknande : null;
+            const lik = svar.liknande && svar.liknande.url && !cur.utanLiknande ? svar.liknande : null; // utanLiknande: plagget ska inte ha någon liknande bild
             const harLik = !!(cur.shopifyBild && cur.shopifyBild.likhet === "liknande");
             if (lik && tom(cur) && !styleImage(cur) && !(cur.shopifyBild && cur.shopifyBild.url === lik.url)) await write("styles", s._id, { shopifyBild: { url: lik.url, titel: lik.titel, handle: lik.handle, likhet: "liknande", auto: true }, andrad: new Date().toISOString(), logg: (cur.logg || []).concat(logEntry("Bild från liknande produkt i Shopify: " + lik.titel)) });
             // En automatiskt satt liknande bild tas bort när butiken inte längre har någon liknande produkt (t.ex. namn på ett enda ord).

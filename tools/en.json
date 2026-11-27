@@ -1820,7 +1820,9 @@
   "Liknande produkt": "Similar product",
   "Bild omvandlad till JPG – originalet gick inte att visa i alla webbläsare": "Image converted to JPG – the original could not be shown in every browser",
   "Bild från liknande produkt i Shopify:": "Image from a similar product in Shopify:",
-  "Bild från liknande produkt borttagen – ingen liknande produkt i Shopify": "Image from a similar product removed – no similar product in Shopify"
+  "Bild från liknande produkt borttagen – ingen liknande produkt i Shopify": "Image from a similar product removed – no similar product in Shopify",
+  "Ingen bild från liknande produkt": "No image from a similar product",
+  "Kryssa i om Kollektion inte ska visa en bild från en liknande produkt i butiken för det här plagget.": "Tick this if Collection should not show an image from a similar product in the shop for this garment."
  },
  "values": {
   "Storleksset": "Size set",

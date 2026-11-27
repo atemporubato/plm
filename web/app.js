@@ -2408,9 +2408,7 @@ import * as P from "./platform.js";
     card(s) {
       // Egen bild först. Saknas den visas modellens bild från butiken (shopifyBild med likhet "liknande"), tydligt märkt.
       const egen = styleImage(s);
-      const g0 = grundOf(s);
-      const simFran = egen ? null : !shopExact(s) && shopUrl(s) ? s : g0 && !shopExact(g0) && shopUrl(g0) ? g0 : null;
-      const sim = simFran ? shopUrl(simFran) : "";
+      const sim = !egen && !s.utanLiknande && !shopExact(s) ? shopUrl(s) : "";
       const img = egen || sim || null;
       const xs = samplesOfStyle(s._id);
       const last = xs[xs.length - 1];
@@ -2420,7 +2418,7 @@ import * as P from "./platform.js";
       const allImgs = styleAllImages(s);
       const g = grundOf(s);
       const b = h("button", { class: "pcard" + (["design", "sampling"].includes(visSteg(s)) ? " tent" : ""), type: "button", onclick: () => openStyle(s._id) },
-        h("div", { class: "pimg" }, img ? h("img", { src: imgUrl(img), alt: s.namn, loading: "lazy", class: sim ? "sim" : null, onerror: (e) => { const el = e.target; if (/^https?:/.test(String(img))) el.replaceWith(h("span", { class: "noimg", text: "The image from Shopify could not be shown – press \"Fetch Shopify images\"" })); } }) : emptyTile(s, xs), styleStatusPill(s), h("span", { class: "typtag t-" + slug(s.typ || "Nyhet"), text: typLabel(s) }), sim ? h("span", { class: "simtag", title: shopTitle(simFran), text: "Similar product" }) : null, (() => { const fb = s.fargBilder && typeof s.fargBilder === "object" ? uniq(Object.values(s.fargBilder)) : []; const rest = (fb.length ? fb : allImgs.filter((x) => !(x === shopUrl(s) && docImages(s).length))).filter((x) => x !== img); if (!rest.length) return null; const visa = rest.slice(0, 3); return h("span", { class: "pthumbs" }, rest.length > visa.length ? h("span", { class: "more", text: "+" + (rest.length - visa.length) }) : null, visa.slice().reverse().map((x) => h("img", { src: imgUrl(x), alt: "", loading: "lazy", onerror: (e) => e.target.remove() }))); })(), g ? h("span", { class: "grundtag", text: "Variant of " + g.namn }) : imageSource(s) ? h("span", { class: "grundtag", text: imageSource(s) === "Shopify" ? (s.shopifyBild && s.shopifyBild.likhet === "liknande" ? "Similar · Shopify" : "Shopify") : imageSource(s) }) : null),
+        h("div", { class: "pimg" }, img ? h("img", { src: imgUrl(img), alt: s.namn, loading: "lazy", class: sim ? "sim" : null, onerror: (e) => { const el = e.target; if (/^https?:/.test(String(img))) el.replaceWith(h("span", { class: "noimg", text: "The image from Shopify could not be shown – press \"Fetch Shopify images\"" })); } }) : emptyTile(s, xs), styleStatusPill(s), h("span", { class: "typtag t-" + slug(s.typ || "Nyhet"), text: typLabel(s) }), sim ? h("span", { class: "simtag", title: shopTitle(s), text: "Similar product" }) : null, (() => { const fb = s.fargBilder && typeof s.fargBilder === "object" ? uniq(Object.values(s.fargBilder)) : []; const rest = (fb.length ? fb : allImgs.filter((x) => !(x === shopUrl(s) && docImages(s).length))).filter((x) => x !== img); if (!rest.length) return null; const visa = rest.slice(0, 3); return h("span", { class: "pthumbs" }, rest.length > visa.length ? h("span", { class: "more", text: "+" + (rest.length - visa.length) }) : null, visa.slice().reverse().map((x) => h("img", { src: imgUrl(x), alt: "", loading: "lazy", onerror: (e) => e.target.remove() }))); })(), g ? h("span", { class: "grundtag", text: "Variant of " + g.namn }) : imageSource(s) ? h("span", { class: "grundtag", text: imageSource(s) === "Shopify" ? (s.shopifyBild && s.shopifyBild.likhet === "liknande" ? "Similar · Shopify" : "Shopify") : imageSource(s) }) : null),
         h("div", { class: "pbody" }, h("span", { class: "pname", text: s.namn }), h("span", { class: "psub lev", text: [s.leverantor, styleKategori(s), styleTyg(s)].filter(Boolean).join(" · ") }),
           (s.farger || []).length ? h("span", { class: "psub", text: s.farger.join(", ") }) : null,
           h("span", { class: "psub antal", text: units ? units + " units" : last ? (last.version || "") + " · " + (last.status || "") : "" }),
@@ -3794,7 +3792,7 @@ import * as P from "./platform.js";
           }
           if (!hit || !hit.url || !(gammal(s) || hit.exakt)) {
             // Ingen säker träff: modellens bild från butiken visas i Kollektion, märkt "Liknande produkt". Den kopieras aldrig in som stylens egen bild.
-            const lik = svar.liknande && svar.liknande.url ? svar.liknande : null;
+            const lik = svar.liknande && svar.liknande.url && !cur.utanLiknande ? svar.liknande : null; // utanLiknande: plagget ska inte ha någon liknande bild
             const harLik = !!(cur.shopifyBild && cur.shopifyBild.likhet === "liknande");
             if (lik && tom(cur) && !styleImage(cur) && !(cur.shopifyBild && cur.shopifyBild.url === lik.url)) await write("styles", s._id, { shopifyBild: { url: lik.url, titel: lik.titel, handle: lik.handle, likhet: "liknande", auto: true }, andrad: new Date().toISOString(), logg: (cur.logg || []).concat(logEntry("Image from a similar product in Shopify: " + lik.titel)) });
             // En automatiskt satt liknande bild tas bort när butiken inte längre har någon liknande produkt (t.ex. namn på ett enda ord).
@@ -5345,7 +5343,7 @@ import * as P from "./platform.js";
 
   // ---------- style sheet ----------
   const ST_LABELS_UTAN_MATT = new Proxy({}, { has: (t, k) => k !== "mattlista" && k in ST_LABELS, get: (t, k) => ST_LABELS[k] });
-  const ST_LABELS = { shopifyBild: "Shopify image", ecomBilder: "E-com images", ecomPlatDatum: "E-com shoot", kampanjStatus: "Campaign shoot", kampanjDatum: "Campaign shoot date", bildId: "Main image", namn: "Name", leverantor: "Supplier", sasong: "Season", drop: "Drop", typ: "Typ", kategori: "Category", status: "Status", klartSenast: "In stock by", fotoSenast: "Photo sample by", kommentar: "Comment", farger: "Colours", storlekar: "Sizes", beskrivning: "Description", tygId: "Tyg", grund: "Base style", grundId: "Variant of", mattFran: "Measurements from", mattlista: "Measurement list", referenser: "References" };
+  const ST_LABELS = { utanLiknande: "No image from a similar product", shopifyBild: "Shopify image", ecomBilder: "E-com images", ecomPlatDatum: "E-com shoot", kampanjStatus: "Campaign shoot", kampanjDatum: "Campaign shoot date", bildId: "Main image", namn: "Name", leverantor: "Supplier", sasong: "Season", drop: "Drop", typ: "Typ", kategori: "Category", status: "Status", klartSenast: "In stock by", fotoSenast: "Photo sample by", kommentar: "Comment", farger: "Colours", storlekar: "Sizes", beskrivning: "Description", tygId: "Tyg", grund: "Base style", grundId: "Variant of", mattFran: "Measurements from", mattlista: "Measurement list", referenser: "References" };
   function openStyle(id, preset, opts) {
     const isNew = !id;
     // Bibliotek är Carls flik: bara det som rör plagget. Planering, foto, e-com, EAN, Shopify och inköp sköts i sina flikar.
@@ -5408,7 +5406,8 @@ import * as P from "./platform.js";
     const fRef = area("f_sref", st.referenser, "Reference garments, links, inspiration …");
     fMattFran.addEventListener("change", () => { if (!fMatt.value.trim()) reMatt(); else syncMattSrc(); });
     syncMattSrc();
-    const fShop = inp("f_sshop", shopUrl(st), { placeholder: "https://cdn.shopify.com/… or the product page's image URL" });
+    const fUtan = h("input", { type: "checkbox", id: "f_sutanlik" }); fUtan.checked = !!st.utanLiknande;
+    const fShop = inp("f_sshop", st.utanLiknande && !shopExact(st) ? "" : shopUrl(st), { placeholder: "https://cdn.shopify.com/… or the product page's image URL" });
     const dropHint = h("span", { class: "hint" });
     const syncDropHint = () => { const d = dropOf({ sasong: fSas.value.trim(), drop: fDrop.value.trim() }); dropHint.textContent = fDrop.value.trim() ? (d ? (isISO(d.lansering) ? "Launch " + fmtDate(d.lansering) + " · in stock by " + fmtDate(d.klartSenast) : isISO(d.klartSenast) ? "In stock by " + fmtDate(d.klartSenast) : "The drop has no launch date under Launches yet") : "Not a drop in " + (fSas.value.trim() || "the season") + " – set it up under Collection or Launches") : "Optional. Choose only a season if the drop is not decided."; };
     const grundHint = h("span", { class: "hint" });
@@ -5431,6 +5430,7 @@ import * as P from "./platform.js";
       h("h3", { class: "sec-title full", text: "References" }),
       field("References and links", fRef, { full: true }),
       lean ? null : field("Image from Shopify (URL)", fShop, { full: true, hint: st.shopifyBild ? "Fetched from " + shopTitle(st) + (st.shopifyBild.handle ? " – atemporubato.com/products/" + st.shopifyBild.handle : "") + ". Used when the style has no images of its own; clear the field to remove." : "Paste an image URL from Shopify as a placeholder until there are own images." }),
+      lean ? null : h("div", { class: "field full" }, h("label", { class: "plain", for: "f_sutanlik" }, fUtan, h("span", { text: "No image from a similar product" })), h("span", { class: "hint", text: "Tick this if Collection should not show an image from a similar product in the shop for this garment." })),
       ...(lean ? [] : [h("h3", { class: "sec-title full", text: "Planning" }),
       field("In stock by", fKlart, { hint: "Empty = the drop's date is used" }), field("Photo sample by", fFoto, { hint: "Optional" }),
       h("h3", { class: "sec-title full", text: "Photo and e-com" }),
@@ -5445,7 +5445,8 @@ import * as P from "./platform.js";
       canSeeMoney() && !lean ? h("div", { class: "field" }, h("label", { text: "Unit cost" }), ucOut, h("span", { class: "hint", text: "Make + fabric. Used on PO lines without a price of their own and in the margin." })) : null);
     if (ro) lock(form);
     fSas.addEventListener("change", syncDropHint); fDrop.addEventListener("change", syncDropHint); syncDropHint(); syncGrund();
-    const formState = () => ({ _id: st._id, namn: fNamn.value.trim(), beskrivning: fBesk.value.trim(), grund: !!st.grund, grundId: st.grund ? "" : fGrund.value, leverantor: fLev.value.trim(), sasong: fSas.value.trim(), drop: fDrop.value.trim(), typ: fTyp.value, kategori: fKat.value, status: fStatus.value, mattFran: fMattFran.value, mattlista: fMatt.value.trim(), referenser: fRef.value.trim(), shopifyBild: fShop.value.trim() ? (st.shopifyBild && st.shopifyBild.url === fShop.value.trim() ? st.shopifyBild : { url: fShop.value.trim(), titel: "", handle: "", likhet: "manuell", t: new Date().toISOString() }) : null, ecomBilder: fEcom.value, ecomPlatDatum: fEcomD.value || null, kampanjStatus: fKamp.value, kampanjDatum: fKampD.value || null, klartSenast: fKlart.value || null, fotoSenast: fFoto.value || null, kommentar: fKom.value.trim(), inkopspris: canSeeMoney() ? num(fInk.value) : st.inkopspris ?? null, tygkostnad: canSeeMoney() ? num(fTygK.value) : st.tygkostnad ?? null, inkopsValuta: canSeeMoney() ? fInkV.value : st.inkopsValuta || "", inkopsKalla: canSeeMoney() && num(fInk.value) !== num(st.inkopspris) ? (num(fInk.value) == null ? "" : myName || "manual") : st.inkopsKalla || "", inkopsDatum: canSeeMoney() && num(fInk.value) !== num(st.inkopspris) ? (num(fInk.value) == null ? "" : todayISO()) : st.inkopsDatum || "" });
+    const formState = () => ({ _id: st._id, namn: fNamn.value.trim(), beskrivning: fBesk.value.trim(), grund: !!st.grund, grundId: st.grund ? "" : fGrund.value, leverantor: fLev.value.trim(), sasong: fSas.value.trim(), drop: fDrop.value.trim(), typ: fTyp.value, kategori: fKat.value, status: fStatus.value, mattFran: fMattFran.value, mattlista: fMatt.value.trim(), referenser: fRef.value.trim(), utanLiknande: fUtan.checked ? true : st.utanLiknande ? false : st.utanLiknande ?? null,
+        shopifyBild: fShop.value.trim() && !(fUtan.checked && st.shopifyBild && st.shopifyBild.likhet === "liknande" && st.shopifyBild.url === fShop.value.trim()) ? (st.shopifyBild && st.shopifyBild.url === fShop.value.trim() ? st.shopifyBild : { url: fShop.value.trim(), titel: "", handle: "", likhet: "manuell", t: new Date().toISOString() }) : null, ecomBilder: fEcom.value, ecomPlatDatum: fEcomD.value || null, kampanjStatus: fKamp.value, kampanjDatum: fKampD.value || null, klartSenast: fKlart.value || null, fotoSenast: fFoto.value || null, kommentar: fKom.value.trim(), inkopspris: canSeeMoney() ? num(fInk.value) : st.inkopspris ?? null, tygkostnad: canSeeMoney() ? num(fTygK.value) : st.tygkostnad ?? null, inkopsValuta: canSeeMoney() ? fInkV.value : st.inkopsValuta || "", inkopsKalla: canSeeMoney() && num(fInk.value) !== num(st.inkopspris) ? (num(fInk.value) == null ? "" : myName || "manual") : st.inkopsKalla || "", inkopsDatum: canSeeMoney() && num(fInk.value) !== num(st.inkopspris) ? (num(fInk.value) == null ? "" : todayISO()) : st.inkopsDatum || "" });
 
     const prodSec = h("section");
     function renderPris() {
