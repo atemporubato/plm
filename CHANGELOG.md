@@ -6,6 +6,17 @@ och importeras med `node tools/import-dokument.js`, och main går live på plm.a
 
 Versionsnumrering: små ändringar ger punktversion (v9.1, v9.2 …). Nytt heltal (v10) bara vid stora ändringar.
 
+## v10.33 (2026-11-27)
+
+Bekräfta inleverans i ett steg, och en PO i lager står kvar i sin säsong. Ett nytt fält på PO:n (inlevDatum); inget ändras i befintliga poster.
+- Ny knapp "Bekräfta inleverans": på PO-kortet i Produktion när leveransen är nära (skickad, eller ETA inom en vecka eller passerad), i PO:n, och på raden Försenad. Den öppnar en ruta med ankomstdatum (förifyllt med idag), hur datumet står mot droppens "I lager senast", och vad PO:n innehåller. Antalen antas stämma – avvikelser flaggas på PO:n, även när den är i lager.
+- Efter bekräftelsen: PO:n får status I lager och ankomstdatumet sparas, plaggen går till Levererad, och frågan om avdrag av trims kommer bara om det finns partier som passar PO:n.
+- Produktion: en PO i lager ligger kvar bland de beställda i sin säsong, sist i gruppen, med märkningen "I lager", ankomstdatum och "kom N d sent" om den kom efter droppens datum. Gruppen Inlevererade finns inte längre som egen rubrik. Filtret Aktiva visar även de som är i lager; filtret för bara dem finns kvar.
+- Summan Beställda räknar med det som kommit in och krymper inte längre vid leverans. Raden under visar hur många som är i lager.
+- Statusen Inlevererad heter "In warehouse" på engelska i stället för "Delivered". Värdet i datan är oförändrat.
+- PO-formuläret: fältet "Ankom lagret" visas när status är Inlevererad, för att kunna rätta datumet. Väljs statusen för hand fylls dagens datum i.
+- Min sida: den som äger Lager får raden "Väntas" för varje PO vars ETA har passerat utan bekräftad inleverans, med knapparna Öppna PO och Bekräfta inleverans. Raderna räknas i siffran vid Min sida.
+
 ## v10.32 (2026-11-27)
 
 Rättningar av liknande-bilderna från v10.31, och ett kryss per plagg för att slippa dem. Ingen befintlig data tas bort utöver automatiskt satta liknande-bilder som inte ska finnas.

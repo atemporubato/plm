@@ -319,6 +319,12 @@ table.ledger { width: 100%; border-collapse: collapse; min-width: 960px; }
 .pill.pg-sent { background: transparent; color: var(--ink); border: 1px solid var(--ink); }
 .pill.pg-prelim, .pill.pg-cancel { background: transparent; color: var(--muted); border: 1px dashed var(--line-strong); }
 .pill.pg-done { background: transparent; color: var(--ink); border: 1px solid var(--line-strong); }
+.po-card.is-inlev { border-left-color: var(--line-strong); }
+.po-card.is-inlev > .card-head h3 { color: var(--muted); }
+.inlev-rows { border: 1px solid var(--line); margin: 4px 0 10px; }
+.inlev-row { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 2fr) auto; gap: 14px; padding: 9px 12px; border-top: 1px solid var(--line); font-size: 15px; }
+.inlev-row:first-child { border-top: 0; }
+.inlev-row .n { font-variant-numeric: tabular-nums; }
 .po-steps { display: inline-flex; gap: 3px; align-items: center; } .po-steps i { width: 22px; height: 5px; background: var(--line); display: block; } .po-steps i.on { background: var(--ink); }
 .po-card.g-prelim .po-steps i.on { background: var(--muted); }
 .po-head { display: flex; flex-wrap: wrap; gap: 6px 16px; align-items: center; }
